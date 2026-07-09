@@ -1,0 +1,16 @@
+en:
+  # Menu / page captions
+  label_sla_compliance: "SLA Compliance"
+  label_sla_compliance_settings: "SLA Compliance"
+
+  # Project module
+  project_module_sla_compliance: "SLA Compliance"
+
+  # Permissions (Administration → Roles)
+  permission_view_sla_dashboard: "View SLA dashboard"
+  permission_edit_sla_policy: "Edit SLA policy"
+  permission_manage_sla_notifications: "Manage SLA notifications"
+
+  # Phase 0 placeholder / test page
+  label_sla_dashboard_coming_soon: "SLA Compliance dashboard — coming soon"
+  text_sla_ui_test_notice: "Scoped Tailwind + Flowbite UI test page."

@@ -1,0 +1,24 @@
+{
+  "name": "redmine_sla_compliance",
+  "version": "0.1.0",
+  "description": "Scoped Tailwind + Flowbite build for the Redmine SLA Compliance plugin.",
+  "private": true,
+  "scripts": {
+    "build": "postcss ./assets/stylesheets/tailwind.input.css -o ./assets/stylesheets/tailwind.output.css && npm run vendor",
+    "watch": "postcss ./assets/stylesheets/tailwind.input.css -o ./assets/stylesheets/tailwind.output.css --watch",
+    "vendor": "cp node_modules/flowbite/dist/flowbite.min.js assets/javascripts/flowbite.min.js && cp node_modules/tom-select/dist/js/tom-select.complete.min.js assets/javascripts/tom-select.complete.min.js && cp node_modules/tom-select/dist/css/tom-select.min.css assets/stylesheets/tom-select.min.css"
+  },
+  "author": "Sahad Rushdi",
+  "license": "MIT",
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "postcss-cli": "^11.0.0",
+    "postcss-prefix-selector": "^2.1.0",
+    "tailwindcss": "^3.4.19"
+  },
+  "dependencies": {
+    "flowbite": "^3.1.2",
+    "tom-select": "^2.4.3"
+  }
+}

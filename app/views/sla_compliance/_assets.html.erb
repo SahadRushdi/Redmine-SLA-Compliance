@@ -1,0 +1,8 @@
+<%# Loads the scoped plugin assets. Rendered from plugin views only, so Tailwind/Flowbite/ %>
+<%# Tom Select never enter Redmine's global layout. Emits into <head> via :header_tags. %>
+<% content_for :header_tags do %>
+  <%= stylesheet_link_tag 'tailwind.output.css', plugin: 'redmine_sla_compliance' %>
+  <%= stylesheet_link_tag 'tom-select.min.css', plugin: 'redmine_sla_compliance' %>
+  <%= javascript_include_tag 'flowbite.min.js', plugin: 'redmine_sla_compliance' %>
+  <%= javascript_include_tag 'tom-select.complete.min.js', plugin: 'redmine_sla_compliance' %>
+<% end %>

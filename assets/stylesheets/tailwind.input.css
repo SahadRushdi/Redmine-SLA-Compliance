@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Flowbite-JS shim.
+ *
+ * Flowbite's JS toggles the LITERAL `hidden` class to show/hide dropdowns, modals, etc.
+ * With prefix:'tw-' Tailwind never emits an unprefixed `.hidden`, so the toggle would have
+ * no effect. Re-declare it here; postcss-prefix-selector scopes it to `.sla-plugin .hidden`
+ * at build time, so interactive Flowbite components work without un-prefixing utilities globally.
+ */
+@layer components {
+  .hidden {
+    display: none !important;
+  }
+}

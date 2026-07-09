@@ -1,0 +1,28 @@
+# Node.js dependencies (never commit)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Backup files
+*.backup
+*.bak
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.idea/
+.vscode/
+.github/
+*.swp
+*.swo
+
+#Summary Files
+TASK_SUMMARY*
+Screenshot *
+
+# AI Files
+CLAUDE.md
+.claude
