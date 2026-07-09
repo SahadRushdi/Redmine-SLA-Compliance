@@ -1,0 +1,32 @@
+# frozen_string_literal: true
+
+# Working days / hours / holidays used by the business-hours calculation (Phase 2.3).
+# working_days is a JSON array of weekday numbers (1 = Monday .. 7 = Sunday, ISO-8601);
+# holidays is a JSON array of ISO date strings.
+class SlaBusinessCalendar < ActiveRecord::Base
+  self.table_name = 'sla_business_calendars'
+
+  serialize :working_days, JSON
+  serialize :holidays, JSON
+
+  has_many :sla_policies, foreign_key: :business_calendar_id, dependent: :nullify
+
+  validates :name, presence: true, length: { maximum: 255 }
+  validate :working_days_are_valid
+  validate :work_times_present_together
+
+  private
+
+  def working_days_are_valid
+    return if working_days.blank?
+    unless working_days.is_a?(Array) && working_days.all? { |d| (1..7).cover?(d.to_i) }
+      errors.add(:working_days, :invalid)
+    end
+  end
+
+  def work_times_present_together
+    if work_start_time.present? ^ work_end_time.present?
+      errors.add(:base, 'work_start_time and work_end_time must both be set')
+    end
+  end
+end
