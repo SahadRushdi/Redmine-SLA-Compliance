@@ -92,8 +92,9 @@ module Sla
       raw.blank? ? nil : raw.to_i
     end
 
-    # Initial status = the `old_value` of the first status change; if the issue never changed
-    # status, fall back to its current status.
+    # Initial status = the `old_value` of the first status change. Real Redmine status-change
+    # journals always carry `old_value`, so the fallback to the issue's *current* status only
+    # applies when the issue never changed status at all (no status journals).
     def initial_status_id(status_changes)
       first = status_changes.min_by { |e| [e.at, e.journal_id.to_i] }
       (first && first.from_status_id) || @issue.status_id
