@@ -145,4 +145,28 @@ class Sla::BusinessHoursCalculatorTest < ActiveSupport::TestCase
     to   = NY.local(2026, 3, 9, 11, 0) # Monday
     assert_equal 14_400, calc.elapsed(from, to)
   end
+
+  # --- add (breach_at projection) -------------------------------------------------------
+
+  test "add projects working seconds forward within a single day" do
+    assert_equal t(WED, 14), build.add(t(WED, 10), 14_400) # +4h stays in-window
+  end
+
+  test "add rolls a projection into the next working day" do
+    # From Wed 15:00, +4h: Wed 15:00->17:00 (2h) then Thu 09:00->11:00 (2h) = Thu 11:00.
+    assert_equal t(THU, 11), build.add(t(WED, 15), 14_400)
+  end
+
+  test "add skips the weekend when projecting" do
+    # From Fri 15:00, +4h: Fri 2h + Mon 2h = Mon 11:00.
+    assert_equal t(MON + 7, 11), build.add(t(FRI, 15), 14_400)
+  end
+
+  test "add starting before the window begins at window open" do
+    assert_equal t(WED, 11), build.add(t(WED, 6), 7_200) # 06:00 -> counts from 09:00, +2h
+  end
+
+  test "add returns nil when the calendar defines no working time" do
+    assert_nil build(working_days: []).add(t(WED, 10), 3_600)
+  end
 end

@@ -24,5 +24,14 @@ module Sla
       seconds = to.to_time.to_f - from.to_time.to_f
       seconds.negative? ? 0 : seconds.round
     end
+
+    # Project +seconds+ of calendar time forward from +from+ (the inverse of #elapsed, used to
+    # compute breach_at). Shares its signature with Sla::BusinessHoursCalculator#add. Returns
+    # +from+ unchanged for a non-positive delta.
+    def add(from, seconds)
+      return from if from.nil? || seconds.nil? || seconds <= 0
+
+      from + seconds
+    end
   end
 end

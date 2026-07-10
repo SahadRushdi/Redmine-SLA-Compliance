@@ -1,0 +1,207 @@
+# frozen_string_literal: true
+
+require_relative '../../test_helper'
+
+# Phase 2 · Step 2.6 — Result classification.
+#
+# Done when: "Tests cover met (open + resolved), breached, and both No-SLA sub-cases." Also
+# exercises the at-risk flag, pause subtraction, reopen clock-restart, and business-hours mode.
+# Config is injected via lightweight duck-typed stubs so nothing hits the DB.
+class Sla::ResultClassifierTest < ActiveSupport::TestCase
+  Event    = Sla::TimelineBuilder::Event
+  Timeline = Sla::TimelineBuilder::Timeline
+  Calendar = Struct.new(:working_days, :work_start_time, :work_end_time, :holidays,
+                        keyword_init: true)
+
+  Policy = Struct.new(:business_hours, :business_calendar, :first_response_rule,
+                      :at_risk_threshold, :pause_enabled, keyword_init: true) do
+    def business_hours?
+      business_hours
+    end
+  end
+
+  Definition = Struct.new(:response_seconds, :workaround_seconds, :resolution_seconds,
+                          keyword_init: true) do
+    def any_target?
+      [response_seconds, workaround_seconds, resolution_seconds].any?
+    end
+  end
+
+  OPEN     = 1
+  WORK     = 2
+  RESOLVED = 3
+  DONE     = 5 # a neutral status in no role
+  PAUSED   = 9
+
+  ROLES = { created: [OPEN], work_started: [WORK], resolved: [RESOLVED], pause: [PAUSED] }.freeze
+
+  setup do
+    @base   = ActiveSupport::TimeZone['UTC'].local(2026, 6, 1, 9, 0, 0)
+    @policy = Policy.new(business_hours: false, business_calendar: nil,
+                         first_response_rule: 'either', at_risk_threshold: 80, pause_enabled: true)
+  end
+
+  def at(hours)
+    @base + hours * 3600
+  end
+
+  def timeline(changes = [], comments: [], initial: OPEN)
+    events = [Event.new(type: :created, at: @base, to_status_id: initial)]
+    changes.each do |from, to, at|
+      events << Event.new(type: :status_change, at: at, from_status_id: from, to_status_id: to)
+    end
+    comments.each do |at, private_note|
+      events << Event.new(type: :comment, at: at, private_note: private_note)
+    end
+    Timeline.new(events.sort_by(&:at))
+  end
+
+  def classify(tl, definition:, now:, policy: @policy, tracker_configured: true)
+    Sla::ResultClassifier.new(
+      timeline: tl, policy: policy, definition: definition,
+      tracker_configured: tracker_configured, status_roles: ROLES, now: now
+    ).classify
+  end
+
+  # --- No-SLA sub-cases -----------------------------------------------------------------
+
+  test "no policy -> no_sla / not_configured" do
+    r = classify(timeline, definition: Definition.new(response_seconds: 3600),
+                           policy: nil, now: at(1))
+    assert_equal 'no_sla', r.primary_state
+    assert_equal 'not_configured', r.no_sla_reason
+  end
+
+  test "tracker not under SLA -> no_sla / not_configured" do
+    r = classify(timeline, definition: nil, tracker_configured: false, now: at(1))
+    assert_equal 'no_sla', r.primary_state
+    assert_equal 'not_configured', r.no_sla_reason
+  end
+
+  test "no definition for this priority -> no_sla / not_tracked" do
+    r = classify(timeline, definition: nil, now: at(1))
+    assert_equal 'no_sla', r.primary_state
+    assert_equal 'not_tracked', r.no_sla_reason
+  end
+
+  test "definition with no targets set -> no_sla / not_tracked" do
+    r = classify(timeline, definition: Definition.new, now: at(1))
+    assert_equal 'not_tracked', r.no_sla_reason
+  end
+
+  # --- met ------------------------------------------------------------------------------
+
+  test "open ticket within target is met, not at risk, with a projected breach_at" do
+    d = Definition.new(response_seconds: 3600)
+    now = @base + 1800 # 50% elapsed, no response yet
+    r = classify(timeline, definition: d, now: now)
+    assert_equal 'met', r.primary_state
+    assert_equal 1800, r.response_seconds
+    refute r.at_risk
+    assert_equal now + 1800, r.breach_at
+    assert_nil r.deviation_seconds
+  end
+
+  test "resolved within target is met with no breach_at" do
+    d = Definition.new(response_seconds: 3600, resolution_seconds: 7200)
+    tl = timeline([[OPEN, RESOLVED, at(1)]], comments: [[@base + 1800, false]])
+    r = classify(tl, definition: d, now: at(5))
+    assert_equal 'met', r.primary_state
+    assert_equal 1800, r.response_seconds   # first (public) comment
+    assert_equal 3600, r.resolution_seconds # net(base .. base+1h)
+    refute r.at_risk
+    assert_nil r.breach_at
+  end
+
+  # --- at-risk flag ---------------------------------------------------------------------
+
+  test "open ticket past the at-risk threshold is met AND flagged at risk" do
+    d = Definition.new(response_seconds: 3600)
+    now = @base + 3000 # 83% > 80%, still < target
+    r = classify(timeline, definition: d, now: now)
+    assert_equal 'met', r.primary_state
+    assert r.at_risk
+    assert_equal now + 600, r.breach_at
+  end
+
+  # --- breached -------------------------------------------------------------------------
+
+  test "open ticket past target is breached with deviation" do
+    d = Definition.new(response_seconds: 3600)
+    now = @base + 7200 # 2h, no response
+    r = classify(timeline, definition: d, now: now)
+    assert_equal 'breached', r.primary_state
+    assert_equal 3600, r.deviation_seconds
+    refute r.at_risk
+    assert_nil r.breach_at
+  end
+
+  test "resolved after target is breached with deviation" do
+    d = Definition.new(resolution_seconds: 3600)
+    tl = timeline([[OPEN, RESOLVED, at(2)]]) # resolved at base+2h
+    r = classify(tl, definition: d, now: at(3))
+    assert_equal 'breached', r.primary_state
+    assert_equal 7200, r.resolution_seconds
+    assert_equal 3600, r.deviation_seconds
+  end
+
+  # --- pause integration ----------------------------------------------------------------
+
+  test "paused time is subtracted, keeping a would-be breach within target" do
+    # Use the first_comment rule with no comment so the response milestone stays pending and
+    # its elapsed reflects the pause subtraction (under 'either' the pause transition itself
+    # would count as the first response).
+    policy = Policy.new(business_hours: false, business_calendar: nil,
+                        first_response_rule: 'first_comment', at_risk_threshold: 80,
+                        pause_enabled: true)
+    d = Definition.new(response_seconds: 3600)
+    # Paused status 9 from base+1000 to base+5000 (4000s), then a neutral status.
+    tl = timeline([[OPEN, PAUSED, @base + 1000], [PAUSED, DONE, @base + 5000]])
+    now = @base + 7200 # gross 2h, minus 4000s pause = 3200s net
+    r = classify(tl, definition: d, policy: policy, now: now)
+    assert_equal 'met', r.primary_state
+    assert_equal 3200, r.response_seconds
+  end
+
+  # --- reopen restarts the clock --------------------------------------------------------
+
+  test "a reopened ticket measures the response from the reopen, not the original creation" do
+    d = Definition.new(response_seconds: 3600)
+    # Resolved at +2h, reopened (back to OPEN, a created-role status) at +5h,
+    # first response 30m after the reopen.
+    tl = timeline([[OPEN, RESOLVED, at(2)], [RESOLVED, OPEN, at(5)]],
+                  comments: [[at(5) + 1800, false]])
+    r = classify(tl, definition: d, now: at(5) + 2000)
+    assert_equal 'met', r.primary_state
+    assert_equal 1800, r.response_seconds # measured from the reopen at +5h
+    assert_nil r.breach_at                # response already achieved; nothing pending
+    refute r.at_risk
+  end
+
+  # --- business-hours mode --------------------------------------------------------------
+
+  test "business-hours mode measures elapsed and projects breach_at in working time" do
+    Time.use_zone('UTC') do
+      zone = Time.zone
+      base = zone.local(2026, 6, 3, 9, 0) # Wednesday 09:00
+      policy = Policy.new(
+        business_hours: true,
+        business_calendar: Calendar.new(working_days: [1, 2, 3, 4, 5], work_start_time: '09:00',
+                                        work_end_time: '17:00', holidays: []),
+        first_response_rule: 'either', at_risk_threshold: 80, pause_enabled: true
+      )
+      tl = Timeline.new([Event.new(type: :created, at: base, to_status_id: OPEN)])
+      d  = Definition.new(response_seconds: 14_400) # 4 business hours
+
+      r = Sla::ResultClassifier.new(
+        timeline: tl, policy: policy, definition: d, tracker_configured: true,
+        status_roles: ROLES, now: zone.local(2026, 6, 3, 11, 0)
+      ).classify
+
+      assert_equal 'met', r.primary_state
+      assert_equal 7200, r.response_seconds # 2 working hours
+      refute r.at_risk                      # 50%
+      assert_equal zone.local(2026, 6, 3, 13, 0), r.breach_at # +2 working hours
+    end
+  end
+end

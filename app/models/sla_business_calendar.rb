@@ -9,7 +9,10 @@ class SlaBusinessCalendar < ActiveRecord::Base
   serialize :working_days, JSON
   serialize :holidays, JSON
 
-  has_many :sla_policies, foreign_key: :business_calendar_id, dependent: :nullify
+  # restrict (not nullify): nullifying the FK would leave a business-hours policy with no
+  # calendar, which the engine cannot measure against (Sla::BusinessHoursCalculator). Block the
+  # delete instead so the admin must detach the calendar from its policies first.
+  has_many :sla_policies, foreign_key: :business_calendar_id, dependent: :restrict_with_error
 
   validates :name, presence: true, length: { maximum: 255 }
   validate :working_days_are_valid

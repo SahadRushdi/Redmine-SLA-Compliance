@@ -75,4 +75,17 @@ class Sla::CalendarTimeCalculatorTest < ActiveSupport::TestCase
     ny_noon  = NY.local(2026, 6, 1, 12, 0, 0)    # 12:00 EDT == 16:00 UTC
     assert_equal 0, @calc.elapsed(utc_noon, ny_noon)
   end
+
+  # --- add (breach_at projection) -------------------------------------------------------
+
+  test "add projects seconds forward as wall-clock time" do
+    from = UTC.local(2026, 6, 1, 9, 0, 0)
+    assert_equal UTC.local(2026, 6, 1, 10, 0, 0), @calc.add(from, 3_600)
+  end
+
+  test "add returns the start for a non-positive delta" do
+    from = UTC.local(2026, 6, 1, 9, 0, 0)
+    assert_equal from, @calc.add(from, 0)
+    assert_equal from, @calc.add(from, -100)
+  end
 end

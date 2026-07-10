@@ -61,6 +61,36 @@ module Sla
       total.round
     end
 
+    # Project +seconds+ of WORKING time forward from +from+ (the inverse of #elapsed, used to
+    # compute breach_at). Shares its signature with Sla::CalendarTimeCalculator#add. Returns
+    # +from+ for a non-positive delta, or nil if the calendar defines no working time (so a
+    # projection is impossible).
+    def add(from, seconds)
+      return from if from.nil? || seconds.nil? || seconds <= 0
+      return nil if @start_h.nil? || @end_h.nil? || @working_days.empty?
+
+      from      = from.in_time_zone(@zone)
+      remaining = seconds.to_f
+      date      = from.to_date
+
+      # Bounded ~10-year horizon so a pathological target can't spin forever.
+      3660.times do
+        if working_day?(date)
+          cursor = [from, window_start(date)].max
+          finish = window_end(date)
+          if finish > cursor
+            available = finish - cursor
+            return cursor + remaining if remaining <= available
+
+            remaining -= available
+          end
+        end
+        date += 1
+      end
+
+      nil
+    end
+
     private
 
     def working_day?(date)

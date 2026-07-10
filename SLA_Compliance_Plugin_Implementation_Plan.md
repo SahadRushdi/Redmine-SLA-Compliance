@@ -125,7 +125,7 @@ Concrete choices so the engine is unambiguous. Where a value is configurable, th
 
 ---
 
-# PHASE 2 — Calculation Engine (build and unit-test before any UI depends on it)
+# PHASE 2 — Calculation Engine (build and unit-test before any UI depends on it) ✅Done
 
 ### Step 2.1 — Timeline reconstruction from journals
 - **Goal:** For an issue, produce an ordered timeline of status transitions and comment events with timestamps from `journals` / `journal_details`.
