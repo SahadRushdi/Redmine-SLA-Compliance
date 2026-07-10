@@ -4,7 +4,7 @@
 
 ---
 
-## 0. What we are building
+## 0. What we are building  
 
 A **Redmine plugin** (a Rails engine) that lets each customer project define SLA policies and automatically measures SLA compliance for Incident tickets, presented as a filterable dashboard. It warns the team before tickets breach, and sends notifications:
 
@@ -78,7 +78,7 @@ Concrete choices so the engine is unambiguous. Where a value is configurable, th
 
 ---
 
-# PHASE 0 — Setup & UI Foundation
+# PHASE 0 — Setup & UI Foundation ✅Done
 
 ### Step 0.1 — Scaffold the plugin
 - **Goal:** A loadable plugin that appears in Redmine's plugin list.
@@ -102,7 +102,7 @@ Concrete choices so the engine is unambiguous. Where a value is configurable, th
 
 ---
 
-# PHASE 1 — Data Model
+# PHASE 1 — Data Model  ✅Done
 
 ### Step 1.1 — Migrations & models
 - **Goal:** Tables and ActiveRecord models for the whole feature. All tables use an `sla_` prefix; all references to Redmine objects are stored as integer IDs.
