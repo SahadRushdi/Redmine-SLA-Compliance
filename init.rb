@@ -44,3 +44,18 @@ Redmine::Plugin.register :redmine_sla_compliance do
        caption: :label_sla_compliance_settings,
        html: { class: 'icon', style: 'background-image: url(/images/time.png)' }
 end
+
+# --- Event-driven recompute + time-driven sweep -----------------------------------
+# Wired after full app initialization so Issue and the plugin's autoloaded services are available.
+Rails.application.config.after_initialize do
+  require_dependency File.expand_path('lib/redmine_sla_compliance/patches/issue_patch', __dir__)
+  require File.expand_path('lib/redmine_sla_compliance/sweep_scheduler', __dir__)
+
+  # Step 3.1 — recompute an issue's cached SLA result on every change (idempotent include guard).
+  unless Issue.included_modules.include?(RedmineSlaCompliance::Patches::IssuePatch)
+    Issue.include(RedmineSlaCompliance::Patches::IssuePatch)
+  end
+
+  # Step 3.3 — start the recurring at-risk/stale sweep (no-op under rake / when disabled).
+  RedmineSlaCompliance::SweepScheduler.start
+end
