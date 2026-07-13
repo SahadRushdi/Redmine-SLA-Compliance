@@ -162,7 +162,7 @@ Concrete choices so the engine is unambiguous. Where a value is configurable, th
 
 ---
 
-# PHASE 3 — Precompute, Caching & the Time-Driven Sweep
+# PHASE 3 — Precompute, Caching & the Time-Driven Sweep ✅Done
 
 ### Step 3.1 — Event-driven recompute
 - **Goal:** Keep `sla_results` fresh when tickets change, without computing on page load.

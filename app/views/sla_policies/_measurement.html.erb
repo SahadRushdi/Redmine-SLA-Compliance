@@ -1,0 +1,40 @@
+<%# Milestone status chips (from the project's real statuses), first-response rule, %>
+<%# at-risk threshold. Selections post as status IDs; an empty field skips that milestone. %>
+<div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-shadow-sm tw-p-5 tw-mb-6">
+  <h3 class="tw-text-base tw-font-semibold tw-text-gray-900 tw-mb-1"><%= l(:label_sla_measurement_rules) %></h3>
+  <p class="tw-text-xs tw-text-gray-500 tw-mb-4"><%= l(:text_sla_status_roles_hint) %></p>
+
+  <% statuses = project.rolled_up_statuses %>
+  <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-3 tw-gap-4 tw-mb-5">
+    <% { created: :field_sla_created_statuses,
+         work_started: :field_sla_work_started_statuses,
+         resolved: :field_sla_resolved_statuses }.each do |role, label_key| %>
+      <div>
+        <label for="sla-status-<%= role %>" class="<%= sla_label_classes %>"><%= l(label_key) %></label>
+        <%= select_tag "status_mappings[#{role}][]",
+              options_from_collection_for_select(statuses, :id, :name, sla_status_ids(policy, role)),
+              multiple: true, id: "sla-status-#{role}", data: { sla_chips: true } %>
+      </div>
+    <% end %>
+  </div>
+
+  <div class="tw-mb-5">
+    <span class="<%= sla_label_classes %>"><%= l(:field_first_response_rule) %></span>
+    <div class="tw-flex tw-flex-col md:tw-flex-row tw-gap-2 md:tw-gap-6">
+      <% SlaPolicy::FIRST_RESPONSE_RULES.each do |rule| %>
+        <label class="tw-inline-flex tw-items-center tw-gap-2 tw-text-sm tw-text-gray-900">
+          <%= radio_button_tag 'sla_policy[first_response_rule]', rule,
+                policy.first_response_rule == rule, class: sla_radio_classes %>
+          <%= l("label_first_response_#{rule}") %>
+        </label>
+      <% end %>
+    </div>
+  </div>
+
+  <div class="md:tw-w-56">
+    <label for="sla_policy_at_risk_threshold" class="<%= sla_label_classes %>"><%= l(:field_at_risk_threshold) %></label>
+    <%= number_field_tag 'sla_policy[at_risk_threshold]', policy.at_risk_threshold,
+          min: 1, max: 100, id: 'sla_policy_at_risk_threshold', class: sla_input_classes %>
+    <p class="tw-mt-1 tw-text-xs tw-text-gray-500"><%= l(:text_sla_at_risk_threshold_hint) %></p>
+  </div>
+</div>

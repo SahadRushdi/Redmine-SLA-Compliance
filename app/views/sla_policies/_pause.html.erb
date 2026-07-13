@@ -1,0 +1,18 @@
+<%# Pause statuses (chips from the project's statuses). Empty = no pauses. %>
+<div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-shadow-sm tw-p-5 tw-mb-6">
+  <h3 class="tw-text-base tw-font-semibold tw-text-gray-900 tw-mb-1"><%= l(:label_sla_pause_section) %></h3>
+  <p class="tw-text-xs tw-text-gray-500 tw-mb-4"><%= l(:text_sla_pause_hint) %></p>
+
+  <div class="tw-mb-4">
+    <%= render 'sla_compliance/toggle', name: 'sla_policy[pause_enabled]',
+               checked: policy.pause_enabled?, label: l(:field_sla_pause_enabled) %>
+  </div>
+
+  <div class="md:tw-w-1/2">
+    <label for="sla-status-pause" class="<%= sla_label_classes %>"><%= l(:field_sla_pause_statuses) %></label>
+    <%= select_tag 'status_mappings[pause][]',
+          options_from_collection_for_select(project.rolled_up_statuses, :id, :name,
+                                             sla_status_ids(policy, :pause)),
+          multiple: true, id: 'sla-status-pause', data: { sla_chips: true } %>
+  </div>
+</div>

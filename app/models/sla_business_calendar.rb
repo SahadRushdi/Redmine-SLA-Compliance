@@ -17,6 +17,7 @@ class SlaBusinessCalendar < ActiveRecord::Base
   validates :name, presence: true, length: { maximum: 255 }
   validate :working_days_are_valid
   validate :work_times_present_together
+  validate :holidays_are_valid
 
   private
 
@@ -31,5 +32,18 @@ class SlaBusinessCalendar < ActiveRecord::Base
     if work_start_time.present? ^ work_end_time.present?
       errors.add(:base, 'work_start_time and work_end_time must both be set')
     end
+  end
+
+  # The engine (Sla::BusinessHoursCalculator) expects ISO date strings; reject anything else
+  # at write time so bad admin input can't silently corrupt SLA math.
+  def holidays_are_valid
+    return if holidays.blank?
+    valid = holidays.is_a?(Array) && holidays.all? do |h|
+      Date.iso8601(h.to_s)
+      true
+    rescue ArgumentError, TypeError
+      false
+    end
+    errors.add(:holidays, :invalid) unless valid
   end
 end

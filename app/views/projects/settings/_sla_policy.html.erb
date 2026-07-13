@@ -1,0 +1,20 @@
+<%# SLA Policy tab shell. Rendered inline by ProjectsController#settings; the tab %>
+<%# itself is injected by RedmineSlaCompliance::Patches::ProjectsHelperPatch. Each section is %>
+<%# gated by its own permission. All markup lives inside .sla-plugin (scoped Tailwind). %>
+<%= render 'sla_compliance/assets' %>
+<% content_for :header_tags do %>
+  <%= javascript_include_tag 'sla_policy_form.js', plugin: 'redmine_sla_compliance' %>
+<% end %>
+
+<div class="sla-plugin">
+  <% if User.current.allowed_to?(:edit_sla_policy, @project) %>
+    <div id="sla-policy-form-container">
+      <%= render 'sla_policies/form',
+                 project: @project, policy: sla_policy_for_form(@project) %>
+    </div>
+  <% end %>
+
+  <% if User.current.allowed_to?(:manage_sla_notifications, @project) %>
+    <%= render 'sla_notification_settings/form', project: @project %>
+  <% end %>
+</div>

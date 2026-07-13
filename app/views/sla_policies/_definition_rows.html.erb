@@ -1,0 +1,19 @@
+<%# One row per active priority for the selected tracker. Replaced via edit.js.erb when the %>
+<%# tracker changes. A priority with all three targets unset gets no SlaDefinition row (it is %>
+<%# excluded / unclassified). Locals: policy, tracker. %>
+<% definitions = sla_definition_map(policy, tracker) %>
+<% IssuePriority.active.each do |priority| %>
+  <% definition = definitions[priority.id] %>
+  <tr class="tw-border-b tw-border-gray-200">
+    <td class="tw-px-4 tw-py-2 tw-font-medium tw-text-gray-900"><%= h priority.name %></td>
+    <% { response: definition&.response_seconds,
+         workaround: definition&.workaround_seconds,
+         resolution: definition&.resolution_seconds }.each do |target_type, current_seconds| %>
+      <td class="tw-px-4 tw-py-2">
+        <%= select_tag "definitions[rows][#{priority.id}][#{target_type}]",
+              sla_target_select_options(target_type, current_seconds),
+              id: "sla-def-#{priority.id}-#{target_type}", class: sla_input_classes %>
+      </td>
+    <% end %>
+  </tr>
+<% end %>

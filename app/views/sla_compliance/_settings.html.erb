@@ -1,3 +1,12 @@
-<%# Global plugin settings stub. Access-control roles, target-option lookups, and the global %>
-<%# Google Chat fallback are configured here in Phase 5. %>
-<p><em>SLA Compliance global settings will appear here (Phase 5).</em></p>
+<%# Global plugin settings. Access-control role grants and the global Google Chat fallback %>
+<%# are configured here in Phase 5. The two admin-managed lookups below feed the SLA policy %>
+<%# form (Phase 4). %>
+<p>
+  <%= link_to l(:label_sla_target_options), sla_target_options_path %><br>
+  <em class="info"><%= l(:text_sla_target_options_hint) %></em>
+</p>
+<p>
+  <%= link_to l(:label_sla_business_calendars), sla_business_calendars_path %><br>
+  <em class="info"><%= l(:text_sla_business_calendars_hint) %></em>
+</p>
+<p><em class="info"><%= l(:text_sla_settings_phase5_note) %></em></p>

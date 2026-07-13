@@ -1,0 +1,29 @@
+<%# The SLA policy form (Steps 4.2–4.5, 4.7, 4.8). Locals: project, policy. %>
+<%# Re-rendered wholesale by edit.js.erb when a clone source is loaded. %>
+<%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-policy-form',
+             data: { edit_url: edit_project_sla_policy_path(project),
+                     confirm_switch: l(:text_sla_unsaved_definitions_confirm),
+                     confirm_clone: l(:text_sla_clone_confirm_overwrite) } do %>
+  <%= hidden_field_tag 'tab', 'sla_policy' %>
+  <%= hidden_field_tag 'clone_source_id', params[:clone_from].presence, id: 'sla-clone-source-id' %>
+
+  <%= render 'sla_policies/general', policy: policy %>
+  <%= render 'sla_policies/measurement', project: project, policy: policy %>
+  <%= render 'sla_policies/definitions', project: project, policy: policy %>
+  <%= render 'sla_policies/pause', project: project, policy: policy %>
+  <%= render 'sla_policies/clone', project: project %>
+
+  <%# Step 4.8 — forward-only save by default; optional historical recalculation. %>
+  <div class="tw-flex tw-flex-col md:tw-flex-row md:tw-items-center tw-gap-3 tw-mb-8">
+    <label class="tw-inline-flex tw-items-center tw-gap-2 tw-text-sm tw-text-gray-900">
+      <%= check_box_tag 'recalculate', '1', false,
+            class: 'tw-w-4 tw-h-4 tw-rounded tw-border-gray-300 tw-text-primary-600 focus:tw-ring-primary-500' %>
+      <%= l(:label_sla_recalculate_historical) %>
+    </label>
+    <span class="tw-text-xs tw-text-gray-500 md:tw-max-w-md"><%= l(:text_sla_forward_only_hint) %></span>
+    <%= submit_tag l(:button_save),
+          class: 'tw-text-white tw-bg-primary-600 hover:tw-bg-primary-700 focus:tw-ring-2 ' \
+                 'focus:tw-ring-primary-300 tw-font-medium tw-rounded-lg tw-text-sm ' \
+                 'tw-px-5 tw-py-2.5 tw-cursor-pointer md:tw-ml-auto' %>
+  </div>
+<% end %>

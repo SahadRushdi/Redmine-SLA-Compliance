@@ -49,12 +49,22 @@ end
 # Wired after full app initialization so Issue and the plugin's autoloaded services are available.
 Rails.application.config.after_initialize do
   require_dependency File.expand_path('lib/redmine_sla_compliance/patches/issue_patch', __dir__)
+  require_dependency File.expand_path('lib/redmine_sla_compliance/patches/projects_helper_patch', __dir__)
   require File.expand_path('lib/redmine_sla_compliance/sweep_scheduler', __dir__)
 
   # Step 3.1 — recompute an issue's cached SLA result on every change (idempotent include guard).
   unless Issue.included_modules.include?(RedmineSlaCompliance::Patches::IssuePatch)
     Issue.include(RedmineSlaCompliance::Patches::IssuePatch)
   end
+
+  # Step 4.1 — SLA Policy tab under Project Settings.
+  unless ProjectsHelper.include?(RedmineSlaCompliance::Patches::ProjectsHelperPatch)
+    ProjectsHelper.prepend(RedmineSlaCompliance::Patches::ProjectsHelperPatch)
+  end
+  # The tab partial renders inside ProjectsController#settings, whose views don't include
+  # plugin helpers by default — make the form helpers available there.
+  ProjectsController.helper(:sla_policies)
+  ProjectsController.helper(:sla_compliance)
 
   # Step 3.3 — start the recurring at-risk/stale sweep (no-op under rake / when disabled).
   RedmineSlaCompliance::SweepScheduler.start

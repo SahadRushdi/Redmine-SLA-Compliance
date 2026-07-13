@@ -1,0 +1,10 @@
+<% if params[:clone_from].present? %>
+$('#sla-policy-form-container').html('<%= escape_javascript(
+  render 'sla_policies/form', project: @project, policy: @sla_policy) %>');
+<% else %>
+<% policy = sla_policy_for_form(@project) %>
+$('#sla-definitions-rows').html('<%= escape_javascript(
+  render 'sla_policies/definition_rows',
+         policy: policy, tracker: sla_selected_tracker(@project, policy)) %>');
+<% end %>
+window.slaPolicyForm.init();

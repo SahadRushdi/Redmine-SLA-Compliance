@@ -1,0 +1,24 @@
+<%# Clone from another project. The picker is not a form param; the Load button %>
+<%# fetches a prefilled re-render, and clone_source_id (hidden, in _form) rides along on save. %>
+<% sources = sla_clone_source_projects(project) %>
+<% if sources.any? %>
+  <div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-shadow-sm tw-p-5 tw-mb-6">
+    <h3 class="tw-text-base tw-font-semibold tw-text-gray-900 tw-mb-1"><%= l(:label_sla_clone_section) %></h3>
+    <p class="tw-text-xs tw-text-gray-500 tw-mb-4"><%= l(:text_sla_clone_hint) %></p>
+
+    <div class="tw-flex tw-flex-col md:tw-flex-row tw-gap-3 md:tw-items-end">
+      <div class="md:tw-w-64">
+        <label for="sla-clone-source" class="<%= sla_label_classes %>"><%= l(:field_sla_clone_source) %></label>
+        <%= select_tag 'sla_clone_picker',
+              options_from_collection_for_select(sources, :id, :name),
+              include_blank: true, id: 'sla-clone-source', class: sla_input_classes %>
+      </div>
+      <button type="button" id="sla-clone-load"
+              class="tw-text-gray-900 tw-bg-white tw-border tw-border-gray-300 hover:tw-bg-gray-100
+                     focus:tw-ring-2 focus:tw-ring-gray-200 tw-font-medium tw-rounded-lg tw-text-sm
+                     tw-px-4 tw-py-2.5 tw-cursor-pointer">
+        <%= l(:button_sla_clone_load) %>
+      </button>
+    </div>
+  </div>
+<% end %>

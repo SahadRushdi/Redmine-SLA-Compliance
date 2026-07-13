@@ -1,0 +1,27 @@
+<%= error_messages_for @calendar %>
+
+<div class="box tabular">
+  <p><%= f.text_field :name, required: true, size: 40 %></p>
+  <p>
+    <label><%= l(:field_sla_working_days) %></label>
+    <% selected_days = @calendar.working_days.to_a.map(&:to_i) %>
+    <% (1..7).each do |day| %>
+      <label class="block" style="margin-left: 180px;">
+        <%= check_box_tag 'sla_business_calendar[working_days][]', day,
+                          selected_days.include?(day), id: "sla-working-day-#{day}" %>
+        <%= day_name(day % 7) %>
+      </label>
+    <% end %>
+  </p>
+  <p><%= f.text_field :work_start_time, label: :field_sla_work_start_time, size: 5,
+                      placeholder: 'HH:MM' %></p>
+  <p><%= f.text_field :work_end_time, label: :field_sla_work_end_time, size: 5,
+                      placeholder: 'HH:MM' %></p>
+  <p>
+    <label for="sla_business_calendar_holidays_text"><%= l(:field_sla_holidays) %></label>
+    <%= text_area_tag 'sla_business_calendar[holidays_text]',
+                      @calendar.holidays.to_a.join("\n"),
+                      id: 'sla_business_calendar_holidays_text', rows: 8, cols: 20 %>
+    <em class="info"><%= l(:text_sla_holidays_hint) %></em>
+  </p>
+</div>

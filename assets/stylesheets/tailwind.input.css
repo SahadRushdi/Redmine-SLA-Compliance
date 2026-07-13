@@ -15,3 +15,62 @@
     display: none !important;
   }
 }
+
+/*
+ * Purplemine2 isolation for interactive controls (CLAUDE.md rule 4): explicitly reset
+ * focus/border colors instead of letting the theme's global input/button rules win.
+ * postcss-prefix-selector scopes every rule below to `.sla-plugin ...` at build time.
+ */
+select:focus,
+input:focus,
+textarea:focus,
+button:focus {
+  outline: none;
+}
+
+input[type='text']:focus,
+input[type='number']:focus,
+input[type='url']:focus,
+select:focus,
+textarea:focus {
+  border-color: #2563eb; /* primary-600 — the only intentional blue in UI chrome */
+  box-shadow: none;
+}
+
+/*
+ * Tom Select (chip multi-selects): match the Flowbite input look, neutral at rest,
+ * primary-600 on focus — never the theme's own focus treatment.
+ */
+.ts-wrapper .ts-control {
+  background-color: #f9fafb; /* gray-50 */
+  border: 1px solid #d1d5db; /* gray-300 */
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.875rem;
+  color: #111827;
+  box-shadow: none;
+}
+
+.ts-wrapper.focus .ts-control {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px #2563eb;
+  outline: none;
+}
+
+.ts-wrapper.multi .ts-control > .item {
+  background: #dbeafe; /* primary-100 chip */
+  color: #1e40af; /* primary-800 */
+  border-radius: 0.25rem;
+  padding: 0 0.375rem;
+}
+
+.ts-dropdown {
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.ts-dropdown .active {
+  background-color: #eff6ff; /* primary-50 */
+  color: #111827;
+}
