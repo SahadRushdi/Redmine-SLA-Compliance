@@ -1,19 +1,36 @@
 <%# One row per active priority for the selected tracker. Replaced via edit.js.erb when the %>
 <%# tracker changes. A priority with all three targets unset gets no SlaDefinition row (it is %>
-<%# excluded / unclassified). Locals: policy, tracker. %>
+<%# excluded / unclassified). The admin-designated "unclassified" priority (Administration → %>
+<%# Plugins → SLA Compliance) is always excluded and rendered disabled — no SlaDefinition can be %>
+<%# saved for it (also enforced server-side, see SlaPoliciesController#replace_tracker_definitions!). %>
+<%# Locals: policy, tracker. %>
 <% definitions = sla_definition_map(policy, tracker) %>
 <% IssuePriority.active.each do |priority| %>
   <% definition = definitions[priority.id] %>
-  <tr class="tw-border-b tw-border-gray-200">
-    <td class="tw-px-4 tw-py-2 tw-font-medium tw-text-gray-900"><%= h priority.name %></td>
-    <% { response: definition&.response_seconds,
-         workaround: definition&.workaround_seconds,
-         resolution: definition&.resolution_seconds }.each do |target_type, current_seconds| %>
-      <td class="tw-px-4 tw-py-2">
-        <%= select_tag "definitions[rows][#{priority.id}][#{target_type}]",
-              sla_target_select_options(target_type, current_seconds),
-              id: "sla-def-#{priority.id}-#{target_type}", class: sla_input_classes %>
+  <% unclassified = sla_unclassified_priority?(priority.id) %>
+  <tr class="tw-border-b tw-border-gray-200 <%= 'tw-bg-gray-50' if unclassified %>">
+    <td class="tw-px-4 tw-py-2 tw-font-medium tw-text-gray-900">
+      <%= h priority.name %>
+      <% if unclassified %>
+        <span class="tw-ml-2 tw-inline-block tw-px-2 tw-py-0.5 tw-text-xs tw-font-medium tw-text-gray-600 tw-bg-gray-200 tw-rounded">
+          <%= l(:label_sla_unclassified_badge) %>
+        </span>
+      <% end %>
+    </td>
+    <% if unclassified %>
+      <td colspan="3" class="tw-px-4 tw-py-2 tw-text-sm tw-text-gray-500">
+        <%= l(:text_sla_unclassified_row_hint) %>
       </td>
+    <% else %>
+      <% { response: definition&.response_seconds,
+           workaround: definition&.workaround_seconds,
+           resolution: definition&.resolution_seconds }.each do |target_type, current_seconds| %>
+        <td class="tw-px-4 tw-py-2">
+          <%= select_tag "definitions[rows][#{priority.id}][#{target_type}]",
+                sla_target_select_options(target_type, current_seconds),
+                id: "sla-def-#{priority.id}-#{target_type}", class: sla_input_classes %>
+        </td>
+      <% end %>
     <% end %>
   </tr>
 <% end %>

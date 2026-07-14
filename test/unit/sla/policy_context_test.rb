@@ -1,0 +1,70 @@
+# frozen_string_literal: true
+
+require_relative '../../test_helper'
+
+# Sla::PolicyContext — per-project config resolution, including the admin-designated
+# "unclassified" priority exclusion (Phase 4 hardening): `definition_for` must return nil for
+# that priority even when a stray SlaDefinition row exists for it, so the classifier is forced
+# into no_sla/not_tracked regardless of what was (or wasn't) saved.
+class Sla::PolicyContextTest < ActiveSupport::TestCase
+  fixtures :projects, :enumerations, :trackers
+
+  TRACKER = 1
+  PRIORITY = 6 # High, from fixtures
+
+  setup do
+    Setting.plugin_redmine_sla_compliance = {}
+    @project = Project.find(1)
+    @policy = SlaPolicy.create!(project_id: @project.id, enabled: true, coverage_hours: '24x7',
+                                first_response_rule: 'either', at_risk_threshold: 80,
+                                pause_enabled: true)
+  end
+
+  teardown do
+    Setting.plugin_redmine_sla_compliance = {}
+  end
+
+  test "tracker_configured? is true only for trackers with at least one definition" do
+    SlaDefinition.create!(sla_policy: @policy, tracker_id: TRACKER, priority_id: PRIORITY,
+                          response_seconds: 3600)
+    context = Sla::PolicyContext.new(@policy)
+
+    assert context.tracker_configured?(TRACKER)
+    refute context.tracker_configured?(999)
+  end
+
+  test "definition_for returns the matching SlaDefinition" do
+    definition = SlaDefinition.create!(sla_policy: @policy, tracker_id: TRACKER,
+                                       priority_id: PRIORITY, response_seconds: 3600)
+    context = Sla::PolicyContext.new(@policy)
+
+    assert_equal definition, context.definition_for(TRACKER, PRIORITY)
+  end
+
+  test "definition_for returns nil for the admin-designated unclassified priority, even with a saved row" do
+    none = IssuePriority.create!(name: 'None', type: 'IssuePriority', position: 99)
+    SlaDefinition.create!(sla_policy: @policy, tracker_id: TRACKER, priority_id: none.id,
+                          response_seconds: 3600) # a stray/legacy row, e.g. saved before this fix
+
+    context = Sla::PolicyContext.new(@policy)
+
+    assert_nil context.definition_for(TRACKER, none.id),
+               'the unclassified priority must never resolve to a definition'
+  end
+
+  test "unclassified_priority? reflects Sla::PluginSettings" do
+    none = IssuePriority.create!(name: 'None', type: 'IssuePriority', position: 99)
+    context = Sla::PolicyContext.new(@policy)
+
+    assert context.unclassified_priority?(none.id)
+    refute context.unclassified_priority?(PRIORITY)
+  end
+
+  test "a nil policy yields an empty, not-configured context" do
+    context = Sla::PolicyContext.new(nil)
+
+    refute context.tracker_configured?(TRACKER)
+    assert_nil context.definition_for(TRACKER, PRIORITY)
+    assert_equal({}, context.status_roles)
+  end
+end

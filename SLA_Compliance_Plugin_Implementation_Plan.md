@@ -182,7 +182,7 @@ Concrete choices so the engine is unambiguous. Where a value is configurable, th
 
 ---
 
-# PHASE 4 — SLA Policy Configuration UI
+# PHASE 4 — SLA Policy Configuration UI ✅Done
 
 > Lives under **Project Settings → "SLA Policy" tab**, gated by the edit permission. Uses the scoped Tailwind/Flowbite setup from Step 0.3.
 

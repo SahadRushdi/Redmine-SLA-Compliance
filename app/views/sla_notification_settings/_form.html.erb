@@ -75,6 +75,13 @@
                                    setting.stale_email_frequency),
                 id: 'sla_notification_stale_frequency', class: sla_input_classes %>
         </div>
+        <div class="md:tw-w-56">
+          <label for="sla_notification_stale_threshold_days" class="<%= sla_label_classes %>"><%= l(:field_stale_threshold_days) %></label>
+          <%= number_field_tag 'sla_notification_setting[stale_threshold_days]',
+                setting.stale_threshold_days, min: 1,
+                id: 'sla_notification_stale_threshold_days', class: sla_input_classes %>
+          <p class="tw-mt-1 tw-text-xs tw-text-gray-500"><%= l(:text_sla_stale_threshold_hint) %></p>
+        </div>
       </div>
     </div>
 

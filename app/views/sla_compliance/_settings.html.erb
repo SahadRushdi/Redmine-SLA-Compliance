@@ -1,6 +1,26 @@
 <%# Global plugin settings. Access-control role grants and the global Google Chat fallback %>
 <%# are configured here in Phase 5. The two admin-managed lookups below feed the SLA policy %>
-<%# form (Phase 4). %>
+<%# form (Phase 4). Locals: settings (the plugin's stored Hash, saved via Setting.plugin_redmine_sla_compliance). %>
+<p>
+  <label for="settings_sweep_interval_minutes"><%= l(:field_sla_sweep_interval_minutes) %></label>
+  <%= number_field_tag 'settings[sweep_interval_minutes]',
+        settings['sweep_interval_minutes'].presence || Sla::PluginSettings::DEFAULT_SWEEP_INTERVAL_MINUTES,
+        min: Sla::PluginSettings::MIN_SWEEP_INTERVAL_MINUTES,
+        max: Sla::PluginSettings::MAX_SWEEP_INTERVAL_MINUTES,
+        id: 'settings_sweep_interval_minutes', size: 6 %>
+  <em class="info"><%= l(:text_sla_sweep_interval_hint) %></em>
+</p>
+<p>
+  <label for="settings_unclassified_priority_id"><%= l(:field_sla_unclassified_priority) %></label>
+  <%= select_tag 'settings[unclassified_priority_id]',
+        options_for_select(
+          [[l(:label_sla_unclassified_priority_auto), '']] +
+            IssuePriority.all.map { |p| [p.name, p.id] },
+          settings['unclassified_priority_id'].presence
+        ),
+        id: 'settings_unclassified_priority_id' %>
+  <em class="info"><%= l(:text_sla_unclassified_priority_hint) %></em>
+</p>
 <p>
   <%= link_to l(:label_sla_target_options), sla_target_options_path %><br>
   <em class="info"><%= l(:text_sla_target_options_hint) %></em>

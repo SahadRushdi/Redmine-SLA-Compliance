@@ -39,6 +39,12 @@ en:
   text_sla_holidays_hint: "One date per line, in YYYY-MM-DD format."
   text_sla_settings_phase5_note: "Role-based access grants and the global Google Chat fallback are configured here in Phase 5."
 
+  field_sla_sweep_interval_minutes: "Sweep interval (minutes)"
+  text_sla_sweep_interval_hint: "How often the at-risk / stale sweep re-evaluates open tickets, in minutes (1–1440). Default 15. Takes effect within a minute, no restart needed."
+  field_sla_unclassified_priority: "Unclassified priority"
+  label_sla_unclassified_priority_auto: "Auto-detect (a priority literally named \"None\", if any)"
+  text_sla_unclassified_priority_hint: "This priority is always excluded from SLA evaluation across every project, and shown as unclassified/needs-triage on the dashboard."
+
   # --- SLA Policy tab (Phase 4) ------------------------------------------------------------
   label_sla_policy: "SLA Policy"
   label_sla_policy_general: "General"
@@ -72,6 +78,8 @@ en:
   text_sla_definitions_hint: "Targets apply to the selected tracker. A priority with every target unset is excluded from SLA tracking. Saving updates the selected tracker only."
   text_sla_no_target_options: "No target duration options defined yet — an administrator can add them under Administration → Plugins → SLA Compliance."
   text_sla_no_trackers: "This project has no trackers enabled."
+  label_sla_unclassified_badge: "Unclassified"
+  text_sla_unclassified_row_hint: "Always excluded from SLA evaluation (Administration → Plugins → SLA Compliance)."
 
   label_sla_pause_section: "Exclusions (Pauses)"
   field_sla_pause_statuses: "Pause statuses"
@@ -104,6 +112,8 @@ en:
   field_stale_email_enabled: "Enabled"
   field_stale_email_recipients: "Recipients"
   field_stale_email_frequency: "Frequency"
+  field_stale_threshold_days: "Stale after (days of inactivity)"
+  text_sla_stale_threshold_hint: "A ticket excluded from SLA (unclassified priority or unset target) with no comment or status change for this many days is included in the digest."
   label_sla_frequency_daily: "Daily"
   label_sla_frequency_weekly: "Weekly"
   label_sla_frequency_monthly: "Monthly"

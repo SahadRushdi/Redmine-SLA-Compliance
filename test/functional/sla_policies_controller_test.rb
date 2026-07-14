@@ -196,6 +196,20 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_equal 0, policy.sla_definitions.count
   end
 
+  test "a posted row for the admin-designated unclassified priority is rejected" do
+    none = IssuePriority.create!(name: 'None', type: 'IssuePriority', position: 99)
+    Setting.plugin_redmine_sla_compliance = { 'unclassified_priority_id' => none.id.to_s }
+
+    put :update, params: base_params(
+      definitions: { tracker_id: @trackers.first.id.to_s,
+                     rows: { none.id.to_s => { response: @opt_1h.seconds.to_s } } }
+    )
+
+    assert_equal 0, policy.sla_definitions.where(priority_id: none.id).count
+  ensure
+    Setting.plugin_redmine_sla_compliance = {}
+  end
+
   test "a previously saved value survives even after the lookup changed" do
     saved_policy = SlaPolicy.create!(project_id: @project.id, enabled: true)
     priority = @priorities.first
@@ -249,6 +263,23 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     overridden = saved.sla_definitions.find_by(tracker_id: @trackers.second.id,
                                                priority_id: priority.id)
     assert_equal 3600, overridden.response_seconds, 'posted tracker overrides the copy'
+  end
+
+  test "cloning skips a source definition saved for the unclassified priority" do
+    source = build_clone_source
+    none = IssuePriority.create!(name: 'None', type: 'IssuePriority', position: 99)
+    source.sla_definitions.create!(tracker_id: @trackers.first.id, priority_id: none.id,
+                                   response_seconds: 3600)
+    Setting.plugin_redmine_sla_compliance = { 'unclassified_priority_id' => none.id.to_s }
+
+    put :update, params: base_params(
+      { clone_source_id: '2',
+        definitions: { tracker_id: @trackers.second.id.to_s, rows: {} } }
+    )
+
+    assert_equal 0, policy.sla_definitions.where(priority_id: none.id).count
+  ensure
+    Setting.plugin_redmine_sla_compliance = {}
   end
 
   test "an unauthorized clone source is ignored on save" do

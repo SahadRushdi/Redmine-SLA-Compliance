@@ -83,7 +83,9 @@ class SlaPoliciesController < ApplicationController
     return unless source
 
     @sla_policy.sla_definitions.delete_all
-    source.sla_definitions.where(tracker_id: @project.trackers.ids).find_each do |definition|
+    unclassified_priority_id = Sla::PluginSettings.unclassified_priority_id
+    source.sla_definitions.where(tracker_id: @project.trackers.ids)
+          .where.not(priority_id: unclassified_priority_id).find_each do |definition|
       @sla_policy.sla_definitions.create!(
         tracker_id: definition.tracker_id,
         priority_id: definition.priority_id,
@@ -110,9 +112,13 @@ class SlaPoliciesController < ApplicationController
     return if rows.blank?
 
     allowed_priority_ids = IssuePriority.active.ids
+    unclassified_priority_id = Sla::PluginSettings.unclassified_priority_id
     rows.each do |priority_id, targets|
       priority_id = priority_id.to_i
       next unless allowed_priority_ids.include?(priority_id)
+      # Defense in depth: the form never renders inputs for the unclassified priority (it's
+      # shown disabled), but never trust the client — reject a forged/stale submission for it too.
+      next if priority_id == unclassified_priority_id
 
       attributes = {}
       SlaTargetOption::TARGET_TYPES.each do |target_type|

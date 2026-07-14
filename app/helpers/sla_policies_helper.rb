@@ -52,6 +52,12 @@ module SlaPoliciesHelper
       SlaTargetOption.order(:position, :seconds).group_by(&:target_type)
   end
 
+  # Is this the admin-designated "None / unclassified" priority (Administration → Plugins →
+  # SLA Compliance)? Always excluded from SLA Definitions — see Sla::PolicyContext#definition_for.
+  def sla_unclassified_priority?(priority_id)
+    priority_id.present? && priority_id == Sla::PluginSettings.unclassified_priority_id
+  end
+
   # Source candidates for "Clone from another project": projects the user could edit the
   # policy of, that actually have one — minus the current project.
   def sla_clone_source_projects(project)

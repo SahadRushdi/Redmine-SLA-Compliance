@@ -30,11 +30,28 @@ class Sla::SweepTest < ActiveSupport::TestCase
     end
   end
 
+  class FakeStaleNotifier
+    attr_reader :calls
+
+    def initialize
+      @calls = []
+    end
+
+    def enqueue_stale_digest(project, issues)
+      @calls << [project.id, issues.map(&:id)]
+    end
+  end
+
   setup do
     User.current = User.find(2)
     @base    = Time.zone.local(2026, 6, 1, 9, 0, 0)
     @project = Project.find(1)
     @project.enable_module!(:sla_compliance)
+    # Fixture issues (created ~2006) are ancient relative to @base, so if left open they'd read
+    # as trivially "stale" the instant they're not_tracked — swamping the stale-digest tests
+    # below with noise unrelated to what each test explicitly sets up. Closing them doesn't
+    # affect the at-risk tests (breached fixture issues were never assertable candidates anyway).
+    Issue.where(project_id: @project.id).open.update_all(status_id: CLOSED)
 
     @policy = SlaPolicy.create!(project_id: @project.id, enabled: true, coverage_hours: '24x7',
                                 first_response_rule: 'either', at_risk_threshold: 80,
@@ -44,17 +61,17 @@ class Sla::SweepTest < ActiveSupport::TestCase
                           response_seconds: 3600) # 1h response target
   end
 
-  def make_issue(status_id: NEW)
+  def make_issue(status_id: NEW, priority_id: PRIORITY)
     issue = Issue.new(project_id: @project.id, tracker_id: TRACKER, author_id: 2,
-                      priority_id: PRIORITY, status_id: status_id, subject: 'sweep test')
+                      priority_id: priority_id, status_id: status_id, subject: 'sweep test')
     issue.save!(validate: false)
     issue.update_column(:created_on, @base)
     issue.reload
   end
 
-  def sweep(now:, notifier: FakeNotifier.new)
-    summary = Sla::Sweep.new(now: now, notifier: notifier).run
-    [summary, notifier]
+  def sweep(now:, notifier: FakeNotifier.new, stale_notifier: FakeStaleNotifier.new)
+    summary = Sla::Sweep.new(now: now, notifier: notifier, stale_notifier: stale_notifier).run
+    [summary, notifier, stale_notifier]
   end
 
   def at(hours)
@@ -150,5 +167,89 @@ class Sla::SweepTest < ActiveSupport::TestCase
     sweep(now: at(50.0 / 60))
 
     assert_nil SlaResult.find_by(issue_id: other_issue.id)
+  end
+
+  # --- stale-ticket digest (Step 2.8 wired into the sweep, Phase 3 hardening) -----------------
+  #
+  # UNTRACKED_PRIORITY has no SlaDefinition on TRACKER, so an issue with it classifies as
+  # no_sla/not_tracked ("unset target") — the exact Step 2.8 scope, distinct from not_configured.
+  UNTRACKED_PRIORITY = 5 # "Normal" in fixtures; not covered by the setup's SlaDefinition
+
+  def enable_stale_digest(threshold_days: 5, frequency: 'weekly', last_at: nil)
+    SlaNotificationSetting.create!(project_id: @project.id, stale_email_enabled: true,
+                                   stale_email_frequency: frequency,
+                                   stale_threshold_days: threshold_days,
+                                   last_stale_digest_at: last_at)
+  end
+
+  test "an excluded ticket past its inactivity threshold is queued in the stale digest" do
+    enable_stale_digest(threshold_days: 5)
+    issue = make_issue(priority_id: UNTRACKED_PRIORITY)
+
+    _, _, stale = sweep(now: @base + 6.days)
+
+    assert_equal [[@project.id, [issue.id]]], stale.calls
+    assert_equal 1, SlaNotificationLog.where(issue_id: issue.id, notification_type: 'stale').count
+  end
+
+  test "an excluded ticket below its inactivity threshold is not queued" do
+    enable_stale_digest(threshold_days: 5)
+    make_issue(priority_id: UNTRACKED_PRIORITY)
+
+    summary, _, stale = sweep(now: @base + 4.days)
+
+    assert_equal 0, summary.stale_queued
+    assert_empty stale.calls
+  end
+
+  test "stale digest is skipped entirely when the project has not enabled stale email" do
+    issue = make_issue(priority_id: UNTRACKED_PRIORITY)
+
+    summary, _, stale = sweep(now: @base + 30.days)
+
+    assert_equal 0, summary.stale_queued
+    assert_empty stale.calls
+    assert_equal 0, SlaNotificationLog.where(issue_id: issue.id, notification_type: 'stale').count
+  end
+
+  test "a not_configured ticket (tracker with no SlaDefinition at all) never enters the stale digest" do
+    enable_stale_digest(threshold_days: 5)
+    unconfigured_tracker_issue = Issue.new(project_id: @project.id, tracker_id: 2, author_id: 2,
+                                           priority_id: UNTRACKED_PRIORITY, status_id: NEW,
+                                           subject: 'unconfigured tracker')
+    unconfigured_tracker_issue.save!(validate: false)
+    unconfigured_tracker_issue.update_column(:created_on, @base)
+
+    _, _, stale = sweep(now: @base + 30.days)
+
+    assert_empty stale.calls
+  end
+
+  test "the digest window is claimed once and not re-claimed until the frequency elapses" do
+    # A digest already ran 3 days ago; weekly frequency means the next one isn't due for 4 more.
+    enable_stale_digest(threshold_days: 1, frequency: 'weekly', last_at: @base + 3.days)
+    issue = make_issue(priority_id: UNTRACKED_PRIORITY)
+
+    # The ticket itself is well past its 1-day threshold, but the project's digest window isn't
+    # due yet — the schedule gate, not per-ticket staleness, decides whether a digest fires.
+    summary, _, stale = sweep(now: @base + 5.days)
+    assert_equal 0, summary.stale_queued
+    assert_empty stale.calls
+
+    # Once the weekly window has elapsed since the last digest, it fires.
+    summary2, _, stale2 = sweep(now: @base + 10.days)
+    assert_equal 1, summary2.stale_queued
+    assert_equal [issue.id], stale2.calls.first.last
+  end
+
+  test "repeated sweeps within the same digest window never queue the same ticket twice" do
+    enable_stale_digest(threshold_days: 1)
+    issue = make_issue(priority_id: UNTRACKED_PRIORITY)
+
+    sweep(now: @base + 2.days)
+    _, _, stale2 = sweep(now: @base + 2.days + 1.hour)
+
+    assert_empty stale2.calls, 'the digest window was already claimed by the first sweep'
+    assert_equal 1, SlaNotificationLog.where(issue_id: issue.id, notification_type: 'stale').count
   end
 end

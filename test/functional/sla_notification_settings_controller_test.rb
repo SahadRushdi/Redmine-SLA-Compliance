@@ -28,7 +28,8 @@ class SlaNotificationSettingsControllerTest < ActionController::TestCase
         at_risk_digest_interval_minutes: '120',
         stale_email_enabled: '1',
         stale_email_recipients: ['', 'ops@example.com'],
-        stale_email_frequency: 'monthly'
+        stale_email_frequency: 'monthly',
+        stale_threshold_days: '10'
       }
     }
     assert_redirected_to settings_project_path(@project, tab: 'sla_policy')
@@ -40,6 +41,7 @@ class SlaNotificationSettingsControllerTest < ActionController::TestCase
     assert saved.stale_email_enabled?
     assert_equal %w[ops@example.com], saved.stale_email_recipients
     assert_equal 'monthly', saved.stale_email_frequency
+    assert_equal 10, saved.stale_threshold_days
     assert_includes saved.google_chat_webhook, 'chat.googleapis.com'
   end
 

@@ -9,14 +9,20 @@ module RedmineSlaCompliance
   # double-starts and never spins up under rake/migrations/tests. The actual work lives in
   # `Sla::Sweep`, which is unit-tested independently; this class only owns scheduling + isolation.
   #
-  # The default cadence is every 15 minutes (the plan's default); the acceptance guarantee is that
-  # a ticket crossing its at-risk window flips within ONE interval.
+  # The cadence is admin-configurable (Administration → Plugins → SLA Compliance), defaulting to
+  # 15 minutes per the plan's Fixed Decisions. Rather than scheduling a Rufus cron/interval job at
+  # a fixed cadence and having to unschedule + reschedule it (racy to do safely from inside the
+  # job's own callback) whenever the admin changes the setting, this runs a fine-grained internal
+  # "tick" and only actually sweeps once the CONFIGURED interval has elapsed since the last sweep.
+  # That makes a changed interval take effect on the very next tick, with no app restart and no
+  # dynamic rescheduling of the underlying Rufus job.
   class SweepScheduler
-    SWEEP_CRON = '*/15 * * * *'
+    TICK_INTERVAL_SECONDS = 60
 
-    @mutex     = Mutex.new
-    @scheduler = nil
-    @job       = nil
+    @mutex        = Mutex.new
+    @scheduler    = nil
+    @job          = nil
+    @last_run_at  = nil
 
     class << self
       def start
@@ -26,7 +32,9 @@ module RedmineSlaCompliance
           return if @scheduler
 
           @scheduler = Rufus::Scheduler.new
-          @job = @scheduler.cron(SWEEP_CRON) { run_sweep! }
+          # overlap: false — if a sweep somehow overruns the tick, skip re-entering it rather than
+          # stacking concurrent runs in the same process.
+          @job = @scheduler.interval("#{TICK_INTERVAL_SECONDS}s", overlap: false) { tick! }
         end
       end
 
@@ -35,7 +43,27 @@ module RedmineSlaCompliance
         !@scheduler.nil?
       end
 
+      # The live-configured cadence in minutes — delegates to `Sla::PluginSettings` so the admin
+      # settings screen and the scheduler read the exact same value.
+      def interval_minutes
+        Sla::PluginSettings.sweep_interval_minutes
+      end
+
       private
+
+      # Runs on every tick (every TICK_INTERVAL_SECONDS); only actually sweeps once the
+      # currently-configured interval has elapsed since the last run.
+      def tick!
+        now = Time.current
+        return unless due?(now)
+
+        @last_run_at = now
+        run_sweep!
+      end
+
+      def due?(now)
+        @last_run_at.nil? || (now - @last_run_at) >= interval_minutes * 60
+      end
 
       def run_sweep!
         # The scheduler runs on its own thread, so check out a dedicated connection; a failure is

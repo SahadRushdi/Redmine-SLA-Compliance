@@ -24,7 +24,7 @@ class SlaNotificationSettingsController < ApplicationController
     permitted = params.require(:sla_notification_setting)
                       .permit(:google_chat_webhook, :at_risk_email_enabled,
                               :at_risk_email_frequency, :at_risk_digest_interval_minutes,
-                              :stale_email_enabled, :stale_email_frequency,
+                              :stale_email_enabled, :stale_email_frequency, :stale_threshold_days,
                               at_risk_email_recipients: [], stale_email_recipients: []).to_h
     %w[at_risk_email_recipients stale_email_recipients].each do |key|
       permitted[key] = Array(permitted[key]).map(&:strip).reject(&:empty?) if permitted.key?(key)
