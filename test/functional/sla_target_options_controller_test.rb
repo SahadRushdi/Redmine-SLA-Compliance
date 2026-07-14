@@ -76,4 +76,56 @@ class SlaTargetOptionsControllerTest < ActionController::TestCase
     end
     assert_redirected_to sla_target_options_path
   end
+
+  # --- Best Effort + basis (B4) --------------------------------------------------------------
+
+  test "create persists a Best Effort option with no seconds value" do
+    assert_difference 'SlaTargetOption.count', 1 do
+      post :create, params: { sla_target_option: { target_type: 'resolution', code: 'be',
+                                                   label: 'Best Effort', best_effort: '1' } }
+    end
+    assert_redirected_to sla_target_options_path
+    option = SlaTargetOption.order(:id).last
+    assert option.best_effort?
+    assert_nil option.seconds
+  end
+
+  test "create clears any posted seconds value when Best Effort is checked" do
+    post :create, params: { sla_target_option: { target_type: 'resolution', code: 'be',
+                                                 label: 'Best Effort', best_effort: '1',
+                                                 seconds: '3600' } }
+    option = SlaTargetOption.order(:id).last
+    assert_nil option.seconds, 'Best Effort must never carry a numeric duration'
+  end
+
+  test "create rejects a non-Best-Effort option with no seconds value" do
+    assert_no_difference 'SlaTargetOption.count' do
+      post :create, params: { sla_target_option: { target_type: 'response', code: 'x',
+                                                   label: 'x' } }
+    end
+    assert_response :success
+    assert_select_error(/Seconds/)
+  end
+
+  test "create persists the basis" do
+    post :create, params: { sla_target_option: { target_type: 'resolution', code: '1bd',
+                                                 label: '1 Business Day', seconds: 28_800,
+                                                 basis: 'business' } }
+    assert_equal 'business', SlaTargetOption.order(:id).last.basis
+  end
+
+  test "basis defaults to calendar when not specified" do
+    option = make_option
+    assert_equal 'calendar', option.basis
+  end
+
+  test "create rejects an invalid basis" do
+    assert_no_difference 'SlaTargetOption.count' do
+      post :create, params: { sla_target_option: { target_type: 'response', code: '1h',
+                                                   label: '1 hour', seconds: 3600,
+                                                   basis: 'bogus' } }
+    end
+    assert_response :success
+    assert_select_error(/Basis/)
+  end
 end

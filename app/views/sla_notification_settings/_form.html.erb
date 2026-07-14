@@ -47,6 +47,9 @@
             <%= number_field_tag 'sla_notification_setting[at_risk_digest_interval_minutes]',
                   setting.at_risk_digest_interval_minutes, min: 1,
                   id: 'sla_notification_digest_interval', class: sla_input_classes %>
+            <p class="tw-mt-1 tw-text-xs tw-text-gray-500">
+              <%= l(:text_sla_digest_interval_hint, sweep_minutes: Sla::PluginSettings.sweep_interval_minutes) %>
+            </p>
           </div>
         </div>
       </div>
@@ -85,7 +88,7 @@
       </div>
     </div>
 
-    <%= submit_tag l(:button_save),
+    <%= submit_tag l(:button_sla_save_notifications),
           class: 'tw-text-white tw-bg-primary-600 hover:tw-bg-primary-700 focus:tw-ring-2 ' \
                  'focus:tw-ring-primary-300 tw-font-medium tw-rounded-lg tw-text-sm ' \
                  'tw-px-5 tw-py-2.5 tw-cursor-pointer' %>

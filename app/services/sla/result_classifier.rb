@@ -12,18 +12,25 @@ module Sla
   # responsible for persisting to sla_results). Inputs are already-resolved config so the whole
   # thing is unit-testable without a database.
   #
-  # Milestones (each skipped when its target is nil):
+  # Milestones (each skipped when neither a numeric target nor Best Effort is set):
   #   * response   — clock start → first response (per policy.first_response_rule, 2.5)
   #   * workaround — clock start → first transition into a `work_started`-role status
   #   * resolution — clock start → first transition into a `resolved`-role status
+  # A Best Effort milestone (B4) has no numeric target — it never breaches and is never at-risk,
+  # but its elapsed time is still tracked and reported.
   #
   # Clock: starts at creation and RESTARTS from the latest reopen (transition into a
   # `created`-role status). A resolved ticket stops the clock at resolution; an unachieved
   # milestone on a resolved ticket is judged by whether its target was exceeded by that point.
   class ResultClassifier
+    # cycle_started_at — the same `clock_start` this classification measured milestones from
+    # (creation, or the latest reopen). Exposed so the sweep can key at-risk notification dedup
+    # per measurement cycle rather than per issue for life: a reopened ticket gets a new
+    # clock_start, and so must be eligible for a fresh at-risk notification. nil for no_sla
+    # results, which never reach the at-risk path.
     Result = Struct.new(:primary_state, :no_sla_reason, :at_risk, :breach_at,
                         :response_seconds, :workaround_seconds, :resolution_seconds,
-                        :deviation_seconds, keyword_init: true)
+                        :deviation_seconds, :cycle_started_at, keyword_init: true)
 
     # @param policy [#business_hours?, #business_calendar, #first_response_rule,
     #   #at_risk_threshold, #pause_enabled, nil] the effective SlaPolicy (nil ⇒ not configured).
@@ -58,7 +65,8 @@ module Sla
         response_seconds:   elapsed_for(milestones, :response),
         workaround_seconds: elapsed_for(milestones, :workaround),
         resolution_seconds: elapsed_for(milestones, :resolution),
-        deviation_seconds:  breached ? max_overage(milestones) : nil
+        deviation_seconds:  breached ? max_overage(milestones) : nil,
+        cycle_started_at:   clock_start
       )
     end
 
@@ -70,25 +78,30 @@ module Sla
 
     def evaluated_milestones
       [
-        milestone(:response,   @definition.response_seconds,   response_at),
-        milestone(:workaround, @definition.workaround_seconds, workaround_at),
-        milestone(:resolution, @definition.resolution_seconds, resolution_at)
+        milestone(:response,   @definition.response_seconds,   response_at,   @definition.response_best_effort?),
+        milestone(:workaround, @definition.workaround_seconds, workaround_at, @definition.workaround_best_effort?),
+        milestone(:resolution, @definition.resolution_seconds, resolution_at, @definition.resolution_best_effort?)
       ].compact
     end
 
-    def milestone(kind, target, achieved_at)
-      return nil if target.nil?
+    # A Best Effort milestone (target nil, best_effort true) is still evaluated — it has an
+    # elapsed time worth reporting — but by definition NEVER breaches and is therefore never
+    # at-risk either (there is no deadline to approach). A milestone that is neither targeted nor
+    # Best Effort is skipped entirely, exactly as before.
+    def milestone(kind, target, achieved_at, best_effort)
+      return nil if target.nil? && !best_effort
 
       end_time = achieved_at || closed_at || @now
       elapsed  = pause.net_elapsed(clock_start, end_time)
       { kind: kind, target: target, elapsed: elapsed,
-        breached: elapsed > target, pending: achieved_at.nil? && open? }
+        breached: best_effort ? false : elapsed > target,
+        pending: achieved_at.nil? && open?, best_effort: best_effort }
     end
 
     def risk(primary, milestones)
       return [false, nil] unless primary == 'met' && open?
 
-      pending = milestones.select { |m| m[:pending] }
+      pending = milestones.select { |m| m[:pending] && !m[:best_effort] }
       return [false, nil] if pending.empty?
 
       AtRiskEvaluator.new(threshold_percent: @policy.at_risk_threshold,

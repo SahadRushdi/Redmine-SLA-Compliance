@@ -58,4 +58,76 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_response :success
     assert_select '#tab-content-sla_policy', 0
   end
+
+  # --- B3: inheritance banner, not a blank editable form ---------------------------------------
+  #
+  # The bug being regression-tested: a child project with no SLA policy of its own used to render
+  # the SAME blank editable form as a project with no policy anywhere — and saving that blank
+  # form silently created a disabled override, defeating inheritance. A child with an inherited
+  # policy must never show `#sla-policy-form` at all.
+
+  def grant_child_access(project)
+    member = Member.find_or_initialize_by(user_id: 2, project_id: project.id)
+    member.role_ids = (member.role_ids + [@role.id]).uniq
+    member.save!
+    project.enable_module!(:sla_compliance)
+  end
+
+  test "a project with no policy of its own but an inherited one shows the banner, not the form" do
+    parent = Project.find(5) # private-child, parent = ecookbook (1)
+    grant_child_access(parent)
+    SlaPolicy.create!(project_id: @project.id, enabled: true) # ecookbook's own policy
+
+    get :settings, params: { id: parent.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select '#sla-policy-form', 0, 'must never render the editable form for an inherited policy'
+    assert_select '#sla-policy-form-container' do
+      assert_select 'button#sla-override-load'
+    end
+  end
+
+  test "a project with its own policy renders the editable form even though its parent also has one" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: @project.id, enabled: true) # parent's policy
+    SlaPolicy.create!(project_id: child.id, enabled: true)    # child's own policy wins
+
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select '#sla-policy-form'
+    assert_select 'button#sla-override-load', 0
+  end
+
+  test "a project with no policy anywhere shows the blank form with a helper hint, not the banner" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select '#sla-policy-form'
+    assert_select 'button#sla-override-load', 0
+  end
+
+  def revert_delete_form_selector(project)
+    "form[action='#{project_sla_policy_path(project)}'] input[name='_method'][value='delete']"
+  end
+
+  test "Revert to inherited policy is offered only when an ancestor also has a policy" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: @project.id, enabled: true) # ancestor policy exists
+    SlaPolicy.create!(project_id: child.id, enabled: true)    # and child has its own
+
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
+    assert_select revert_delete_form_selector(child)
+  end
+
+  test "Revert to inherited policy is NOT offered when no ancestor has a policy" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: child.id, enabled: true) # only the child has one
+
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
+    assert_select revert_delete_form_selector(child), 0
+  end
 end

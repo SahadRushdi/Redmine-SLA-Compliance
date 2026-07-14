@@ -3,25 +3,26 @@
 require_relative '../../test_helper'
 
 # Sweep scheduler guards + the configurable-interval "tick" design (Phase 3 hardening).
-# The scheduler itself is a thin rufus wrapper; the sweep logic is covered by sweep_test.rb. Here
-# we assert: it never starts under rake/tests, honours an env kill-switch, is idempotent (no
-# second scheduler on a repeat start), ticks on a fixed fine-grained cadence with overlap
-# disabled, and only actually sweeps once the ADMIN-CONFIGURED interval has elapsed — so changing
-# the setting takes effect on the next tick without any app restart or job rescheduling.
+# The scheduler itself is a thin rufus wrapper; the sweep logic is covered by sweep_test.rb, and
+# the atomic multi-process claim is covered by sla_sweep_state_test.rb. Here we assert: it never
+# starts under rake/tests, honours an env kill-switch, is idempotent (no second scheduler on a
+# repeat start), ticks on a fixed fine-grained cadence with overlap disabled, and that `tick!`
+# defers entirely to `SlaSweepState.claim_run!` to decide whether to actually sweep.
 class Sla::SweepSchedulerTest < ActiveSupport::TestCase
   Scheduler = RedmineSlaCompliance::SweepScheduler
 
   setup do
     Setting.plugin_redmine_sla_compliance = {}
+    SlaSweepState.delete_all
   end
 
   teardown do
     # Never leave a (stubbed) scheduler set for other tests / the real boot.
     Scheduler.instance_variable_set(:@scheduler, nil)
     Scheduler.instance_variable_set(:@job, nil)
-    Scheduler.instance_variable_set(:@last_run_at, nil)
     ENV.delete('SLA_SWEEP_SCHEDULER_DISABLED')
     Setting.plugin_redmine_sla_compliance = {}
+    SlaSweepState.delete_all
   end
 
   # --- admin-configurable interval (delegates to Sla::PluginSettings) -----------------------
@@ -64,47 +65,26 @@ class Sla::SweepSchedulerTest < ActiveSupport::TestCase
     assert Scheduler.running?
   end
 
-  # --- tick-based scheduling: the configurable interval, not the fixed Rufus job, gates runs --
+  # --- tick! defers to the atomic DB claim, not process-local state --------------------------
 
-  test "due? is true on the very first tick (no prior run recorded)" do
-    assert Scheduler.send(:due?, Time.current)
-  end
-
-  test "due? is false until the configured interval has elapsed since the last run" do
-    Setting.plugin_redmine_sla_compliance = { 'sweep_interval_minutes' => '15' }
-    last = Time.current
-    Scheduler.instance_variable_set(:@last_run_at, last)
-
-    refute Scheduler.send(:due?, last + 14.minutes)
-    assert Scheduler.send(:due?, last + 15.minutes)
-  end
-
-  test "shortening the configured interval makes a pending tick due sooner, with no rescheduling" do
-    last = 10.minutes.ago
-    Scheduler.instance_variable_set(:@last_run_at, last)
-
-    Setting.plugin_redmine_sla_compliance = { 'sweep_interval_minutes' => '15' }
-    refute Scheduler.send(:due?, Time.current), 'not yet due under the original 15-minute interval'
-
-    Setting.plugin_redmine_sla_compliance = { 'sweep_interval_minutes' => '5' }
-    assert Scheduler.send(:due?, Time.current),
-           'the very next tick honours the shortened interval immediately'
-  end
-
-  test "tick! runs the sweep and records the run time when due" do
-    Scheduler.instance_variable_set(:@last_run_at, nil)
+  test "tick! runs the sweep when it wins the DB claim" do
     Scheduler.expects(:run_sweep!).once
 
     Scheduler.send(:tick!)
-
-    refute_nil Scheduler.instance_variable_get(:@last_run_at)
   end
 
-  test "tick! does not run the sweep when not yet due" do
+  test "tick! does not run the sweep when the claim is already held for this interval" do
     Setting.plugin_redmine_sla_compliance = { 'sweep_interval_minutes' => '15' }
-    Scheduler.instance_variable_set(:@last_run_at, Time.current)
+    SlaSweepState.claim_run!(now: Time.current, interval_minutes: 15) # another worker just won it
     Scheduler.expects(:run_sweep!).never
 
     Scheduler.send(:tick!)
+  end
+
+  test "a second worker's tick in the same interval never also sweeps" do
+    Scheduler.expects(:run_sweep!).once # only the first tick's claim should succeed
+
+    Scheduler.send(:tick!) # simulates worker A
+    Scheduler.send(:tick!) # simulates worker B racing the same interval
   end
 end

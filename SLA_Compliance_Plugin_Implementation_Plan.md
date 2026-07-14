@@ -220,6 +220,94 @@ Concrete choices so the engine is unambiguous. Where a value is configurable, th
 
 ---
 
+# PHASE 4A — Policy UI Gaps Found in Client-Spec Review ✅Done
+
+> Findings from re-reviewing the built Phase 4 UI against the client spec PDF and the running
+> screenshots, plus a follow-up hardening pass on the Phase 3 fixes. All items below were
+> triaged (verified against the codebase first, not blind-fixed) and are closed as of this
+> section being added, with test coverage.
+
+### Step 4A.1 — Best Effort + calendar/business target basis
+- `sla_target_options` gained `best_effort` (bool) and `basis` ('calendar'|'business') columns.
+  A Best Effort option has no `seconds` value and is never required to have one.
+- `sla_definitions` gained per-milestone `*_best_effort` flags (snapshotted, consistent with the
+  existing "snapshot the chosen value" design — never an FK back to the lookup).
+- Engine: a Best Effort milestone is evaluated (elapsed time still reported) but never breaches
+  and is never at-risk.
+- A 'business'-basis target (e.g. "1 Business Day") paired with a `24x7x365`-coverage policy is
+  rejected at save time (`SlaDefinition` validation) — it would otherwise silently be read as
+  calendar time with no warning.
+- **Done when:** Best Effort options are creatable and selectable per priority row; a Best
+  Effort milestone never contributes to `breached`/`at_risk`; a business-basis target under
+  24x7 coverage fails the save atomically with a clear error.
+
+### Step 4A.2 — Inheritance banner + Override / Revert
+- A project with no policy of its own but an inherited one now renders a **read-only summary**
+  ("This project inherits its SLA policy from X") instead of the interactive form — the
+  interactive form used to render blank in this case, and saving it silently created an empty
+  override that disabled SLA for the child project.
+- **Override for this project** unlocks the real form, prefilled from the ancestor's policy —
+  implemented by reusing the existing Step 4.7 clone-prefill AJAX path with the ancestor as the
+  source (no new prefill logic).
+- **Revert to inherited policy** deletes the project's own policy row (cascading to its
+  definitions/mappings) when both the project has its own row AND some further ancestor has one;
+  it recalculates `sla_results` in place, never deletes the cache.
+- `SlaPolicy.source_for(project)` (new) answers "which project does the displayed policy actually
+  belong to" — reuses `effective_for`'s `self_and_ancestors` traversal rather than a second
+  tree-walk.
+- **Done when:** an inherited project never shows an editable blank form; Override prefills and
+  requires an explicit Save; Revert is offered only when there's something to revert to and never
+  deletes cached results.
+
+### Step 4A.3 — Notification dedup hardening (Phase 3 follow-up)
+Re-review of the Phase 3 fixes surfaced three problems in the fixes themselves, all closed here:
+- The dedup unique index would have aborted on first run against any real (non-empty) database
+  with pre-existing duplicate rows — migration now dedupes via
+  `RedmineSlaCompliance::NotificationLogDeduplicator` before creating the index.
+- The dedup key was a lifetime claim, which would have permanently blocked re-notification after
+  a ticket resolves and reopens (a new SLA measurement cycle). A `cycle_key` column was added:
+  for at-risk claims it's the engine's `cycle_started_at`; for stale-digest claims it's the
+  claimed digest window's instant. A still-stale ticket now reappears in every digest window it
+  qualifies for, not just once ever.
+- The sweep itself had no cross-process claim, so every app-server worker ran the full sweep
+  every interval. `SlaSweepState.claim_run!` (a conditional `UPDATE`, mirroring the stale-digest
+  window claim) now lets only one worker actually run it per interval.
+- Whether running the scheduler inside web-server worker processes (current approach, now
+  correct under concurrency via the claim above) vs. an OS-cron-invoked rake task or a
+  delayed_job-scheduled recurring job is the right long-term architecture for this Redmine
+  instance is still an open deployment decision — see the comment in
+  `lib/redmine_sla_compliance/sweep_scheduler.rb`. Not settled by this pass.
+
+### Step 4A.4 — Sweep interval fully admin-configurable
+`Sla::PluginSettings.sweep_interval_minutes`, read from Administration → Plugins → SLA
+Compliance (default 15, clamped 1–1440). The scheduler ticks every 60s and only actually sweeps
+once the currently-configured interval has elapsed, so a changed setting takes effect within a
+minute — no app restart, no dynamic Rufus job rescheduling.
+
+### Items reviewed and confirmed already correct (no change made)
+- **At-risk threshold + first-response radio (4.3):** both already render, persist, and are
+  tested — no gap found.
+- **Digest interval field (4.6):** already exists as `at_risk_digest_interval_minutes`, correctly
+  conditional on frequency=digest. Added a hint cross-referencing the global sweep interval
+  rather than a hard validation — a short digest interval just batches at the sweep's cadence,
+  it doesn't produce a wrong answer the way B4's basis mismatch did.
+- **Status chip scoping:** deliberately project-wide (`Project#rolled_up_statuses`), not scoped
+  to one tracker's workflow. `sla_status_mappings` is one row per (policy, role) — not per
+  tracker — so narrowing to a single tracker's reachable statuses would incorrectly exclude
+  statuses other trackers in the same project actually use. Redmine's own workflow model also
+  has no tracker-only "reachable statuses" concept — reachability is always (tracker, role).
+- **Select-dropdown "clipping" in the screenshots:** the compiled scoped Tailwind CSS has no
+  `overflow-hidden`, fixed height, or line-clamp rule near any `<select>` — the screenshot in
+  question shows the "No target duration options defined yet" empty state, which is the more
+  likely explanation. Revisit with target options actually populated before treating this as a
+  CSS bug.
+- **Two Save buttons:** intentional — the policy and notification forms are gated by different
+  permissions (`edit_sla_policy` vs `manage_sla_notifications`) and must stay independently
+  submittable. Relabelled "Save Policy" / "Save Notification Settings" for clarity instead of
+  merging the forms.
+
+---
+
 # PHASE 5 — Access Control
 
 ### Step 5.1 — Role-based visibility & edit
@@ -301,6 +389,8 @@ Concrete choices so the engine is unambiguous. Where a value is configurable, th
 3.1 → 3.2 → 3.3   (3.3 = time-driven sweep, needs 2.7 / 2.8)
    ↓
 4.1 → 4.2 → 4.3 → 4.4 → 4.5 → 4.6 → 4.7 → 4.8   (4.8 needs 3.2)
+   ↓
+4A.1 → 4A.2 → 4A.3 → 4A.4   (gap-review hardening pass; 4A.3 revisits 3.1-3.3)
    ↓
 5.1
    ↓

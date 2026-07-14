@@ -9,8 +9,21 @@
 <div class="sla-plugin">
   <% if User.current.allowed_to?(:edit_sla_policy, @project) %>
     <div id="sla-policy-form-container">
-      <%= render 'sla_policies/form',
-                 project: @project, policy: sla_policy_for_form(@project) %>
+      <%# B3: an inherited (not-own) policy renders as a read-only banner, never a blank %>
+      <%# editable form — saving a blank form used to silently create an empty override that %>
+      <%# disabled SLA for this project. `clone_from` present means Override was just clicked %>
+      <%# (mid AJAX re-render into the real edit form), so it takes precedence. %>
+      <% source_project, source_policy = SlaPolicy.source_for(@project) %>
+      <% if source_project.present? && source_project != @project && params[:clone_from].blank? %>
+        <%= render 'sla_policies/inherited_banner',
+                   project: @project, source_project: source_project, source_policy: source_policy %>
+      <% else %>
+        <% if source_project.nil? && params[:clone_from].blank? %>
+          <p class="tw-text-sm tw-text-gray-500 tw-mb-4"><%= l(:text_sla_no_policy_anywhere_hint) %></p>
+        <% end %>
+        <%= render 'sla_policies/form',
+                   project: @project, policy: sla_policy_for_form(@project) %>
+      <% end %>
     </div>
   <% end %>
 

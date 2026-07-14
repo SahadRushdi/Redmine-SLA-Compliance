@@ -38,6 +38,7 @@ module Sla
         workaround_seconds: result.workaround_seconds,
         resolution_seconds: result.resolution_seconds,
         deviation_seconds:  result.deviation_seconds,
+        cycle_started_at:   result.cycle_started_at,
         calculated_at:      now
       )
       record.save!

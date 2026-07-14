@@ -1,8 +1,24 @@
 # Remaining Requirements — SLA Compliance Plugin (Phases 0–4 Review)
 
-> **Update (same day):** All Phase 3 and Phase 4 issues identified below have been fixed and are
-> covered by new/updated tests. See the "Fix Status" section at the end of each affected phase and
-> the summary at the bottom. Full suite: **215 runs, 562 assertions, 0 failures, 0 errors.**
+> **Update (same day, pass 1):** All Phase 3 and Phase 4 issues identified below have been fixed
+> and are covered by new/updated tests. See the "Fix Status" section at the end of each affected
+> phase and the summary at the bottom.
+
+> **Update (same day, pass 2 — Phase 4A):** A follow-up review surfaced three real problems in
+> pass 1's own Phase 3 fixes (a migration that would fail on a real non-empty database, a
+> notification-dedup key that permanently blocked re-notification after a reopen, and no
+> cross-process claim on the sweep itself — all fixed), plus new client-spec gaps in Phase 4:
+> Best Effort targets were impossible to configure, business-basis durations under 24x7 coverage
+> silently gave a wrong number, and a project with an inherited (not own) policy rendered a blank
+> editable form that would silently disable SLA for that project on save. All fixed; full detail
+> in the new **PHASE 4A** section of `SLA_Compliance_Plugin_Implementation_Plan.md`. A handful of
+> other reviewed claims (at-risk threshold/first-response fields, digest interval field, status
+> chip scoping, select "clipping," two Save buttons) turned out to already be correct or working
+> as intended — see Phase 4A's "Items reviewed and confirmed already correct" list for why.
+>
+> **Current full suite: 277 runs, 720 assertions, 0 failures, 0 errors** — verified against a
+> completely fresh migration (001→002→003 from an empty schema), not just an incrementally
+> patched one.
 
 **Reviewed against:** `SLA_Compliance_Plugin_Implementation_Plan.md` (source of truth per CLAUDE.md) and
 `Requirement Specification for SLA Compliance Plugin.pdf` (original client spec), cross-checked with the
@@ -269,21 +285,51 @@ functional tests in `sla_policies_controller_test.rb` (posted-row rejection, clo
 4. ~~**[Phase 4, medium]** Implement Priority "None" exclusion~~ — **FIXED.** New
    `unclassified_priority_id` global setting (ID-based, auto-detected default), enforced in the
    engine, UI, and controller.
-5. **[Phase 2, low, not yet addressed]** Add business-hours "breached" test cases to
-   `at_risk_evaluator_test.rb` and `result_classifier_test.rb` to fully satisfy Step 2.7's stated
-   acceptance criteria. Out of scope for this fix pass (Phase 2 wasn't reported as broken) — left
-   here as a follow-up.
-6. **[Phase 4, low, not yet addressed]** Add a Phase-4-level regression test confirming an empty
-   pause-status list round-trips through the UI form into "no pause" behavior. Also left as a
-   follow-up; the engine-level guard itself is correct and tested at the Phase 2 layer.
+5. ~~**[Phase 2, low]** Add business-hours "breached" test cases~~ — **FIXED** (pass 2). Added to
+   both `at_risk_evaluator_test.rb` and `result_classifier_test.rb` (met+at-risk and breached, full
+   pipeline).
+6. ~~**[Phase 4, low]** Empty pause-list UI round-trip regression test~~ — **FIXED** (pass 2). New
+   integration-style test in `sla_policies_controller_test.rb` saves via the real form, then runs
+   the engine on a real issue and asserts no pause subtraction occurred.
 
-**Current state:** all four Phase 3/4 gaps from the original review are fixed, tested, and verified
-against the live test database (migration applied cleanly, forward and idempotent-safe on re-run;
-full suite green at 215 runs / 562 assertions / 0 failures). Items 5–6 are minor test-coverage
-follow-ups, not functional defects, and were not part of this fix pass.
+## Phase 4A Punch List (pass 2 — see the plan's PHASE 4A section for full detail)
 
-**Not yet done:** the migration has only been run against the `test` database in this session — it
-has not been applied to `development`/production. Run
+1. ~~**[Phase 3, critical]** Migration 002 would fail on any real, non-empty database~~ — **FIXED.**
+   `RedmineSlaCompliance::NotificationLogDeduplicator` collapses pre-existing duplicate rows before
+   the unique index is created; verified with a test that seeds real duplicates via raw SQL.
+2. ~~**[Phase 3, critical]** The dedup key permanently blocked re-notification after a ticket
+   reopened~~ — **FIXED.** Added a `cycle_key` column (engine's `cycle_started_at` for at-risk,
+   digest-window instant for stale) to the unique index — a new SLA measurement cycle can always be
+   notified again.
+3. ~~**[Phase 3, high]** Stale-digest dedup was lifetime-scoped, not per-window~~ — **FIXED** as part
+   of item 2 — a still-stale ticket now reappears in every digest window it qualifies for.
+4. ~~**[Phase 3, medium]** No cross-process claim on the sweep itself (N workers = N x the work)~~ —
+   **FIXED.** New `SlaSweepState.claim_run!`, the same atomic-conditional-UPDATE pattern as the
+   stale-digest window claim.
+5. ~~**[Phase 4, high]** "Best Effort" resolution target was impossible to configure~~ — **FIXED.**
+   `sla_target_options.best_effort` + per-milestone flags on `sla_definitions`; engine treats it as
+   never-breach, never-at-risk.
+6. ~~**[Phase 4, high]** Business-basis durations (e.g. "1 Business Day") silently gave a wrong
+   number under 24x7 coverage~~ — **FIXED.** `sla_target_options.basis` + a hard validation blocking
+   the mismatched combination at save time.
+7. ~~**[Phase 4, critical]** A project with an inherited (not own) policy rendered a blank editable
+   form, and saving it silently created a disabling override~~ — **FIXED.** Read-only inheritance
+   banner + Override (reuses the existing clone-prefill path) + Revert-to-inherited action.
+8. **DISAGREE, no change made** — select "clipping," tracker-scoped status lists, and merging the
+   two Save buttons. Reasoning for each is in the plan's Phase 4A "Items reviewed and confirmed
+   already correct" list.
+
+**Current state:** every item raised in both review passes is either fixed-and-tested or has a
+documented reason it wasn't changed. Full suite: **277 runs, 720 assertions, 0 failures, 0 errors**,
+verified against a migration run from a completely empty schema (not just incrementally patched).
+
+**Not yet done:** the migrations (001→002→003) have only been run against the `test` database in
+this session — none have been applied to `development`/production. Run
 `bundle exec rake redmine:plugins:migrate NAME=redmine_sla_compliance RAILS_ENV=<env>` for whichever
 environment(s) need it next; this was deliberately left for the user to trigger given the
-live-instance handling conventions for this project.
+live-instance handling conventions for this project. Also still open: whether running the sweep
+scheduler inside web-server worker processes is the right long-term architecture for this instance,
+vs. an OS-cron rake task or a delayed_job-scheduled recurring job (see Phase 4A.3 and the comment in
+`lib/redmine_sla_compliance/sweep_scheduler.rb`) — the current approach is now correct under
+concurrency, but the underlying "should scheduling logic live inside request-serving processes at
+all" question from Step 0.1 is still an open deployment decision, not a code fix.

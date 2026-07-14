@@ -131,6 +131,38 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_equal [], saved.status_ids_for(:pause)
   end
 
+  # Phase-4-level regression (C): the engine-level "empty pause list = no pause" guard is already
+  # tested in isolation at Phase 2 (Sla::PauseCalculator), but nothing previously proved the UI
+  # form's save path actually WIRES an empty selection through to that behavior end-to-end.
+  test "an empty pause list saved via the form round-trips into no pause subtraction at the engine level" do
+    work_status = @status_ids.second
+    put :update, params: base_params(
+      status_mappings: { created: [@status_ids.first.to_s] }, # pause intentionally left empty
+      definitions: { tracker_id: @trackers.first.id.to_s,
+                     rows: { @priorities.first.id.to_s => { response: @opt_1h.seconds.to_s } } }
+    )
+    saved = policy
+    assert_equal [], saved.status_ids_for(:pause), 'pause selection must round-trip to empty'
+
+    base = Time.zone.local(2026, 6, 1, 9, 0, 0)
+    issue = Issue.new(project_id: @project.id, tracker_id: @trackers.first.id, author_id: 2,
+                      priority_id: @priorities.first.id, status_id: @status_ids.first,
+                      subject: 'pause round-trip')
+    issue.save!(validate: false)
+    issue.update_column(:created_on, base)
+
+    # A status change into a status that WOULD have paused the clock if pause were configured.
+    journal = Journal.new(journalized: issue, user: User.find(2), created_on: base + 10.minutes)
+    journal.details << JournalDetail.new(property: 'attr', prop_key: 'status_id',
+                                         old_value: @status_ids.first.to_s, value: work_status.to_s)
+    journal.save!
+    issue.update_column(:status_id, work_status)
+
+    result = Sla::IssueEvaluator.new(issue.reload, now: base + 50.minutes).call
+    assert_equal 3000, result.response_seconds,
+                 'no pause status is configured, so the full 50 minutes must count, unreduced'
+  end
+
   test "statuses foreign to the project are rejected" do
     foreign = IssueStatus.create!(name: 'Not In Workflow')
     assert_not_includes @status_ids, foreign.id
@@ -194,6 +226,67 @@ class SlaPoliciesControllerTest < ActionController::TestCase
                      rows: { priority.id.to_s => { response: '12345' } } }
     )
     assert_equal 0, policy.sla_definitions.count
+  end
+
+  # --- Best Effort + basis (B4) --------------------------------------------------------------
+
+  test "posting 'best_effort' persists a Best Effort target with no seconds value" do
+    SlaTargetOption.create!(target_type: 'resolution', code: 'be', label: 'Best Effort',
+                            best_effort: true)
+    priority = @priorities.first
+
+    put :update, params: base_params(
+      definitions: { tracker_id: @trackers.first.id.to_s,
+                     rows: { priority.id.to_s => { resolution: 'best_effort' } } }
+    )
+
+    definition = policy.sla_definitions.find_by(tracker_id: @trackers.first.id, priority_id: priority.id)
+    assert definition.resolution_best_effort?
+    assert_nil definition.resolution_seconds
+  end
+
+  test "posting 'best_effort' is rejected when no Best Effort option is configured for that type" do
+    priority = @priorities.first
+
+    put :update, params: base_params(
+      definitions: { tracker_id: @trackers.first.id.to_s,
+                     rows: { priority.id.to_s => { resolution: 'best_effort' } } }
+    )
+
+    assert_equal 0, policy.sla_definitions.count
+  end
+
+  test "a business-basis target under 24x7x365 coverage fails the save atomically" do
+    SlaTargetOption.create!(target_type: 'resolution', code: '1bd', label: '1 Business Day',
+                            seconds: 28_800, basis: 'business')
+    priority = @priorities.first
+
+    put :update, params: base_params(
+      { sla_policy: { coverage_hours: '24x7' },
+        definitions: { tracker_id: @trackers.first.id.to_s,
+                       rows: { priority.id.to_s => { resolution: '28800' } } } }
+    )
+
+    assert flash[:error].present?
+    assert_equal 0, policy&.sla_definitions&.count.to_i
+  end
+
+  test "a business-basis target is accepted under Business Hours coverage" do
+    calendar = SlaBusinessCalendar.create!(name: 'Std', working_days: [1, 2, 3, 4, 5],
+                                           work_start_time: '09:00', work_end_time: '17:00')
+    SlaTargetOption.create!(target_type: 'resolution', code: '1bd', label: '1 Business Day',
+                            seconds: 28_800, basis: 'business')
+    priority = @priorities.first
+
+    put :update, params: base_params(
+      { sla_policy: { coverage_hours: 'business_hours', business_calendar_id: calendar.id.to_s },
+        definitions: { tracker_id: @trackers.first.id.to_s,
+                       rows: { priority.id.to_s => { resolution: '28800' } } } }
+    )
+
+    refute flash[:error].present?
+    definition = policy.sla_definitions.find_by(tracker_id: @trackers.first.id, priority_id: priority.id)
+    assert_equal 28_800, definition.resolution_seconds
   end
 
   test "a posted row for the admin-designated unclassified priority is rejected" do
@@ -349,5 +442,71 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     SlaPolicy.create!(project_id: 3, enabled: true)
     get :edit, params: { project_id: @project.id, clone_from: '3' }, format: 'js', xhr: true
     assert_response :not_found
+  end
+
+  # --- B3: Override via an ancestor the user has no direct edit rights on --------------------
+
+  test "edit.js with clone_from an ANCESTOR project succeeds without direct edit rights there" do
+    # @project (id 1) is the parent of project 5; jsmith is NOT separately granted
+    # edit_sla_policy on project 1 here — only on the child, project 5.
+    SlaPolicy.create!(project_id: @project.id, enabled: true, first_response_rule: 'either')
+    child = Project.find(5)
+    child.enable_module!(:sla_compliance)
+    member = Member.find_or_initialize_by(user_id: 2, project_id: child.id)
+    member.role_ids = (member.role_ids + [@role.id]).uniq
+    member.save!
+
+    get :edit, params: { project_id: child.id, clone_from: @project.id.to_s }, format: 'js', xhr: true
+
+    assert_response :success
+    assert_includes @response.body, 'sla-policy-form-container'
+  end
+
+  test "edit.js with clone_from an unrelated, unauthorized project is still a 404" do
+    SlaPolicy.create!(project_id: 3, enabled: true) # not an ancestor of @project, no direct rights
+    get :edit, params: { project_id: @project.id, clone_from: '3' }, format: 'js', xhr: true
+    assert_response :not_found
+  end
+
+  # --- B3: Revert to inherited policy (destroy) -----------------------------------------------
+
+  test "destroy removes the project's own policy and its definitions/mappings" do
+    saved_policy = SlaPolicy.create!(project_id: @project.id, enabled: true)
+    saved_policy.sla_definitions.create!(tracker_id: @trackers.first.id,
+                                         priority_id: @priorities.first.id, response_seconds: 3600)
+    saved_policy.sla_status_mappings.create!(role: 'created', status_id: @status_ids.first)
+
+    delete :destroy, params: { project_id: @project.id }
+
+    assert_redirected_to settings_project_path(@project, tab: 'sla_policy')
+    assert_nil SlaPolicy.find_by(project_id: @project.id)
+    assert_equal 0, SlaDefinition.where(sla_policy_id: saved_policy.id).count
+    assert_equal 0, SlaStatusMapping.where(sla_policy_id: saved_policy.id).count
+  end
+
+  test "destroy enqueues a recalculation and never touches sla_results" do
+    saved_policy = SlaPolicy.create!(project_id: @project.id, enabled: true)
+    result = SlaResult.create!(issue_id: 999_001, project_id: @project.id, primary_state: 'met')
+
+    assert_enqueued_with(job: SlaPolicyRecalculationJob, args: [@project.id]) do
+      delete :destroy, params: { project_id: @project.id }
+    end
+
+    assert SlaResult.exists?(result.id), 'sla_results must never be deleted by a revert'
+  end
+
+  test "destroy is a no-op (no error) when the project has no own policy to revert" do
+    assert_nothing_raised { delete :destroy, params: { project_id: @project.id } }
+    assert_redirected_to settings_project_path(@project, tab: 'sla_policy')
+  end
+
+  test "destroy is forbidden without edit_sla_policy" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    @role.remove_permission!(:edit_sla_policy)
+
+    delete :destroy, params: { project_id: @project.id }
+
+    assert_response :forbidden
+    assert SlaPolicy.exists?(project_id: @project.id)
   end
 end

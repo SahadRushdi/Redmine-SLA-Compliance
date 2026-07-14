@@ -4,9 +4,8 @@ require 'rufus-scheduler'
 
 module RedmineSlaCompliance
   # In-process scheduler for the at-risk / stale sweep.
-  # Mirrors the established pattern in this install (redmine_time_analytics' schedulers): a
-  # class-level rufus-scheduler singleton started once from `after_initialize`, guarded so it never
-  # double-starts and never spins up under rake/migrations/tests. The actual work lives in
+  # A class-level rufus-scheduler singleton started once from `after_initialize`, guarded so it
+  # never double-starts and never spins up under rake/migrations/tests. The actual work lives in
   # `Sla::Sweep`, which is unit-tested independently; this class only owns scheduling + isolation.
   #
   # The cadence is admin-configurable (Administration → Plugins → SLA Compliance), defaulting to
@@ -16,13 +15,28 @@ module RedmineSlaCompliance
   # "tick" and only actually sweeps once the CONFIGURED interval has elapsed since the last sweep.
   # That makes a changed interval take effect on the very next tick, with no app restart and no
   # dynamic rescheduling of the underlying Rufus job.
+  #
+  # Whether-to-actually-sweep is decided by `SlaSweepState.claim_run!` — a DB-level atomic claim,
+  # NOT process-local state. A production deployment normally runs several app-server worker
+  # processes (Puma cluster mode, Passenger, Unicorn), each booting its own copy of this scheduler;
+  # without a DB-level claim every worker would independently run the full sweep every interval
+  # (N x the recompute load for no correctness benefit — Global Rule 4 is "do not break or slow
+  # Redmine"). The claim means only one worker's tick actually performs the sweep per interval.
+  #
+  # Whether running the scheduler inside web-server workers is the right long-term answer for this
+  # instance is still an open question (see Step 0.1's "confirm the scheduling mechanism" and the
+  # note in the implementation plan) — an OS-level cron job invoking a rake task, or a
+  # delayed_job/ActiveJob-scheduled recurring job, would avoid running scheduling logic inside
+  # request-serving processes entirely and wouldn't need the claim above (a single cron invocation
+  # has no sibling workers to race against). The atomic claim here makes the current in-process
+  # approach *correct* under multiple workers; it doesn't settle whether it's the *right*
+  # architecture for this Redmine instance long-term — that's a deployment decision, not a code fix.
   class SweepScheduler
     TICK_INTERVAL_SECONDS = 60
 
-    @mutex        = Mutex.new
-    @scheduler    = nil
-    @job          = nil
-    @last_run_at  = nil
+    @mutex     = Mutex.new
+    @scheduler = nil
+    @job       = nil
 
     class << self
       def start
@@ -51,18 +65,12 @@ module RedmineSlaCompliance
 
       private
 
-      # Runs on every tick (every TICK_INTERVAL_SECONDS); only actually sweeps once the
-      # currently-configured interval has elapsed since the last run.
+      # Runs on every tick (every TICK_INTERVAL_SECONDS, in every worker process); only actually
+      # sweeps if this call wins the DB-level claim for the current interval.
       def tick!
-        now = Time.current
-        return unless due?(now)
+        return unless SlaSweepState.claim_run!(now: Time.current, interval_minutes: interval_minutes)
 
-        @last_run_at = now
         run_sweep!
-      end
-
-      def due?(now)
-        @last_run_at.nil? || (now - @last_run_at) >= interval_minutes * 60
       end
 
       def run_sweep!

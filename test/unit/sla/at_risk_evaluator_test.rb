@@ -81,6 +81,13 @@ class Sla::AtRiskEvaluatorTest < ActiveSupport::TestCase
     assert at_risk
   end
 
+  test "business: a breached milestone is neither at risk nor projected" do
+    now = UTC.local(2026, 6, 3, 10, 0)
+    at_risk, breach_at = business_eval(now: now).evaluate([{ target: 14_400, elapsed: 15_000 }])
+    refute at_risk
+    assert_nil breach_at
+  end
+
   test "business: breach projection rolls into the next working day" do
     now = UTC.local(2026, 6, 3, 16, 0) # Wed 16:00, 1h to close
     # remaining 10800s (3h): Wed 16:00-17:00 (1h) + Thu 09:00-11:00 (2h) = Thu 11:00.

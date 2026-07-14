@@ -54,4 +54,24 @@ class SlaPolicy < ActiveRecord::Base
     end
     nil
   end
+
+  # Where the policy shown/edited on +project+'s SLA Policy tab actually comes from — distinct
+  # from `effective_for` (which only cares whether the nearest policy is enabled, per Global
+  # Rule 5): this ignores enabled/disabled entirely and returns [source_project, policy] for the
+  # nearest project (self, then ancestors) that HAS A ROW AT ALL. The UI needs this to decide
+  # whether to render an editable form (own row, any enabled state) or a read-only "inherited
+  # from X" banner (nearest row belongs to an ancestor) — reuses the exact same
+  # `self_and_ancestors` traversal `effective_for` walks, not a second tree-walk implementation.
+  def self.source_for(project)
+    return [nil, nil] unless project
+
+    branch = project.self_and_ancestors.to_a
+    policies = where(project_id: branch.map(&:id)).index_by(&:project_id)
+
+    branch.reverse_each do |proj|
+      policy = policies[proj.id]
+      return [proj, policy] if policy
+    end
+    [nil, nil]
+  end
 end

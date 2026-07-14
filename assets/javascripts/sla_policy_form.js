@@ -94,10 +94,25 @@
       if (!window.confirm(formData('confirm-clone'))) { return; }
       fetchRerender({ clone_from: source.value });
     });
+
+    // B3 — "Override for this project": the button lives in the read-only inherited-policy
+    // banner, OUTSIDE #sla-policy-form (which doesn't exist yet in that state), so its own
+    // data- attributes carry the edit URL / confirm text rather than reading from the form.
+    jQuery(document).on('click', '#sla-override-load', function () {
+      var ancestorId = this.getAttribute('data-ancestor-id');
+      var editUrl = this.getAttribute('data-edit-url');
+      if (!ancestorId || !editUrl) { return; }
+      if (!window.confirm(this.getAttribute('data-confirm-override'))) { return; }
+      jQuery.ajax({ url: editUrl, data: { clone_from: ancestorId }, dataType: 'script' });
+    });
   }
 
   function init() {
-    if (!byId('sla-policy-form') && !byId('sla-notification-form')) { return; }
+    // The inherited-policy banner (B3) has neither form but still needs its Override button
+    // wired up, so it's part of the same early-return guard as the two real forms.
+    if (!byId('sla-policy-form') && !byId('sla-notification-form') && !byId('sla-override-load')) {
+      return;
+    }
     initChips();
     initEmailChips();
     toggleCalendarField();

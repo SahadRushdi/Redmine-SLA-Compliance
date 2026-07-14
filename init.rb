@@ -22,7 +22,8 @@ Redmine::Plugin.register :redmine_sla_compliance do
     permission :view_sla_dashboard, { sla_dashboard: [:index] }, read: true
 
     # Create/edit the project's SLA policy (Project Settings → SLA Policy tab, Phase 4).
-    permission :edit_sla_policy, { sla_policies: [:edit, :update] }
+    # :destroy is B3's "Revert to inherited policy" action.
+    permission :edit_sla_policy, { sla_policies: [:edit, :update, :destroy] }
 
     # Manage per-project notification settings (Google Chat webhook, at-risk/stale email).
     permission :manage_sla_notifications, { sla_notification_settings: [:edit, :update] }

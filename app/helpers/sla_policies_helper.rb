@@ -33,18 +33,27 @@ module SlaPoliciesHelper
       trackers.first
   end
 
-  # <option> list for one target dropdown: a leading "not tracked" blank, then the admin
-  # lookup. If the saved value no longer matches any option (the admin edited the lookup),
-  # inject it so it isn't silently dropped on the next save.
-  def sla_target_select_options(target_type, current_seconds)
-    options = sla_target_options_by_type.fetch(target_type.to_s, [])
-                                        .map { |o| [o.label, o.seconds] }
-    if current_seconds.present? && options.none? { |_, seconds| seconds == current_seconds }
+  # <option> list for one target dropdown: a leading "not tracked" blank, then the admin lookup
+  # (numeric durations by seconds, Best Effort rows by the 'best_effort' sentinel — a Best Effort
+  # option has no seconds value to use as the option value). If the saved numeric value no longer
+  # matches any option (the admin edited the lookup), inject it so it isn't silently dropped on
+  # the next save.
+  SLA_BEST_EFFORT_VALUE = 'best_effort'
+
+  def sla_target_select_options(target_type, current_seconds, current_best_effort = false)
+    rows = sla_target_options_by_type.fetch(target_type.to_s, [])
+    options = rows.reject(&:best_effort?).map { |o| [o.label, o.seconds.to_s] }
+    options += rows.select(&:best_effort?).map { |o| [o.label, SLA_BEST_EFFORT_VALUE] }
+
+    if !current_best_effort && current_seconds.present? &&
+       options.none? { |_, value| value == current_seconds.to_s }
       options.unshift([l(:label_sla_target_current_value,
-                         value: format_sla_duration(current_seconds)), current_seconds])
+                         value: format_sla_duration(current_seconds)), current_seconds.to_s])
     end
     options.unshift([l(:label_sla_target_skipped), ''])
-    options_for_select(options, current_seconds || '')
+
+    selected = current_best_effort ? SLA_BEST_EFFORT_VALUE : (current_seconds || '').to_s
+    options_for_select(options, selected)
   end
 
   def sla_target_options_by_type
@@ -56,6 +65,41 @@ module SlaPoliciesHelper
   # SLA Compliance)? Always excluded from SLA Definitions — see Sla::PolicyContext#definition_for.
   def sla_unclassified_priority?(priority_id)
     priority_id.present? && priority_id == Sla::PluginSettings.unclassified_priority_id
+  end
+
+  # --- B3: read-only display for the "inherited from an ancestor" banner ---------------------
+  # Plain text, not form pre-population — see _inherited_banner.html.erb for why this is
+  # deliberately NOT the same interactive form partial used for an owned policy.
+
+  def sla_status_names(policy, role)
+    ids = sla_status_ids(policy, role)
+    return l(:label_sla_target_skipped) if ids.empty?
+
+    IssueStatus.where(id: ids).order(:position).pluck(:name).join(', ')
+  end
+
+  # One summary line per priority that has a definition on +tracker+, e.g.
+  # "High — Response: 1h, Workaround: —, Resolution: Best Effort".
+  def sla_target_summary_lines(policy, tracker)
+    return [] unless tracker
+
+    definitions = sla_definition_map(policy, tracker)
+    IssuePriority.active.filter_map do |priority|
+      definition = definitions[priority.id]
+      next if definition.nil?
+
+      parts = SlaDefinition::TARGET_TYPES.map do |type|
+        "#{sla_target_type_label(type)}: #{sla_target_summary_value(definition, type)}"
+      end
+      "#{priority.name} — #{parts.join(', ')}"
+    end
+  end
+
+  def sla_target_summary_value(definition, type)
+    return l(:field_sla_best_effort) if definition.best_effort?(type)
+
+    seconds = definition.public_send("#{type}_seconds")
+    seconds.present? ? format_sla_duration(seconds) : l(:label_sla_target_skipped)
   end
 
   # Source candidates for "Clone from another project": projects the user could edit the

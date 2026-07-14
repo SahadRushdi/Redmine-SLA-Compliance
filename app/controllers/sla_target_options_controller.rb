@@ -56,6 +56,9 @@ class SlaTargetOptionsController < ApplicationController
   end
 
   def target_option_params
-    params.require(:sla_target_option).permit(:target_type, :code, :label, :seconds, :position)
+    permitted = params.require(:sla_target_option)
+                      .permit(:target_type, :code, :label, :seconds, :position, :best_effort, :basis)
+    permitted[:seconds] = nil if ActiveRecord::Type::Boolean.new.cast(permitted[:best_effort])
+    permitted
   end
 end

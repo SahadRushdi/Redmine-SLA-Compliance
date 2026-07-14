@@ -69,6 +69,17 @@ class Sla::SweepTest < ActiveSupport::TestCase
     issue.reload
   end
 
+  # A status transition journal, mirroring timeline_builder_test.rb's helper — also updates the
+  # issue's CURRENT status_id, since the sweep's `open_issues` scope (and TimelineBuilder's
+  # journal-history reconstruction) both need it to reflect reality, not just the journal record.
+  def add_status_change(issue, from:, to:, at:)
+    journal = Journal.new(journalized: issue, user: User.current, created_on: at)
+    journal.details << JournalDetail.new(property: 'attr', prop_key: 'status_id',
+                                         old_value: from.to_s, value: to.to_s)
+    journal.save!
+    issue.update_column(:status_id, to)
+  end
+
   def sweep(now:, notifier: FakeNotifier.new, stale_notifier: FakeStaleNotifier.new)
     summary = Sla::Sweep.new(now: now, notifier: notifier, stale_notifier: stale_notifier).run
     [summary, notifier, stale_notifier]
@@ -107,6 +118,37 @@ class Sla::SweepTest < ActiveSupport::TestCase
     assert_empty n3.calls, 'the sweep must never double-send'
     assert_equal 0, summary3.queued
     assert_equal 1, at_risk_logs(issue), 'still exactly one ledger row after repeated sweeps'
+  end
+
+  # --- reopen restarts the measurement cycle -> a second notification is allowed (A2) ---------
+
+  test "reopening after resolution starts a new cycle and allows a second at-risk notification" do
+    issue = make_issue
+
+    # Cycle 1: crosses the at-risk threshold and is notified once.
+    _, first = sweep(now: at(50.0 / 60))
+    assert_equal [issue.id], first.calls
+    assert_equal 1, at_risk_logs(issue)
+
+    # Resolved shortly after, then reopened two days later — Fixed Decisions: reopened tickets
+    # restart the SLA clock from zero.
+    add_status_change(issue, from: NEW, to: CLOSED, at: at(55.0 / 60))
+    add_status_change(issue, from: CLOSED, to: NEW, at: @base + 2.days)
+
+    # Immediately after reopening, cycle 2 has barely started: not yet at-risk, and the old
+    # (lifetime-scoped, pre-fix) dedup key would have wrongly blocked this if it fired.
+    _, right_after_reopen = sweep(now: @base + 2.days + 1.minute)
+    assert_empty right_after_reopen.calls
+    assert_equal 1, at_risk_logs(issue), 'still just the one notification from cycle 1'
+
+    # 83% of the target, measured from the reopen (the new clock_start), not the original creation.
+    _, second = sweep(now: @base + 2.days + 50.minutes)
+    assert_equal [issue.id], second.calls, 'reopening must allow a fresh at-risk notification'
+    assert_equal 2, at_risk_logs(issue), 'two distinct cycles, two distinct notifications'
+
+    cycle_keys = SlaNotificationLog.where(issue_id: issue.id, notification_type: 'at_risk')
+                                   .pluck(:cycle_key)
+    assert_equal 2, cycle_keys.uniq.size, 'each cycle must claim its own dedup key'
   end
 
   # --- idempotency even when re-run at the exact same instant --------------------------------
@@ -240,6 +282,26 @@ class Sla::SweepTest < ActiveSupport::TestCase
     summary2, _, stale2 = sweep(now: @base + 10.days)
     assert_equal 1, summary2.stale_queued
     assert_equal [issue.id], stale2.calls.first.last
+  end
+
+  # A3: a still-stale ticket must appear in EVERY digest window it's stale for, not just once
+  # ever — a lifetime-scoped dedup key would silently suppress it after its first appearance,
+  # defeating the entire point of a recurring "don't forget about excluded tickets" digest.
+  test "a still-stale ticket appears again in the next digest window, not just once ever" do
+    enable_stale_digest(threshold_days: 1, frequency: 'weekly')
+    issue = make_issue(priority_id: UNTRACKED_PRIORITY)
+
+    _, _, window1 = sweep(now: @base + 2.days)
+    assert_equal [issue.id], window1.calls.first.last, 'appears in the first window'
+
+    # A full week later: a new digest window, and the ticket is STILL stale (no activity since).
+    _, _, window2 = sweep(now: @base + 9.days)
+    assert_equal [issue.id], window2.calls.first.last,
+                 'a still-stale ticket must appear again in the next window, not be suppressed'
+
+    logs = SlaNotificationLog.where(issue_id: issue.id, notification_type: 'stale')
+    assert_equal 2, logs.count, 'one ledger row per window the ticket appeared in'
+    assert_equal 2, logs.pluck(:cycle_key).uniq.size, 'each window claims its own dedup key'
   end
 
   test "repeated sweeps within the same digest window never queue the same ticket twice" do

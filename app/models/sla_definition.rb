@@ -7,6 +7,8 @@
 class SlaDefinition < ActiveRecord::Base
   self.table_name = 'sla_definitions'
 
+  TARGET_TYPES = %w[response workaround resolution].freeze
+
   belongs_to :sla_policy
 
   validates :tracker_id, presence: true
@@ -14,9 +16,38 @@ class SlaDefinition < ActiveRecord::Base
   validates :tracker_id, uniqueness: { scope: [:sla_policy_id, :priority_id] }
   validates :response_seconds, :workaround_seconds, :resolution_seconds,
             numericality: { only_integer: true, greater_than: 0 }, allow_nil: true
+  # A "1 Business Day"-style ('business'-basis) target option's stored seconds value is only a
+  # correct answer when the policy measures elapsed time in working seconds (Coverage Hours =
+  # Business Hours) — under 24x7x365 coverage it would silently be read as calendar time. Block
+  # the combination outright rather than accept a numerically wrong dashboard value.
+  validate :business_basis_targets_require_business_hours_coverage
 
-  # True when at least one target is configured (otherwise this row tracks nothing).
+  # True when at least one target is configured — a numeric seconds value OR Best Effort — for
+  # this priority (otherwise this row tracks nothing).
   def any_target?
-    response_seconds.present? || workaround_seconds.present? || resolution_seconds.present?
+    TARGET_TYPES.any? { |type| public_send("#{type}_seconds").present? || best_effort?(type) }
+  end
+
+  def best_effort?(type)
+    !!public_send("#{type}_best_effort")
+  end
+
+  private
+
+  def business_basis_targets_require_business_hours_coverage
+    return if sla_policy.nil? || sla_policy.business_hours?
+
+    offending = TARGET_TYPES.select { |type| business_basis_target?(type) }
+    return if offending.empty?
+
+    labels = offending.map { |type| I18n.t("label_sla_target_#{type}") }.join(', ')
+    errors.add(:base, I18n.t(:error_sla_business_basis_requires_business_hours, targets: labels))
+  end
+
+  def business_basis_target?(type)
+    seconds = public_send("#{type}_seconds")
+    return false if seconds.blank?
+
+    SlaTargetOption.exists?(target_type: type, seconds: seconds, basis: 'business')
   end
 end

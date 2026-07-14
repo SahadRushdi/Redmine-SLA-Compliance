@@ -7,7 +7,13 @@
   <p><%= f.text_field :code, label: :field_sla_code, required: true, size: 30 %>
     <em class="info"><%= l(:text_sla_code_hint) %></em></p>
   <p><%= f.text_field :label, label: :field_sla_option_label, required: true, size: 40 %></p>
-  <p><%= f.text_field :seconds, label: :field_sla_seconds, required: true, size: 12 %>
-    <em class="info"><%= l(:text_sla_seconds_hint) %></em></p>
+  <p><%= f.select :basis,
+                  SlaTargetOption::BASES.map { |b| [l("label_sla_basis_#{b}"), b] },
+                  { label: :field_sla_basis }, required: true %>
+    <em class="info"><%= l(:text_sla_basis_hint) %></em></p>
+  <p><%= f.check_box :best_effort, label: :field_sla_best_effort %>
+    <em class="info"><%= l(:text_sla_best_effort_hint) %></em></p>
+  <p><%= f.text_field :seconds, label: :field_sla_seconds, size: 12 %>
+    <em class="info"><%= l(:text_sla_seconds_hint) %> <%= l(:text_sla_seconds_best_effort_hint) %></em></p>
   <p><%= f.text_field :position, label: :field_sla_position, size: 5 %></p>
 </div>

@@ -22,12 +22,13 @@
         <%= l(:text_sla_unclassified_row_hint) %>
       </td>
     <% else %>
-      <% { response: definition&.response_seconds,
-           workaround: definition&.workaround_seconds,
-           resolution: definition&.resolution_seconds }.each do |target_type, current_seconds| %>
+      <% { response: [definition&.response_seconds, definition&.best_effort?(:response)],
+           workaround: [definition&.workaround_seconds, definition&.best_effort?(:workaround)],
+           resolution: [definition&.resolution_seconds, definition&.best_effort?(:resolution)]
+         }.each do |target_type, (current_seconds, current_best_effort)| %>
         <td class="tw-px-4 tw-py-2">
           <%= select_tag "definitions[rows][#{priority.id}][#{target_type}]",
-                sla_target_select_options(target_type, current_seconds),
+                sla_target_select_options(target_type, current_seconds, current_best_effort),
                 id: "sla-def-#{priority.id}-#{target_type}", class: sla_input_classes %>
         </td>
       <% end %>

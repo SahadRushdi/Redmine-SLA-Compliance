@@ -68,12 +68,17 @@ module Sla
 
     private
 
-    # Queue the at-risk notification exactly once. `claim!` is an atomic DB-level guard (a real
-    # unique index, not a check-then-act query), so this is safe even when multiple app-server
-    # processes run their own copy of the sweep concurrently — only one of them will ever get
-    # `true` back for a given issue.
+    # Queue the at-risk notification exactly once PER MEASUREMENT CYCLE. `claim!` is an atomic
+    # DB-level guard (a real unique index, not a check-then-act query), so this is safe even when
+    # multiple app-server processes run their own copy of the sweep concurrently — only one of
+    # them will ever get `true` back for a given (issue, cycle). The cycle_key is the engine's
+    # clock_start for this result: a reopened ticket gets a new clock_start and therefore a fresh
+    # cycle_key, so it can be notified again rather than being silently blocked by its previous
+    # cycle's already-claimed row.
     def queue_at_risk(issue, result)
-      return false unless SlaNotificationLog.claim!(issue_id: issue.id, notification_type: 'at_risk')
+      cycle_key = result.cycle_started_at&.to_i&.to_s || SlaNotificationLog::NO_CYCLE
+      return false unless SlaNotificationLog.claim!(issue_id: issue.id, notification_type: 'at_risk',
+                                                    cycle_key: cycle_key)
 
       @notifier.enqueue_at_risk(issue, result)
       true
@@ -101,8 +106,12 @@ module Sla
       setting = SlaNotificationSetting.claim_stale_digest_window!(project.id, now: @now)
       return 0 unless setting
 
+      # The window's own claimed instant is the cycle_key: a still-stale ticket gets a fresh key
+      # every window (rather than being claimed once, ever), so it keeps reappearing in
+      # subsequent digests for as long as it stays stale — the whole point of a recurring digest.
+      window_key = setting.last_stale_digest_at.to_i.to_s
       claimed = stale_candidates.select do |issue|
-        SlaNotificationLog.claim!(issue_id: issue.id, notification_type: 'stale')
+        SlaNotificationLog.claim!(issue_id: issue.id, notification_type: 'stale', cycle_key: window_key)
       end
       @stale_notifier.enqueue_stale_digest(project, claimed) if claimed.any?
       claimed.size

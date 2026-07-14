@@ -48,6 +48,20 @@ class SlaPoliciesController < ApplicationController
     redirect_to settings_project_path(@project, tab: 'sla_policy')
   end
 
+  # B3 — "Revert to inherited policy": deletes THIS project's own policy row (cascading to its
+  # definitions/status mappings, per their `dependent: :destroy`) so the project falls back to
+  # its nearest ancestor's policy. Never touches `sla_results` — the recalculation job UPDATES
+  # those rows in place under the now-inherited policy, it never deletes the cache.
+  def destroy
+    sla_policy = SlaPolicy.find_by(project_id: @project.id)
+    if sla_policy
+      sla_policy.destroy!
+      SlaPolicyRecalculationJob.perform_later(@project.id)
+      flash[:notice] = l(:notice_sla_reverted_to_inherited)
+    end
+    redirect_to settings_project_path(@project, tab: 'sla_policy')
+  end
+
   private
 
   def policy_params
@@ -91,7 +105,10 @@ class SlaPoliciesController < ApplicationController
         priority_id: definition.priority_id,
         response_seconds: definition.response_seconds,
         workaround_seconds: definition.workaround_seconds,
-        resolution_seconds: definition.resolution_seconds
+        resolution_seconds: definition.resolution_seconds,
+        response_best_effort: definition.response_best_effort,
+        workaround_best_effort: definition.workaround_best_effort,
+        resolution_best_effort: definition.resolution_best_effort
       )
     end
   end
@@ -125,10 +142,18 @@ class SlaPoliciesController < ApplicationController
         raw = targets[target_type].presence
         next unless raw
 
-        seconds = raw.to_i
-        previously_saved = previous[priority_id]&.public_send("#{target_type}_seconds")
-        if allowed_seconds_for(target_type).include?(seconds) || seconds == previously_saved
-          attributes["#{target_type}_seconds"] = seconds
+        if raw == SlaPoliciesHelper::SLA_BEST_EFFORT_VALUE
+          next unless SlaTargetOption.exists?(target_type: target_type, best_effort: true)
+
+          attributes["#{target_type}_seconds"] = nil
+          attributes["#{target_type}_best_effort"] = true
+        else
+          seconds = raw.to_i
+          previously_saved = previous[priority_id]&.public_send("#{target_type}_seconds")
+          if allowed_seconds_for(target_type).include?(seconds) || seconds == previously_saved
+            attributes["#{target_type}_seconds"] = seconds
+            attributes["#{target_type}_best_effort"] = false
+          end
         end
       end
       next if attributes.empty?
@@ -140,15 +165,23 @@ class SlaPoliciesController < ApplicationController
   end
 
   def allowed_seconds_for(target_type)
-    @allowed_seconds ||= SlaTargetOption.all.group_by(&:target_type)
+    @allowed_seconds ||= SlaTargetOption.where(best_effort: false).group_by(&:target_type)
                                         .transform_values { |options| options.map(&:seconds) }
     @allowed_seconds.fetch(target_type.to_s, [])
   end
 
+  # A source project is a valid prefill source (for both Step 4.7 "Clone from another project"
+  # and B3's "Override for this project" inheritance-override) when either:
+  #   * the user can directly edit ITS policy (the general clone case), or
+  #   * it's an ANCESTOR of @project (the override case) — the user already passed `authorize`
+  #     for @project itself, and that ancestor's policy already effectively governs @project's
+  #     tickets today via inheritance, so reading it to prefill an override needs no separate
+  #     permission grant on the ancestor project.
   def authorized_source_policy(source_project_id)
     source_project = Project.find_by(id: source_project_id)
     return nil unless source_project && source_project != @project &&
-                      User.current.allowed_to?(:edit_sla_policy, source_project)
+                      (User.current.allowed_to?(:edit_sla_policy, source_project) ||
+                       @project.self_and_ancestors.include?(source_project))
 
     SlaPolicy.find_by(project_id: source_project.id)
   end
@@ -181,7 +214,10 @@ class SlaPoliciesController < ApplicationController
         priority_id: definition.priority_id,
         response_seconds: definition.response_seconds,
         workaround_seconds: definition.workaround_seconds,
-        resolution_seconds: definition.resolution_seconds
+        resolution_seconds: definition.resolution_seconds,
+        response_best_effort: definition.response_best_effort,
+        workaround_best_effort: definition.workaround_best_effort,
+        resolution_best_effort: definition.resolution_best_effort
       )
     end
     policy

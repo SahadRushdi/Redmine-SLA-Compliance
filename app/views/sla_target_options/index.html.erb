@@ -13,6 +13,7 @@
         <th><%= l(:field_sla_code) %></th>
         <th><%= l(:field_sla_option_label) %></th>
         <th><%= l(:field_sla_duration) %></th>
+        <th><%= l(:field_sla_basis) %></th>
         <th><%= l(:field_sla_position) %></th>
         <th></th>
       </tr>
@@ -23,7 +24,8 @@
           <td><%= sla_target_type_label(option.target_type) %></td>
           <td><%= h option.code %></td>
           <td><%= h option.label %></td>
-          <td><%= format_sla_duration(option.seconds) %></td>
+          <td><%= option.best_effort? ? l(:field_sla_best_effort) : format_sla_duration(option.seconds) %></td>
+          <td><%= l("label_sla_basis_#{option.basis}") %></td>
           <td><%= option.position %></td>
           <td class="buttons">
             <%= link_to l(:button_edit), edit_sla_target_option_path(option), class: 'icon icon-edit' %>

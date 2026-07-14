@@ -21,9 +21,23 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
   end
 
   Definition = Struct.new(:response_seconds, :workaround_seconds, :resolution_seconds,
+                          :response_best_effort, :workaround_best_effort, :resolution_best_effort,
                           keyword_init: true) do
     def any_target?
-      [response_seconds, workaround_seconds, resolution_seconds].any?
+      [response_seconds, workaround_seconds, resolution_seconds,
+       response_best_effort, workaround_best_effort, resolution_best_effort].any?
+    end
+
+    def response_best_effort?
+      !!response_best_effort
+    end
+
+    def workaround_best_effort?
+      !!workaround_best_effort
+    end
+
+    def resolution_best_effort?
+      !!resolution_best_effort
     end
   end
 
@@ -145,6 +159,48 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
     assert_equal 3600, r.deviation_seconds
   end
 
+  # --- Best Effort (B4: a target with no numeric deadline) ------------------------------
+
+  test "a definition with only Best Effort set (no numeric targets) is tracked, not not_tracked" do
+    r = classify(timeline, definition: Definition.new(resolution_best_effort: true), now: at(1))
+    refute_equal 'not_tracked', r.no_sla_reason
+    assert_equal 'met', r.primary_state
+  end
+
+  test "a Best Effort target is never breached, no matter how long it's open" do
+    d = Definition.new(resolution_best_effort: true)
+    now = @base + 5000.hours # absurdly overdue by any numeric standard
+    r = classify(timeline, definition: d, now: now)
+    assert_equal 'met', r.primary_state
+    assert_nil r.deviation_seconds
+    assert_equal (5000 * 3600), r.resolution_seconds, 'elapsed time is still tracked and reported'
+  end
+
+  test "a Best Effort target is never flagged at risk" do
+    d = Definition.new(resolution_best_effort: true)
+    # Same instant a numeric target would be well past its at-risk threshold.
+    now = @base + 5000.hours
+    r = classify(timeline, definition: d, now: now)
+    refute r.at_risk
+    assert_nil r.breach_at
+  end
+
+  test "a Best Effort target resolved late is still met, with no deviation" do
+    d = Definition.new(resolution_best_effort: true)
+    tl = timeline([[OPEN, RESOLVED, at(500)]])
+    r = classify(tl, definition: d, now: at(501))
+    assert_equal 'met', r.primary_state
+    assert_nil r.deviation_seconds
+  end
+
+  test "one Best Effort milestone doesn't shield a numeric milestone on the same ticket from breaching" do
+    d = Definition.new(response_seconds: 3600, resolution_best_effort: true)
+    now = @base + 7200 # 2h, no response — breaches the numeric response target
+    r = classify(timeline, definition: d, now: now)
+    assert_equal 'breached', r.primary_state
+    assert_equal 3600, r.deviation_seconds
+  end
+
   # --- pause integration ----------------------------------------------------------------
 
   test "paused time is subtracted, keeping a would-be breach within target" do
@@ -202,6 +258,59 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
       assert_equal 7200, r.response_seconds # 2 working hours
       refute r.at_risk                      # 50%
       assert_equal zone.local(2026, 6, 3, 13, 0), r.breach_at # +2 working hours
+    end
+  end
+
+  test "business-hours mode: past the at-risk threshold is met AND flagged at risk" do
+    Time.use_zone('UTC') do
+      zone = Time.zone
+      base = zone.local(2026, 6, 3, 9, 0) # Wednesday 09:00
+      policy = Policy.new(
+        business_hours: true,
+        business_calendar: Calendar.new(working_days: [1, 2, 3, 4, 5], work_start_time: '09:00',
+                                        work_end_time: '17:00', holidays: []),
+        first_response_rule: 'either', at_risk_threshold: 80, pause_enabled: true
+      )
+      tl = Timeline.new([Event.new(type: :created, at: base, to_status_id: OPEN)])
+      d  = Definition.new(response_seconds: 14_400) # 4 business hours
+
+      # +3h20m working time = 83% of the 4h target, still short of it.
+      now = zone.local(2026, 6, 3, 12, 20)
+      r = Sla::ResultClassifier.new(
+        timeline: tl, policy: policy, definition: d, tracker_configured: true,
+        status_roles: ROLES, now: now
+      ).classify
+
+      assert_equal 'met', r.primary_state
+      assert r.at_risk
+      assert_equal zone.local(2026, 6, 3, 13, 0), r.breach_at # +40 working minutes
+    end
+  end
+
+  test "business-hours mode: past target is breached with deviation" do
+    Time.use_zone('UTC') do
+      zone = Time.zone
+      base = zone.local(2026, 6, 3, 9, 0) # Wednesday 09:00
+      policy = Policy.new(
+        business_hours: true,
+        business_calendar: Calendar.new(working_days: [1, 2, 3, 4, 5], work_start_time: '09:00',
+                                        work_end_time: '17:00', holidays: []),
+        first_response_rule: 'either', at_risk_threshold: 80, pause_enabled: true
+      )
+      tl = Timeline.new([Event.new(type: :created, at: base, to_status_id: OPEN)])
+      d  = Definition.new(response_seconds: 14_400) # 4 business hours
+
+      # Thu 10:00: Wed 09:00-17:00 (8h) + Thu 09:00-10:00 (1h) = 9h working, well past the 4h target.
+      now = zone.local(2026, 6, 4, 10, 0)
+      r = Sla::ResultClassifier.new(
+        timeline: tl, policy: policy, definition: d, tracker_configured: true,
+        status_roles: ROLES, now: now
+      ).classify
+
+      assert_equal 'breached', r.primary_state
+      refute r.at_risk
+      assert_nil r.breach_at
+      assert_equal (32_400 - 14_400), r.deviation_seconds
     end
   end
 end

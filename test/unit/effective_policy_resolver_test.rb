@@ -60,4 +60,42 @@ class EffectivePolicyResolverTest < ActiveSupport::TestCase
   test "nil project is handled" do
     assert_nil SlaPolicy.effective_for(nil)
   end
+
+  # --- source_for (B3: inheritance banner) ---------------------------------------------------
+
+  test "source_for returns the project itself when it has its own policy" do
+    own = make_policy(@leaf, enabled: true)
+    project, policy = SlaPolicy.source_for(@leaf)
+    assert_equal @leaf, project
+    assert_equal own, policy
+  end
+
+  test "source_for returns the project itself even when its own policy is disabled" do
+    own = make_policy(@leaf, enabled: false)
+    project, policy = SlaPolicy.source_for(@leaf)
+    assert_equal @leaf, project, 'a disabled OWN row is still the source, not inheritance'
+    assert_equal own, policy
+  end
+
+  test "source_for returns the nearest ancestor when the project has no row of its own" do
+    parent_policy = make_policy(@child, enabled: true)
+    project, policy = SlaPolicy.source_for(@leaf)
+    assert_equal @child, project
+    assert_equal parent_policy, policy
+  end
+
+  test "source_for finds the nearest ancestor even when it's disabled" do
+    parent_policy = make_policy(@child, enabled: false)
+    project, policy = SlaPolicy.source_for(@leaf)
+    assert_equal @child, project, 'source_for does not care about enabled state, unlike effective_for'
+    assert_equal parent_policy, policy
+  end
+
+  test "source_for returns nil, nil when no project in the chain has a policy" do
+    assert_equal [nil, nil], SlaPolicy.source_for(@leaf)
+  end
+
+  test "source_for is nil-safe" do
+    assert_equal [nil, nil], SlaPolicy.source_for(nil)
+  end
 end

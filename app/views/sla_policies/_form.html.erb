@@ -14,16 +14,34 @@
   <%= render 'sla_policies/clone', project: project %>
 
   <%# Step 4.8 — forward-only save by default; optional historical recalculation. %>
-  <div class="tw-flex tw-flex-col md:tw-flex-row md:tw-items-center tw-gap-3 tw-mb-8">
+  <div class="tw-flex tw-flex-col md:tw-flex-row md:tw-items-center tw-gap-3 tw-mb-4">
     <label class="tw-inline-flex tw-items-center tw-gap-2 tw-text-sm tw-text-gray-900">
       <%= check_box_tag 'recalculate', '1', false,
             class: 'tw-w-4 tw-h-4 tw-rounded tw-border-gray-300 tw-text-primary-600 focus:tw-ring-primary-500' %>
       <%= l(:label_sla_recalculate_historical) %>
     </label>
     <span class="tw-text-xs tw-text-gray-500 md:tw-max-w-md"><%= l(:text_sla_forward_only_hint) %></span>
-    <%= submit_tag l(:button_save),
+    <%= submit_tag l(:button_sla_save_policy),
           class: 'tw-text-white tw-bg-primary-600 hover:tw-bg-primary-700 focus:tw-ring-2 ' \
                  'focus:tw-ring-primary-300 tw-font-medium tw-rounded-lg tw-text-sm ' \
                  'tw-px-5 tw-py-2.5 tw-cursor-pointer md:tw-ml-auto' %>
   </div>
+<% end %>
+
+<%# B3 — "Revert to inherited policy": only offered when this project has its OWN row AND some %>
+<%# further ancestor also has one to fall back to (otherwise there'd be nothing to revert TO). %>
+<% if policy.persisted? && project.parent.present? %>
+  <% ancestor_project, = SlaPolicy.source_for(project.parent) %>
+  <% if ancestor_project.present? %>
+    <div class="tw-mb-8">
+      <%= button_to l(:button_sla_revert_to_inherited), project_sla_policy_path(project),
+            method: :delete,
+            data: { confirm: l(:text_sla_revert_confirm, project: ancestor_project.name) },
+            class: 'tw-text-gray-700 tw-bg-white tw-border tw-border-gray-300 hover:tw-bg-gray-100 ' \
+                   'tw-font-medium tw-rounded-lg tw-text-sm tw-px-4 tw-py-2 tw-cursor-pointer' %>
+      <p class="tw-mt-1 tw-text-xs tw-text-gray-500">
+        <%= l(:text_sla_revert_hint, project: ancestor_project.name) %>
+      </p>
+    </div>
+  <% end %>
 <% end %>
