@@ -13,7 +13,7 @@
       <%= select_tag 'sla_policy[coverage_hours]',
             options_for_select(SlaPolicy::COVERAGE_HOURS.map { |c| [l("label_coverage_#{c}"), c] },
                                policy.coverage_hours),
-            id: 'sla_policy_coverage_hours', class: sla_input_classes %>
+            id: 'sla_policy_coverage_hours', class: sla_input_classes, data: { sla_select: true } %>
     </div>
 
     <div id="sla-calendar-field" class="<%= 'hidden' unless policy.business_hours? %>">
@@ -23,7 +23,8 @@
         <%= select_tag 'sla_policy[business_calendar_id]',
               options_for_select([['', '']] + calendars.map { |c| [c.name, c.id] },
                                  policy.business_calendar_id),
-              id: 'sla_policy_business_calendar_id', class: sla_input_classes %>
+              id: 'sla_policy_business_calendar_id', class: sla_input_classes,
+              data: { sla_select: true } %>
       <% else %>
         <p class="tw-text-sm tw-text-gray-500"><%= l(:text_sla_no_business_calendars) %></p>
       <% end %>

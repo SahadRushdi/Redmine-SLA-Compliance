@@ -35,6 +35,22 @@
     });
   }
 
+  // Single-value dropdowns (Coverage hours, Business calendar, Tracker, target durations,
+  // stale-digest frequency). Native <select> popups are OS/browser-chrome-rendered and can't be
+  // themed to match the rest of the scoped Flowbite UI — Tom Select replaces them with the same
+  // styled, HTML-rendered dropdown already used for the chip multi-selects (see .ts-dropdown in
+  // tailwind.input.css), which also sidesteps the native-select text-clipping some browsers
+  // exhibit under Purplemine2's fixed input height. Tom Select keeps the original <select>'s
+  // `.value` in sync and re-dispatches `change` on it, so existing handlers (toggleCalendarField,
+  // snapshotDefs, the tracker-switch confirm) keep working unmodified.
+  function initSingleSelects() {
+    document.querySelectorAll('select[data-sla-select]').forEach(function (el) {
+      if (!el.tomselect && window.TomSelect) {
+        new TomSelect(el, { create: false, allowEmptyOption: true });
+      }
+    });
+  }
+
   function snapshotDefs() {
     var rows = byId('sla-definitions-rows');
     if (!rows) { return ''; }
@@ -115,6 +131,7 @@
     }
     initChips();
     initEmailChips();
+    initSingleSelects();
     toggleCalendarField();
     toggleDigestInterval();
     state.defsSnapshot = snapshotDefs();

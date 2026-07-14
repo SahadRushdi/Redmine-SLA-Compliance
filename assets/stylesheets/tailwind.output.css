@@ -23,7 +23,7 @@
     --tw-ring-inset:  ;
     --tw-ring-offset-width: 0px;
     --tw-ring-offset-color: #fff;
-    --tw-ring-color: rgb(59 130 246 / 0.5);
+    --tw-ring-color: rgb(63 131 248 / 0.5);
     --tw-ring-offset-shadow: 0 0 #0000;
     --tw-ring-shadow: 0 0 #0000;
     --tw-shadow: 0 0 #0000;
@@ -76,7 +76,7 @@
     --tw-ring-inset:  ;
     --tw-ring-offset-width: 0px;
     --tw-ring-offset-color: #fff;
-    --tw-ring-color: rgb(59 130 246 / 0.5);
+    --tw-ring-color: rgb(63 131 248 / 0.5);
     --tw-ring-offset-shadow: 0 0 #0000;
     --tw-ring-shadow: 0 0 #0000;
     --tw-shadow: 0 0 #0000;
@@ -120,7 +120,7 @@
 }
 .sla-plugin [data-tooltip-style^='light'] + .tooltip > .tooltip-arrow:before {
     border-style: solid;
-    border-color: var(--color-gray-200);
+    border-color: #e5e7eb;
 }
 .sla-plugin [data-tooltip-style^='light'] + .tooltip[data-popper-placement^='top'] > .tooltip-arrow:before {
     border-bottom-width: 1px;
@@ -178,19 +178,19 @@
 }
 .sla-plugin [role="tooltip"] > [data-popper-arrow]:before {
     border-style: solid;
-    border-color: var(--color-gray-200);
+    border-color: #e5e7eb;
 }
 .sla-plugin .dark [role="tooltip"] > [data-popper-arrow]:before {
     border-style: solid;
-    border-color: var(--color-gray-600);
+    border-color: #4b5563;
 }
 .sla-plugin [role="tooltip"] > [data-popper-arrow]:after {
     border-style: solid;
-    border-color: var(--color-gray-200);
+    border-color: #e5e7eb;
 }
 .sla-plugin .dark [role="tooltip"] > [data-popper-arrow]:after {
     border-style: solid;
-    border-color: var(--color-gray-600);
+    border-color: #4b5563;
 }
 .sla-plugin [data-popover][role="tooltip"][data-popper-placement^='top'] > [data-popper-arrow]:before {
     border-bottom-width: 1px;
@@ -247,7 +247,7 @@
        -moz-appearance: none;
             appearance: none;
     background-color: #fff;
-    border-color: var(--color-gray-500);
+    border-color: #6B7280;
     border-width: 1px;
     border-radius: 0px;
     padding-top: 0.5rem;
@@ -264,18 +264,18 @@
     --tw-ring-inset: var(--tw-empty,/*!*/ /*!*/);
     --tw-ring-offset-width: 0px;
     --tw-ring-offset-color: #fff;
-    --tw-ring-color: var(--color-blue-600);
+    --tw-ring-color: #1C64F2;
     --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
     --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);
     box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-    border-color: var(--color-blue-600);
+    border-color: #1C64F2;
 }
 .sla-plugin input::-moz-placeholder, .sla-plugin textarea::-moz-placeholder {
-    color: var(--color-gray-500);
+    color: #6B7280;
     opacity: 1;
 }
 .sla-plugin input::placeholder,.sla-plugin textarea::placeholder {
-    color: var(--color-gray-500);
+    color: #6B7280;
     opacity: 1;
 }
 .sla-plugin ::-webkit-datetime-edit-fields-wrapper {
@@ -285,7 +285,7 @@
     background: none;
 }
 .sla-plugin select:not([size]) {
-    background-image: url("data:image/svg+xml,%3csvg aria-hidden='true' xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 10 6'%3e %3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 1 4 4 4-4'/%3e %3c/svg%3e");
+    background-image: url("data:image/svg+xml,%3csvg aria-hidden='true' xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 10 6'%3e %3cpath stroke='%236B7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 1 4 4 4-4'/%3e %3c/svg%3e");
     background-position: right 0.75rem center;
     background-repeat: no-repeat;
     background-size: 0.75em 0.75em;
@@ -323,9 +323,9 @@
     flex-shrink: 0;
     height: 1rem;
     width: 1rem;
-    color: var(--color-blue-600);
+    color: #1C64F2;
     background-color: #fff;
-    border-color: --color-gray-500;
+    border-color: #6B7280;
     border-width: 1px;
     --tw-shadow: 0 0 #0000;
 }
@@ -341,14 +341,14 @@
     --tw-ring-inset: var(--tw-empty,/*!*/ /*!*/);
     --tw-ring-offset-width: 2px;
     --tw-ring-offset-color: #fff;
-    --tw-ring-color: var(--color-blue-600);
+    --tw-ring-color: #1C64F2;
     --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
     --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
     box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
 }
 .sla-plugin [type='checkbox']:checked,.sla-plugin [type='radio']:checked,.sla-plugin .dark [type='checkbox']:checked,.sla-plugin .dark [type='radio']:checked {
-    border-color: transparent !important;
-    background-color: currentColor !important;
+    border-color: transparent;
+    background-color: currentColor;
     background-size: 0.55em 0.55em;
     background-position: center;
     background-repeat: no-repeat;
@@ -370,8 +370,8 @@
 }
 .sla-plugin [type='checkbox']:indeterminate {
     background-image: url("data:image/svg+xml,%3csvg aria-hidden='true' xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 16 12'%3e %3cpath stroke='white' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='M0.5 6h14'/%3e %3c/svg%3e");
-    background-color: currentColor !important;
-    border-color: transparent !important;
+    background-color: currentColor;
+    border-color: transparent;
     background-position: center;
     background-repeat: no-repeat;
     background-size: 0.55em 0.55em;
@@ -379,8 +379,8 @@
             print-color-adjust: exact;
 }
 .sla-plugin [type='checkbox']:indeterminate:hover,.sla-plugin [type='checkbox']:indeterminate:focus {
-    border-color: transparent !important;
-    background-color: currentColor !important;
+    border-color: transparent;
+    background-color: currentColor;
 }
 .sla-plugin [type='file'] {
     background: unset;
@@ -396,10 +396,10 @@
 }
 .sla-plugin input[type=file]::file-selector-button {
     color: white;
-    background: var(--color-gray-800);
+    background: #1F2937;
     border: 0;
     font-weight: 500;
-    font-size: 0;
+    font-size: 0.875rem;
     cursor: pointer;
     padding-top: 0.625rem;
     padding-bottom: 0.625rem;
@@ -409,7 +409,7 @@
     margin-inline-end: 1rem;
 }
 .sla-plugin input[type=file]::file-selector-button:hover {
-    background: var(--color-gray-700);
+    background: #374151;
 }
 .sla-plugin :is([dir=rtl]) input[type=file]::file-selector-button {
     padding-right: 2rem;
@@ -417,15 +417,15 @@
 }
 .sla-plugin .dark input[type=file]::file-selector-button {
     color: white;
-    background: var(--color-gray-600);
+    background: #4B5563;
 }
 .sla-plugin .dark input[type=file]::file-selector-button:hover {
-    background: var(--color-gray-500);
+    background: #6B7280;
 }
 .sla-plugin input[type="range"]::-webkit-slider-thumb {
     height: 1.25rem;
     width: 1.25rem;
-    background: var(--color-blue-600);
+    background: #1C64F2;
     border-radius: 9999px;
     border: 0;
     appearance: none;
@@ -434,10 +434,10 @@
     cursor: pointer;
 }
 .sla-plugin input[type="range"]:disabled::-webkit-slider-thumb {
-    background: var(--color-gray-400);
+    background: #9CA3AF;
 }
 .sla-plugin .dark input[type="range"]:disabled::-webkit-slider-thumb {
-    background: var(--color-gray-500);
+    background: #6B7280;
 }
 .sla-plugin input[type="range"]:focus::-webkit-slider-thumb {
     outline: 2px solid transparent;
@@ -451,7 +451,7 @@
 .sla-plugin input[type="range"]::-moz-range-thumb {
     height: 1.25rem;
     width: 1.25rem;
-    background: var(--color-blue-600);
+    background: #1C64F2;
     border-radius: 9999px;
     border: 0;
     appearance: none;
@@ -460,16 +460,16 @@
     cursor: pointer;
 }
 .sla-plugin input[type="range"]:disabled::-moz-range-thumb {
-    background: var(--color-gray-400);
+    background: #9CA3AF;
 }
 .sla-plugin .dark input[type="range"]:disabled::-moz-range-thumb {
-    background: var(--color-gray-500);
+    background: #6B7280;
 }
 .sla-plugin input[type="range"]::-moz-range-progress {
-    background: var(--color-blue-500);
+    background: #3F83F8;
 }
 .sla-plugin input[type="range"]::-ms-fill-lower {
-    background: var(--color-blue-500);
+    background: #3F83F8;
 }
 .sla-plugin .toggle-bg:after {
     content: "";
@@ -477,7 +477,7 @@
     top: 0.125rem;
     left: 0.125rem;
     background: white;
-    border-color: var(--color-gray-300);
+    border-color: #D1D5DB;
     border-width: 1px;
     border-radius: 9999px;
     height: 1.25rem;
@@ -491,8 +491,8 @@
     border-color: white;
 }
 .sla-plugin input:checked + .toggle-bg {
-    background: var(--color-blue-600);
-    border-color: var(--color-blue-600);
+    background: #1C64F2;
+    border-color: #1C64F2;
 }
 .sla-plugin .hidden {
     display: none !important;
@@ -542,6 +542,9 @@
 .sla-plugin .tw-me-2 {
     margin-inline-end: 0.5rem;
 }
+.sla-plugin .tw-ml-2 {
+    margin-left: 0.5rem;
+}
 .sla-plugin .tw-ms-2\.5 {
     margin-inline-start: 0.625rem;
 }
@@ -554,11 +557,20 @@
 .sla-plugin .tw-mt-2 {
     margin-top: 0.5rem;
 }
+.sla-plugin .tw-mt-3 {
+    margin-top: 0.75rem;
+}
+.sla-plugin .tw-mt-4 {
+    margin-top: 1rem;
+}
 .sla-plugin .tw-mt-8 {
     margin-top: 2rem;
 }
 .sla-plugin .tw-block {
     display: block;
+}
+.sla-plugin .tw-inline-block {
+    display: inline-block;
 }
 .sla-plugin .tw-flex {
     display: flex;
@@ -602,11 +614,20 @@
 .sla-plugin .tw-cursor-pointer {
     cursor: pointer;
 }
+.sla-plugin .tw-list-inside {
+    list-style-position: inside;
+}
+.sla-plugin .tw-list-disc {
+    list-style-type: disc;
+}
 .sla-plugin .tw-grid-cols-1 {
     grid-template-columns: repeat(1, minmax(0, 1fr));
 }
 .sla-plugin .tw-flex-col {
     flex-direction: column;
+}
+.sla-plugin .tw-flex-wrap {
+    flex-wrap: wrap;
 }
 .sla-plugin .tw-items-center {
     align-items: center;
@@ -622,6 +643,11 @@
 }
 .sla-plugin .tw-gap-6 {
     gap: 1.5rem;
+}
+.sla-plugin .tw-space-y-1 > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(0.25rem * var(--tw-space-y-reverse));
 }
 .sla-plugin .tw-divide-y > :not([hidden]) ~ :not([hidden]) {
     --tw-divide-y-reverse: 0;
@@ -653,6 +679,14 @@
 .sla-plugin .tw-border-t {
     border-top-width: 1px;
 }
+.sla-plugin .tw-border-blue-200 {
+    --tw-border-opacity: 1;
+    border-color: rgb(195 221 253 / var(--tw-border-opacity, 1));
+}
+.sla-plugin .tw-border-gray-100 {
+    --tw-border-opacity: 1;
+    border-color: rgb(243 244 246 / var(--tw-border-opacity, 1));
+}
 .sla-plugin .tw-border-gray-200 {
     --tw-border-opacity: 1;
     border-color: rgb(229 231 235 / var(--tw-border-opacity, 1));
@@ -664,6 +698,10 @@
 .sla-plugin .tw-border-primary-200 {
     --tw-border-opacity: 1;
     border-color: rgb(191 219 254 / var(--tw-border-opacity, 1));
+}
+.sla-plugin .tw-bg-blue-50 {
+    --tw-bg-opacity: 1;
+    background-color: rgb(235 245 255 / var(--tw-bg-opacity, 1));
 }
 .sla-plugin .tw-bg-gray-200 {
     --tw-bg-opacity: 1;
@@ -697,6 +735,10 @@
 .sla-plugin .tw-p-6 {
     padding: 1.5rem;
 }
+.sla-plugin .tw-px-2 {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+}
 .sla-plugin .tw-px-4 {
     padding-left: 1rem;
     padding-right: 1rem;
@@ -704,6 +746,10 @@
 .sla-plugin .tw-px-5 {
     padding-left: 1.25rem;
     padding-right: 1.25rem;
+}
+.sla-plugin .tw-py-0\.5 {
+    padding-top: 0.125rem;
+    padding-bottom: 0.125rem;
 }
 .sla-plugin .tw-py-2 {
     padding-top: 0.5rem;
@@ -751,9 +797,17 @@
     --tw-text-opacity: 1;
     color: rgb(180 83 9 / var(--tw-text-opacity, 1));
 }
+.sla-plugin .tw-text-blue-900 {
+    --tw-text-opacity: 1;
+    color: rgb(35 56 118 / var(--tw-text-opacity, 1));
+}
 .sla-plugin .tw-text-gray-500 {
     --tw-text-opacity: 1;
     color: rgb(107 114 128 / var(--tw-text-opacity, 1));
+}
+.sla-plugin .tw-text-gray-600 {
+    --tw-text-opacity: 1;
+    color: rgb(75 85 99 / var(--tw-text-opacity, 1));
 }
 .sla-plugin .tw-text-gray-700 {
     --tw-text-opacity: 1;
@@ -855,6 +909,85 @@
 .sla-plugin .ts-dropdown .active {
   background-color: #eff6ff; /* primary-50 */
   color: #111827;
+}
+
+/*
+ * Native form-control appearance reset (select / text-like inputs / radio / checkbox).
+ *
+ * Root cause of two reported bugs — "dropdown text is cut off" and "unchecked radios are
+ * invisible" — turned out to be the SAME class of problem CLAUDE.md warns about: Purplemine2
+ * styles that this plugin's build never actually overrides, because this Tailwind build has no
+ * forms-reset plugin installed (no @tailwindcss/forms) and Preflight is disabled. Utility
+ * classes like `tw-border-gray-300` / `tw-text-primary-600` have NO visual effect on a native,
+ * un-reset radio/checkbox — browsers ignore most box-model/color properties on native form
+ * widgets until `appearance: none` strips the OS-native look first. Only the CHECKED radio
+ * picked up a colour (via the browser's own `accent-color`/`color` fallback); the UNCHECKED
+ * state was pure OS-native rendering with no border this build ever styled.
+ *
+ * Height: Purplemine2's global `select, input[type=...] { height: 28px; padding: 3px 8px; }`
+ * (an *element* selector, so it wins wherever nothing here overrides it) combined with this
+ * plugin's own `tw-p-2.5` (10px) padding utility squeezed the visible text area of every
+ * select/url/number input down to a few pixels — the "clipped to dots" look in screenshots.
+ */
+.sla-plugin select,
+.sla-plugin input[type='text'],
+.sla-plugin input[type='url'],
+.sla-plugin input[type='number'] {
+  height: auto;
+  min-height: 2.625rem; /* 42px: matches tw-p-2.5 (10px) + tw-text-sm line-height once unclamped */
+}
+
+.sla-plugin input[type='radio'] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+       appearance: none;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  border: 1px solid #d1d5db; /* gray-300 */
+  border-radius: 9999px;
+  background-color: #fff;
+  flex-shrink: 0;
+}
+
+.sla-plugin input[type='radio']:checked {
+  border-color: #2563eb; /* primary-600 */
+  background-image: radial-gradient(circle, #2563eb 45%, transparent 50%);
+}
+
+.sla-plugin input[type='radio']:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+
+/* :not(.tw-sr-only) excludes the visually-hidden checkbox inside the Flowbite toggle switch
+   (sla_compliance/_toggle.html.erb) — that one is already a fully custom, correctly-visible
+   component and must keep its screen-reader-only, zero-size native input untouched. */
+.sla-plugin input[type='checkbox']:not(.tw-sr-only) {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+       appearance: none;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 0.25rem;
+  background-color: #fff;
+  flex-shrink: 0;
+}
+
+.sla-plugin input[type='checkbox']:not(.tw-sr-only):checked {
+  border-color: #2563eb;
+  background-color: #2563eb;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 0.75rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M13.28 4.72a.75.75 0 0 1 0 1.06l-5.5 5.5a.75.75 0 0 1-1.06 0l-2.5-2.5a.75.75 0 1 1 1.06-1.06L6.5 9.94l4.97-4.97a.75.75 0 0 1 1.06 0Z'/%3E%3C/svg%3E");
+}
+
+.sla-plugin input[type='checkbox']:not(.tw-sr-only):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
 }
 
 .sla-plugin .after\:tw-absolute::after {

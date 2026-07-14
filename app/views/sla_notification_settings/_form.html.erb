@@ -76,7 +76,8 @@
           <%= select_tag 'sla_notification_setting[stale_email_frequency]',
                 options_for_select(SlaNotificationSetting::STALE_FREQUENCIES.map { |f| [l("label_sla_frequency_#{f}"), f] },
                                    setting.stale_email_frequency),
-                id: 'sla_notification_stale_frequency', class: sla_input_classes %>
+                id: 'sla_notification_stale_frequency', class: sla_input_classes,
+                data: { sla_select: true } %>
         </div>
         <div class="md:tw-w-56">
           <label for="sla_notification_stale_threshold_days" class="<%= sla_label_classes %>"><%= l(:field_stale_threshold_days) %></label>

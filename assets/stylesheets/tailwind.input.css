@@ -74,3 +74,80 @@ textarea:focus {
   background-color: #eff6ff; /* primary-50 */
   color: #111827;
 }
+
+/*
+ * Native form-control appearance reset (select / text-like inputs / radio / checkbox).
+ *
+ * Root cause of two reported bugs — "dropdown text is cut off" and "unchecked radios are
+ * invisible" — turned out to be the SAME class of problem CLAUDE.md warns about: Purplemine2
+ * styles that this plugin's build never actually overrides, because this Tailwind build has no
+ * forms-reset plugin installed (no @tailwindcss/forms) and Preflight is disabled. Utility
+ * classes like `tw-border-gray-300` / `tw-text-primary-600` have NO visual effect on a native,
+ * un-reset radio/checkbox — browsers ignore most box-model/color properties on native form
+ * widgets until `appearance: none` strips the OS-native look first. Only the CHECKED radio
+ * picked up a colour (via the browser's own `accent-color`/`color` fallback); the UNCHECKED
+ * state was pure OS-native rendering with no border this build ever styled.
+ *
+ * Height: Purplemine2's global `select, input[type=...] { height: 28px; padding: 3px 8px; }`
+ * (an *element* selector, so it wins wherever nothing here overrides it) combined with this
+ * plugin's own `tw-p-2.5` (10px) padding utility squeezed the visible text area of every
+ * select/url/number input down to a few pixels — the "clipped to dots" look in screenshots.
+ */
+select,
+input[type='text'],
+input[type='url'],
+input[type='number'] {
+  height: auto;
+  min-height: 2.625rem; /* 42px: matches tw-p-2.5 (10px) + tw-text-sm line-height once unclamped */
+}
+
+input[type='radio'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  border: 1px solid #d1d5db; /* gray-300 */
+  border-radius: 9999px;
+  background-color: #fff;
+  flex-shrink: 0;
+}
+
+input[type='radio']:checked {
+  border-color: #2563eb; /* primary-600 */
+  background-image: radial-gradient(circle, #2563eb 45%, transparent 50%);
+}
+
+input[type='radio']:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+
+/* :not(.tw-sr-only) excludes the visually-hidden checkbox inside the Flowbite toggle switch
+   (sla_compliance/_toggle.html.erb) — that one is already a fully custom, correctly-visible
+   component and must keep its screen-reader-only, zero-size native input untouched. */
+input[type='checkbox']:not(.tw-sr-only) {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 0.25rem;
+  background-color: #fff;
+  flex-shrink: 0;
+}
+
+input[type='checkbox']:not(.tw-sr-only):checked {
+  border-color: #2563eb;
+  background-color: #2563eb;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 0.75rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M13.28 4.72a.75.75 0 0 1 0 1.06l-5.5 5.5a.75.75 0 0 1-1.06 0l-2.5-2.5a.75.75 0 1 1 1.06-1.06L6.5 9.94l4.97-4.97a.75.75 0 0 1 1.06 0Z'/%3E%3C/svg%3E");
+}
+
+input[type='checkbox']:not(.tw-sr-only):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}

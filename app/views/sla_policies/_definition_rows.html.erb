@@ -29,7 +29,8 @@
         <td class="tw-px-4 tw-py-2">
           <%= select_tag "definitions[rows][#{priority.id}][#{target_type}]",
                 sla_target_select_options(target_type, current_seconds, current_best_effort),
-                id: "sla-def-#{priority.id}-#{target_type}", class: sla_input_classes %>
+                id: "sla-def-#{priority.id}-#{target_type}", class: sla_input_classes,
+                data: { sla_select: true } %>
         </td>
       <% end %>
     <% end %>

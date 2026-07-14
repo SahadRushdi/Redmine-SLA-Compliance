@@ -13,7 +13,7 @@
       <label for="sla-definitions-tracker" class="<%= sla_label_classes %>"><%= l(:field_sla_tracker) %></label>
       <%= select_tag 'definitions[tracker_id]',
             options_from_collection_for_select(trackers, :id, :name, tracker&.id),
-            id: 'sla-definitions-tracker', class: sla_input_classes %>
+            id: 'sla-definitions-tracker', class: sla_input_classes, data: { sla_select: true } %>
     </div>
 
     <% if sla_target_options_by_type.empty? %>
