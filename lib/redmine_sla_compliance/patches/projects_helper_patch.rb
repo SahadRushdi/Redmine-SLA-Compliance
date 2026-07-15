@@ -7,6 +7,8 @@ module RedmineSlaCompliance
     # permission, but this tab hosts two independently-gated sections (policy form under
     # :edit_sla_policy, notifications under :manage_sla_notifications), so the patch does its
     # own gating — show the tab when the user holds either permission and the module is on.
+    # `allowed_to?` also answers for the Step 5.1 user allow-list (see UserPatch), so a listed
+    # manager gets the tab with no role at all, while a listed viewer (dashboard-only) does not.
     module ProjectsHelperPatch
       def project_settings_tabs
         tabs = super

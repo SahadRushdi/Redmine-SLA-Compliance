@@ -6,6 +6,12 @@
 class SlaTargetOptionsController < ApplicationController
   layout 'admin'
   self.main_menu = false
+  # This is a separate controller from SettingsController#plugin, so without this the admin
+  # sidebar's :admin_menu highlighting (Redmine::MenuManager::MenuController#current_menu_item)
+  # has no entry for it and "Plugins" loses its selected state while on this page — mirror
+  # core's own `menu_item :plugins, :only => :plugin` (settings_controller.rb) so this page reads
+  # as part of the same "Plugins" section.
+  menu_item :plugins
   helper :sla_compliance
 
   before_action :require_admin

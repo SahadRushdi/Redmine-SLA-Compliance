@@ -80,4 +80,33 @@ class SlaNotificationSettingsControllerTest < ActionController::TestCase
                            sla_notification_setting: { stale_email_frequency: 'daily' } }
     assert_response :forbidden
   end
+
+  # --- Step 5.1: the user allow-list ------------------------------------------------------------
+  # rhill (user 4) holds no role and no membership, so only the allow-list can let them through.
+
+  test "a listed manager can save notification settings with no role" do
+    @request.session[:user_id] = 4
+    Setting.plugin_redmine_sla_compliance = { 'sla_manager_user_ids' => ['4'] }
+
+    put :update, params: { project_id: @project.id,
+                           sla_notification_setting: { stale_email_frequency: 'daily' } }
+
+    assert_redirected_to settings_project_path(@project, tab: 'sla_policy')
+    assert_equal 'daily', setting.stale_email_frequency
+  ensure
+    Setting.plugin_redmine_sla_compliance = {}
+  end
+
+  test "a listed viewer is dashboard-only and cannot save notification settings" do
+    @request.session[:user_id] = 4
+    Setting.plugin_redmine_sla_compliance = { 'sla_viewer_user_ids' => ['4'] }
+
+    put :update, params: { project_id: @project.id,
+                           sla_notification_setting: { stale_email_frequency: 'daily' } }
+
+    assert_response :forbidden
+    assert_nil setting
+  ensure
+    Setting.plugin_redmine_sla_compliance = {}
+  end
 end

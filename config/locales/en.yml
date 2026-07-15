@@ -45,13 +45,21 @@ en:
   field_sla_work_end_time: "Work end (HH:MM)"
   field_sla_holidays: "Holidays"
   text_sla_holidays_hint: "One date per line, in YYYY-MM-DD format."
-  text_sla_settings_phase5_note: "Role-based access grants and the global Google Chat fallback are configured here in Phase 5."
 
   field_sla_sweep_interval_minutes: "Sweep interval (minutes)"
   text_sla_sweep_interval_hint: "How often the at-risk / stale sweep re-evaluates open tickets, in minutes (1–1440). Default 15. Takes effect within a minute, no restart needed."
   field_sla_unclassified_priority: "Unclassified priority"
   label_sla_unclassified_priority_auto: "Auto-detect (a priority literally named \"None\", if any)"
   text_sla_unclassified_priority_hint: "This priority is always excluded from SLA evaluation across every project, and shown as unclassified/needs-triage on the dashboard."
+
+  # --- Access control (Phase 5, Step 5.1) --------------------------------------------------
+  label_sla_access_control: "Access control"
+  text_sla_access_control_hint: "Administrators always have full access. Roles granted the SLA permissions under Administration → Roles keep their access as usual. Use the lists below to grant access to individual users without giving them a role."
+  field_sla_viewer_users: "SLA viewers"
+  text_sla_viewer_users_hint: "Can open the SLA dashboard, read-only. Search by name, login or email; add as many users as you like. Applies to every project that has the SLA Compliance module enabled and is already visible to them."
+  field_sla_manager_users: "SLA managers"
+  text_sla_manager_users_hint: "Everything a viewer can do, plus the Project Settings → SLA Policy tab (edit the policy and notification settings). Changes take effect immediately, with no restart."
+  label_sla_no_users_added: "No users added yet."
 
   # --- SLA Policy tab (Phase 4) ------------------------------------------------------------
   label_sla_policy: "SLA Policy"

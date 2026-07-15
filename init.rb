@@ -23,15 +23,26 @@ Redmine::Plugin.register :redmine_sla_compliance do
 
     # Create/edit the project's SLA policy (Project Settings → SLA Policy tab, Phase 4).
     # :destroy is B3's "Revert to inherited policy" action.
-    permission :edit_sla_policy, { sla_policies: [:edit, :update, :destroy] }
+    #
+    # `projects: [:settings]` is what makes the tab actually REACHABLE: the page hosting it is
+    # ProjectsController#settings, which Redmine gates on :edit_project (require_member). Without
+    # claiming that action here, a role granted only :edit_sla_policy would be shown no Settings
+    # menu link and 403 on the URL — the tab could never be opened. This mirrors how core's own
+    # :manage_members / :manage_versions / :manage_categories each claim projects/settings.
+    # Holding it grants nothing else: every other tab stays filtered by its own permission.
+    permission :edit_sla_policy, { sla_policies: [:edit, :update, :destroy],
+                                   projects: [:settings] }
 
     # Manage per-project notification settings (Google Chat webhook, at-risk/stale email).
-    permission :manage_sla_notifications, { sla_notification_settings: [:edit, :update] }
+    permission :manage_sla_notifications, { sla_notification_settings: [:edit, :update],
+                                            projects: [:settings] }
   end
 
   # --- Menu stubs -------------------------------------------------------------------------
   # Project-level entry to the dashboard, gated by the view permission and the module being
-  # enabled on the project (allowed_to? returns false when the module is disabled).
+  # enabled on the project (allowed_to? returns false when the module is disabled). Step 5.1's
+  # user allow-list is answered by allowed_to? itself (see UserPatch), so a listed viewer sees
+  # this entry without holding any role on the project.
   menu :project_menu, :sla_compliance,
        { controller: 'sla_dashboard', action: 'index' },
        caption: :label_sla_compliance,
@@ -51,11 +62,20 @@ end
 Rails.application.config.after_initialize do
   require_dependency File.expand_path('lib/redmine_sla_compliance/patches/issue_patch', __dir__)
   require_dependency File.expand_path('lib/redmine_sla_compliance/patches/projects_helper_patch', __dir__)
+  require_dependency File.expand_path('lib/redmine_sla_compliance/patches/user_patch', __dir__)
   require File.expand_path('lib/redmine_sla_compliance/sweep_scheduler', __dir__)
 
   # Step 3.1 — recompute an issue's cached SLA result on every change (idempotent include guard).
   unless Issue.included_modules.include?(RedmineSlaCompliance::Patches::IssuePatch)
     Issue.include(RedmineSlaCompliance::Patches::IssuePatch)
+  end
+
+  # Step 5.1 — make Redmine's own permission check honour the SLA user allow-list. Prepended so
+  # the patch's allowed_to? runs first and can fall through to core's via super; every SLA gate
+  # (project menu, authorize, settings tabs, view partials) asks this one method, so this is the
+  # only place the allow-list has to be taught about.
+  unless User.included_modules.include?(RedmineSlaCompliance::Patches::UserPatch)
+    User.prepend(RedmineSlaCompliance::Patches::UserPatch)
   end
 
   # Step 4.1 — SLA Policy tab under Project Settings.
@@ -66,6 +86,11 @@ Rails.application.config.after_initialize do
   # plugin helpers by default — make the form helpers available there.
   ProjectsController.helper(:sla_policies)
   ProjectsController.helper(:sla_compliance)
+
+  # Step 5.1 — the access-control pickers render inside Redmine's own SettingsController#plugin
+  # view, which likewise doesn't include plugin helpers by default (sla_label_classes et al).
+  SettingsController.helper(:sla_policies)
+  SettingsController.helper(:sla_compliance)
 
   # Step 3.3 — start the recurring at-risk/stale sweep (no-op under rake / when disabled).
   RedmineSlaCompliance::SweepScheduler.start

@@ -6,6 +6,10 @@
 class SlaBusinessCalendarsController < ApplicationController
   layout 'admin'
   self.main_menu = false
+  # See the matching comment in SlaTargetOptionsController: without this, the admin sidebar's
+  # "Plugins" entry loses its selected state on this page because it's a separate controller
+  # from SettingsController#plugin.
+  menu_item :plugins
   helper :sla_compliance
 
   before_action :require_admin

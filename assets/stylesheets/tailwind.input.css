@@ -151,3 +151,30 @@ input[type='checkbox']:not(.tw-sr-only):focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
 }
+
+/*
+ * Administration -> Plugins -> Configure bleed (Step 5.1 access-control section).
+ *
+ * Redmine core wraps every plugin settings partial in `<div class="box tabular settings">`
+ * (app/views/settings/plugin.html.erb) and application.css styles ANY <label>/<p> inside it
+ * unconditionally: `.tabular.settings label { float: left; margin-left: -300px; width: 295px;
+ * text-align: right; }` and `.tabular.settings p { padding-left: 300px; }`. Those rules don't
+ * check for our own classes, so they still win over plain `tw-block`-style utilities (which
+ * never set float/margin/width/padding-left) and shove the access-control labels 300px left
+ * (clipping them against the sidebar) and the hint paragraphs 300px right (overlapping the next
+ * grid column). Selectors below are pre-scoped (`.sla-plugin` written explicitly, ancestor-first)
+ * so postcss-prefix-selector leaves them as-is instead of nesting `.sla-plugin` the other way
+ * round, and are specific enough (0,3,1) to beat `.tabular.settings label`/`p` (0,2,1) outright.
+ */
+.tabular.settings .sla-plugin label {
+  float: none;
+  text-align: left;
+  margin-left: 0;
+  width: auto;
+}
+
+.tabular.settings .sla-plugin p {
+  padding-left: 0;
+  min-height: 0;
+  clear: none;
+}

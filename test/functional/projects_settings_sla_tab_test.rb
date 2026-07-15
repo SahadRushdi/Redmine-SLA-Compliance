@@ -17,6 +17,11 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     @request.session[:user_id] = 2
     SlaTargetOption.create!(target_type: 'response', code: '4h', label: '4 hours',
                             seconds: 14_400)
+    Setting.plugin_redmine_sla_compliance = {}
+  end
+
+  teardown do
+    Setting.plugin_redmine_sla_compliance = {}
   end
 
   test "settings page renders both tab sections with saved values" do
@@ -129,5 +134,96 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
 
     get :settings, params: { id: child.identifier, tab: 'sla_policy' }
     assert_select revert_delete_form_selector(child), 0
+  end
+
+  # --- Step 5.1: the user allow-list ------------------------------------------------------------
+  #
+  # "A non-permitted role sees neither the tab nor the dashboard; an admin can grant access to a
+  # chosen role and it takes effect." These cover the TAB half for users granted individually
+  # rather than through a role — the case Redmine's role-only permission model cannot express.
+  #
+  # All of them log in as rhill (user 4): active, but a member of no project and holding no role.
+  # Anything they can see here was granted by the allow-list and by nothing else.
+
+  def list!(list, *user_ids)
+    Setting.plugin_redmine_sla_compliance = {
+      "sla_#{list}_user_ids" => user_ids.map(&:to_s)
+    }
+  end
+
+  test "a listed manager gets the tab and both sections with no role at all" do
+    @request.session[:user_id] = 4
+    list!(:manager, 4)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+
+    assert_response :success, 'a listed manager must be able to open the Settings page itself'
+    assert_select '#tab-content-sla_policy .sla-plugin' do
+      assert_select '#sla-policy-form'
+      assert_select '#sla-notification-form'
+    end
+  end
+
+  test "a listed viewer is dashboard-only and never sees the tab" do
+    @request.session[:user_id] = 4
+    list!(:viewer, 4)
+
+    get :settings, params: { id: @project.identifier }
+
+    # The viewer list grants the dashboard only, so the page hosting the tab stays closed to them.
+    assert_response :forbidden
+  end
+
+  test "an unlisted user with no role sees neither the tab nor the Settings page" do
+    @request.session[:user_id] = 4
+
+    get :settings, params: { id: @project.identifier }
+    assert_response :forbidden
+  end
+
+  test "granting a manager takes effect immediately, with no restart" do
+    @request.session[:user_id] = 4
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :forbidden, 'precondition: not listed yet'
+
+    list!(:manager, 4)
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+    assert_select '#sla-policy-form'
+
+    Setting.plugin_redmine_sla_compliance = {}
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :forbidden, 'revoking must apply just as immediately'
+  end
+
+  test "a listed manager sees only the SLA tab, not the rest of Project Settings" do
+    # Claiming projects/settings for :edit_sla_policy opens the page, but every other tab is
+    # still filtered by its own permission — a listed manager must not gain project admin.
+    @request.session[:user_id] = 4
+    list!(:manager, 4)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+
+    assert_response :success
+    # The positive assertion pins the selector form, so the two negatives below cannot pass
+    # vacuously by naming an id that never exists.
+    assert_select 'a#tab-sla_policy'
+    assert_select 'a#tab-info', 0, 'must not gain the project Information tab'
+    assert_select 'a#tab-members', 0, 'must not gain the Members tab'
+  end
+
+  test "a role granted only edit_sla_policy can reach the tab without edit_project" do
+    # The role-based counterpart of the above: before Step 5.1, :edit_sla_policy alone was not
+    # enough to open ProjectsController#settings, so the tab was unreachable for such a role.
+    role = Role.create!(name: 'SLA Only', permissions: [:view_project, :edit_sla_policy])
+    Member.create!(user_id: 4, project_id: @project.id, role_ids: [role.id])
+    @request.session[:user_id] = 4
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+
+    assert_response :success
+    assert_select '#sla-policy-form'
+    assert_select '#sla-notification-form', 0, 'edit_sla_policy alone must not open notifications'
   end
 end

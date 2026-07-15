@@ -67,6 +67,33 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_response :forbidden
   end
 
+  # --- Step 5.1: the user allow-list --------------------------------------------------------
+  # rhill (user 4) holds no role and no membership, so only the allow-list can let them through.
+
+  test "a listed manager can save the policy with no role" do
+    @request.session[:user_id] = 4
+    Setting.plugin_redmine_sla_compliance = { 'sla_manager_user_ids' => ['4'] }
+
+    put :update, params: base_params
+
+    assert_redirected_to settings_project_path(@project, tab: 'sla_policy')
+    assert policy.present?, 'a listed manager must be able to save the policy'
+  ensure
+    Setting.plugin_redmine_sla_compliance = {}
+  end
+
+  test "a listed viewer is dashboard-only and cannot save the policy" do
+    @request.session[:user_id] = 4
+    Setting.plugin_redmine_sla_compliance = { 'sla_viewer_user_ids' => ['4'] }
+
+    put :update, params: base_params
+
+    assert_response :forbidden
+    assert_nil policy
+  ensure
+    Setting.plugin_redmine_sla_compliance = {}
+  end
+
   # --- scalars (4.2 / 4.3 / 4.8 defaults) ---------------------------------------------------
 
   test "update persists policy scalars and redirects to the tab" do

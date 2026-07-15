@@ -614,6 +614,11 @@
 .sla-plugin .tw-cursor-pointer {
     cursor: pointer;
 }
+.sla-plugin .tw-select-none {
+    -webkit-user-select: none;
+       -moz-user-select: none;
+            user-select: none;
+}
 .sla-plugin .tw-list-inside {
     list-style-position: inside;
 }
@@ -723,6 +728,9 @@
     --tw-bg-opacity: 1;
     background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1));
 }
+.sla-plugin .tw-p-1\.5 {
+    padding: 0.375rem;
+}
 .sla-plugin .tw-p-2\.5 {
     padding: 0.625rem;
 }
@@ -768,6 +776,9 @@
 .sla-plugin .tw-text-center {
     text-align: center;
 }
+.sla-plugin .tw-text-right {
+    text-align: right;
+}
 .sla-plugin .tw-text-2xl {
     font-size: 1.5rem;
     line-height: 2rem;
@@ -800,6 +811,10 @@
 .sla-plugin .tw-text-blue-900 {
     --tw-text-opacity: 1;
     color: rgb(35 56 118 / var(--tw-text-opacity, 1));
+}
+.sla-plugin .tw-text-gray-400 {
+    --tw-text-opacity: 1;
+    color: rgb(156 163 175 / var(--tw-text-opacity, 1));
 }
 .sla-plugin .tw-text-gray-500 {
     --tw-text-opacity: 1;
@@ -990,6 +1005,33 @@
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
 }
 
+/*
+ * Administration -> Plugins -> Configure bleed (Step 5.1 access-control section).
+ *
+ * Redmine core wraps every plugin settings partial in `<div class="box tabular settings">`
+ * (app/views/settings/plugin.html.erb) and application.css styles ANY <label>/<p> inside it
+ * unconditionally: `.tabular.settings label { float: left; margin-left: -300px; width: 295px;
+ * text-align: right; }` and `.tabular.settings p { padding-left: 300px; }`. Those rules don't
+ * check for our own classes, so they still win over plain `tw-block`-style utilities (which
+ * never set float/margin/width/padding-left) and shove the access-control labels 300px left
+ * (clipping them against the sidebar) and the hint paragraphs 300px right (overlapping the next
+ * grid column). Selectors below are pre-scoped (`.sla-plugin` written explicitly, ancestor-first)
+ * so postcss-prefix-selector leaves them as-is instead of nesting `.sla-plugin` the other way
+ * round, and are specific enough (0,3,1) to beat `.tabular.settings label`/`p` (0,2,1) outright.
+ */
+.tabular.settings .sla-plugin label {
+  float: none;
+  text-align: left;
+  margin-left: 0;
+  width: auto;
+}
+
+.tabular.settings .sla-plugin p {
+  padding-left: 0;
+  min-height: 0;
+  clear: none;
+}
+
 .sla-plugin .after\:tw-absolute::after {
     content: var(--tw-content);
     position: absolute;
@@ -1047,6 +1089,10 @@
 .sla-plugin .after\:tw-content-\[\'\'\]::after {
     --tw-content: '';
     content: var(--tw-content);
+}
+
+.sla-plugin .last\:tw-border-0:last-child {
+    border-width: 0px;
 }
 
 .sla-plugin .hover\:tw-bg-gray-100:hover {

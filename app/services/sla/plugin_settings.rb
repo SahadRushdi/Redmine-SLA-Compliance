@@ -44,7 +44,51 @@ module Sla
         IssuePriority.where('LOWER(name) = ?', 'none').first&.id
       end
 
+      # --- Step 5.1: the user access allow-lists ----------------------------------------------
+      #
+      # Redmine permissions attach to roles only, so there is no native way to grant SLA access to
+      # a named person. These two lists fill that gap; Sla::AccessControl turns them into an
+      # answer. Stored as user IDs per Global Rule 2 (references, never labels) inside the same
+      # plugin-settings hash as everything above — no table, no migration.
+      #
+      # Read fresh on every call, like the settings above: `Setting` invalidates its cache when an
+      # admin saves the form, which is what makes a granted (or revoked) user take effect on their
+      # very next request with no restart.
+
+      # Dashboard, read-only.
+      def viewer_user_ids
+        user_ids_setting('sla_viewer_user_ids')
+      end
+
+      # Dashboard plus the SLA Policy tab.
+      def manager_user_ids
+        user_ids_setting('sla_manager_user_ids')
+      end
+
+      def viewer_users
+        users_for(viewer_user_ids)
+      end
+
+      def manager_users
+        users_for(manager_user_ids)
+      end
+
       private
+
+      # The settings form posts a blank sentinel entry (so the `[]` param still arrives when every
+      # chip has been removed) and Redmine's settings controller stores what it is given verbatim
+      # via `permit!.to_h` — so the cleanup has to happen on read. Tolerates a nil or non-array
+      # value, which is what a hand-edited or pre-5.1 settings hash looks like.
+      def user_ids_setting(key)
+        Array(settings[key]).reject(&:blank?).map(&:to_i).uniq
+      end
+
+      # Ordered for display, and silently skips IDs whose user has since been deleted.
+      def users_for(ids)
+        return User.none if ids.empty?
+
+        User.where(id: ids).sorted
+      end
 
       def settings
         Setting.plugin_redmine_sla_compliance || {}
