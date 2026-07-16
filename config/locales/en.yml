@@ -27,9 +27,8 @@ en:
   label_sla_date_preset_custom: "Custom Range"
   field_sla_date_from: "From"
   field_sla_date_to: "To"
-  button_sla_apply_filters: "Apply Filters"
-  button_sla_clear_filters: "Clear filters"
   button_sla_remove_filter: "Remove filter"
+  button_sla_export_csv: "Export CSV"
   text_sla_filter_locked_project_hint: "This project has no sub-projects, so the Project filter is locked to it."
 
   label_sla_card_total: "Total Tickets"
@@ -48,6 +47,7 @@ en:
   label_sla_chart_trend: "Created vs Resolved"
   label_sla_chart_met_on_track: "SLA Met (on track)"
   label_sla_chart_met_at_risk: "SLA Met (at risk)"
+  label_sla_chart_met_at_risk_hint: "of Met"
   label_sla_chart_created: "Created"
   label_sla_chart_resolved: "Resolved"
   label_sla_trend_daily: "Daily"
@@ -67,6 +67,8 @@ en:
   field_sla_detail_resolution: "Resolution"
   field_sla_detail_result: "Result"
   field_sla_detail_deviation: "Deviation"
+  label_sla_detail_search_placeholder: "Search tickets..."
+  label_sla_detail_per_page: "Per page:"
   text_sla_detail_table_empty_state: "No tickets match the current filters."
 
   # --- Admin lookups (target options + business calendars) --------------------------------

@@ -8,10 +8,6 @@
 <%# Shared template for both SlaDashboardController#index (project-level, @project set) and %>
 <%# #cross_project (top-level, @project nil). %>
 <div class="sla-plugin">
-  <h1 class="tw-text-2xl tw-font-bold tw-text-gray-900 tw-mb-4">
-    <%= @project ? "#{l(:label_sla_compliance)} — #{@project.name}" : l(:label_sla_dashboard_all) %>
-  </h1>
-
   <%= render 'sla_dashboard/filter_bar' %>
   <%= render 'sla_dashboard/summary_cards' %>
   <%= render 'sla_dashboard/charts' %>

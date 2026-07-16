@@ -85,6 +85,34 @@ textarea:focus {
 }
 
 /*
+ * Dashboard filter fields ONLY (Tracker/Priority/Project Tom Select controls, the custom
+ * date-range inputs) — white background + a permanent blue border, per the reference design.
+ * Scoped to #sla-filter-form (the dashboard's one filter <form>, see _filter_bar.html.erb) so the
+ * SLA Policy tab / notification settings / access-control pickers elsewhere in the plugin keep
+ * their existing neutral grey look (the shared .ts-wrapper .ts-control rule above) untouched —
+ * an ID-scoped selector outranks that rule's class/element selectors without needing !important.
+ */
+#sla-filter-form .ts-wrapper .ts-control {
+  background-color: #ffffff;
+  border-color: #3b82f6; /* primary-500 */
+}
+
+#sla-filter-form .ts-wrapper.focus .ts-control {
+  border-color: #2563eb; /* primary-600 */
+  box-shadow: 0 0 0 1px #2563eb;
+}
+
+#sla-filter-form input[type='text'] {
+  background-color: #ffffff;
+  border-color: #3b82f6;
+}
+
+#sla-filter-form input[type='text']:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px #2563eb;
+}
+
+/*
  * Native form-control appearance reset (select / text-like inputs / radio / checkbox).
  *
  * Root cause of two reported bugs — "dropdown text is cut off" and "unchecked radios are

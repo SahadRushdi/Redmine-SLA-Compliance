@@ -440,6 +440,114 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_select '#sla-detail-state-tabs a', text: /\AAll \(5\)\z/
   end
 
+  # --- redesign pass: Export CSV, search, per-page ----------------------------------------------
+
+  test "the Export CSV button links to the current page with format csv, ignoring detail-table state/search/sort" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    list!(:viewer, @user.id)
+    seed_reconciled_dataset
+
+    get :index, params: { project_id: @project.id, date_preset: 'this_month', state: 'breached', q: 'whatever' }
+
+    assert_select "a[href*='.csv'][href*='date_preset=this_month']" do |links|
+      href = links.first['href']
+      refute_includes href, 'state=breached'
+      refute_includes href, 'q=whatever'
+    end
+  end
+
+  test "format=csv returns a CSV listing every matching row, ignoring pagination" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    list!(:viewer, @user.id)
+    issues = seed_reconciled_dataset
+
+    get :index, params: { project_id: @project.id, format: 'csv' }
+
+    assert_response :success
+    assert_match %r{\Atext/csv}, @response.content_type
+    rows = CSV.parse(@response.body, headers: true)
+    assert_equal 5, rows.size
+    ticket_ids = rows.map { |r| r['Ticket'] }
+    assert_includes ticket_ids, issues[:breached].id.to_s
+  end
+
+  test "CSV export honors the active project/tracker/priority/date filters" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    other = Project.find(3)
+    other.enable_module!(:sla_compliance)
+    SlaPolicy.create!(project_id: other.id, enabled: true)
+    list!(:viewer, @user.id)
+    seed_reconciled_dataset
+    other_issue = Issue.generate!(project: other, tracker_id: other.trackers.first.id, author_id: 2)
+    SlaResult.find_by!(issue_id: other_issue.id).update!(primary_state: 'met', no_sla_reason: nil)
+
+    get :cross_project, params: { project_ids: [@project.id], format: 'csv' }
+
+    assert_response :success
+    rows = CSV.parse(@response.body, headers: true)
+    refute_includes rows.map { |r| r['Ticket'] }, other_issue.id.to_s
+  end
+
+  test "the detail table search box filters by ticket subject" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    list!(:viewer, @user.id)
+    tracker_id = @project.trackers.first.id
+    matching = Issue.generate!(project: @project, tracker_id: tracker_id, author_id: 2, subject: 'Unique Search Target')
+    other = Issue.generate!(project: @project, tracker_id: tracker_id, author_id: 2, subject: 'Something else entirely')
+    SlaResult.find_by!(issue_id: matching.id).update!(primary_state: 'met', no_sla_reason: nil)
+    SlaResult.find_by!(issue_id: other.id).update!(primary_state: 'met', no_sla_reason: nil)
+
+    get :index, params: { project_id: @project.id, q: 'Search Target' }
+
+    assert_response :success
+    assert_select "#sla-detail-row-#{matching.id}"
+    assert_select "#sla-detail-row-#{other.id}", 0
+  end
+
+  test "the detail table search box matches an exact ticket id" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    list!(:viewer, @user.id)
+    tracker_id = @project.trackers.first.id
+    matching = Issue.generate!(project: @project, tracker_id: tracker_id, author_id: 2)
+    other = Issue.generate!(project: @project, tracker_id: tracker_id, author_id: 2)
+    SlaResult.find_by!(issue_id: matching.id).update!(primary_state: 'met', no_sla_reason: nil)
+    SlaResult.find_by!(issue_id: other.id).update!(primary_state: 'met', no_sla_reason: nil)
+
+    get :index, params: { project_id: @project.id, q: "##{matching.id}" }
+
+    assert_response :success
+    assert_select "#sla-detail-row-#{matching.id}"
+    assert_select "#sla-detail-row-#{other.id}", 0
+  end
+
+  test "a search with no matches shows the empty state instead of every row" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    list!(:viewer, @user.id)
+    issues = seed_reconciled_dataset
+
+    get :index, params: { project_id: @project.id, q: 'no-such-ticket-exists' }
+
+    assert_response :success
+    issues.each_value { |issue| assert_select "#sla-detail-row-#{issue.id}", 0 }
+  end
+
+  test "the per-page selector changes how many detail rows render per page" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    list!(:viewer, @user.id)
+    tracker_id = @project.trackers.first.id
+    4.times do
+      issue = Issue.generate!(project: @project, tracker_id: tracker_id, author_id: 2)
+      SlaResult.find_by!(issue_id: issue.id).update!(primary_state: 'met', no_sla_reason: nil)
+    end
+
+    with_settings per_page_options: '2, 25, 50' do
+      get :index, params: { project_id: @project.id, per_page: 2 }
+    end
+
+    assert_response :success
+    assert_select '#sla-detail-table-body tr[id^="sla-detail-row-"]', 2
+  end
+
   # --- the menu entry: seeing the dashboard means being shown the way to it --------------------
 
   class SlaDashboardMenuTest < ActionController::TestCase

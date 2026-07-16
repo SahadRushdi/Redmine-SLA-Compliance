@@ -1,64 +1,108 @@
-<%# Step 6.1 — sticky filter bar. Plain GET form + full-page resubmit (matches Redmine's own %>
-<%# report/filter pages) — no AJAX needed for 6.1/6.2. Tracker/Priority option lists are already %>
-<%# narrowed server-side (SlaDashboardController#resolve_filters) to what's actually configured %>
-<%# for the currently selected project(s)/tracker. %>
-<div class="sla-dashboard-filter-bar tw-sticky tw-top-0 tw-z-20 tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-p-4 tw-mb-6 tw-shadow-sm">
-  <%= form_tag(sla_dashboard_base_path(@project), method: :get,
-                class: 'tw-flex tw-flex-wrap tw-items-end tw-gap-4') do %>
+<%# Step 6.1 — filter bar. Plain GET form + full-page resubmit (matches Redmine's own report/ %>
+<%# filter pages). Tracker/Priority option lists are already narrowed server-side %>
+<%# (SlaDashboardController#resolve_filters) to what's actually configured for the currently %>
+<%# selected project(s)/tracker. %>
+<%#
+  Auto-apply, no Apply/Clear buttons (per the time_analytics plugin's own auto-apply
+  convention): every control submits the form itself on change
+  (assets/javascripts/sla_dashboard_filters.js). Date Range pills and the single-value Tracker
+  dropdown submit immediately; the Project/Priority multi-selects and the custom date inputs
+  debounce briefly so picking several chips or filling both date fields doesn't navigate away
+  mid-selection. Individual active filters are still removable via the chip row's "×" below.
 
-    <div class="tw-min-w-[14rem]">
+  Date Range renders as a Figma-style segmented pill group layered over the real
+  `#sla-filter-date-preset` <select> — kept in the DOM (visually hidden) so it still submits
+  normally and every existing functional-test assertion on it (option[selected], clamped values,
+  etc.) keeps working unmodified.
+
+  The <form> uses `tw-contents` (display: contents) so its children lay out as direct flex items
+  of the surrounding header row - lets the title sit on the left and Date Range/Tracker/Priority/
+  Export CSV sit on the right of the SAME row (opposite the heading), while Project still submits
+  as part of the one real <form> underneath.
+%>
+<div class="tw-mb-6">
+  <%= form_tag(sla_dashboard_base_path(@project), method: :get, id: 'sla-filter-form', class: 'tw-contents') do %>
+    <div class="tw-flex tw-items-start tw-justify-between tw-flex-wrap tw-gap-4 tw-mb-4">
+      <div>
+        <h1 class="tw-text-2xl tw-font-bold tw-text-gray-900">
+          <%= @project ? "#{l(:label_sla_compliance)} — #{@project.name}" : l(:label_sla_dashboard_all) %>
+        </h1>
+        <p class="tw-text-sm tw-text-gray-500 tw-mt-1"><%= sla_dashboard_date_range_label(@filters[:date_range]) %></p>
+      </div>
+
+      <div class="tw-flex tw-flex-wrap tw-items-end tw-gap-3">
+        <div>
+          <label class="<%= sla_label_classes %>"><%= l(:label_sla_filter_date_range) %></label>
+          <div class="tw-inline-flex tw-rounded-lg tw-shadow-sm" role="group">
+            <% sla_date_presets.each_with_index do |preset, i| %>
+              <% active = @filters[:date_preset] == preset %>
+              <%# tw-shadow-none is required, not decorative: Purplemine2's global `button{}` rule sets %>
+              <%# `box-shadow: 0 1px 0 #004dc2` (a permanent blue 1px line under every button) that no %>
+              <%# border/background utility touches, since box-shadow is a separate property - without %>
+              <%# this override it renders as one continuous blue bar under the whole pill group. %>
+              <button type="button" data-sla-preset-btn="<%= preset %>"
+                      class="tw-px-3 tw-py-2.5 tw-text-sm tw-font-medium tw-border tw-border-solid tw-shadow-none tw-transition-colors focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-inset focus:tw-ring-primary-300
+                             <%= 'tw-rounded-l-lg' if i.zero? %> <%= 'tw-rounded-r-lg' if i == sla_date_presets.size - 1 %>
+                             <%= '-tw-ml-px' unless i.zero? %>
+                             <%= active ? 'tw-bg-primary-600 tw-text-white tw-border-primary-600 tw-z-10' : 'tw-bg-white tw-text-gray-700 tw-border-gray-300 hover:tw-bg-gray-50' %>">
+                <%= sla_date_preset_label(preset) %>
+              </button>
+            <% end %>
+          </div>
+          <%= select_tag 'date_preset',
+                options_for_select(sla_date_presets.map { |p| [sla_date_preset_label(p), p] }, @filters[:date_preset]),
+                id: 'sla-filter-date-preset', class: 'tw-hidden' %>
+        </div>
+
+        <div id="sla-custom-range" class="tw-flex tw-gap-2 <%= 'hidden' unless @filters[:date_preset] == 'custom' %>">
+          <div>
+            <label class="<%= sla_label_classes %>" for="sla-filter-from"><%= l(:field_sla_date_from) %></label>
+            <%= text_field_tag 'from', @filters[:date_range]&.first, id: 'sla-filter-from',
+                  class: sla_input_classes, autocomplete: 'off', data: { 'sla-datepicker': true, 'sla-auto-apply-debounced': true } %>
+          </div>
+          <div>
+            <label class="<%= sla_label_classes %>" for="sla-filter-to"><%= l(:field_sla_date_to) %></label>
+            <%= text_field_tag 'to', @filters[:date_range]&.last, id: 'sla-filter-to',
+                  class: sla_input_classes, autocomplete: 'off', data: { 'sla-datepicker': true, 'sla-auto-apply-debounced': true } %>
+          </div>
+        </div>
+
+        <div class="tw-min-w-[10rem]">
+          <label class="<%= sla_label_classes %>" for="sla-filter-tracker"><%= l(:label_sla_filter_tracker) %></label>
+          <%= select_tag 'tracker_id',
+                options_for_select([[l(:label_sla_filter_all_trackers), '']] +
+                                    @available_trackers.map { |t| [t.name, t.id] }, @filters[:tracker_id]),
+                id: 'sla-filter-tracker', class: sla_input_classes, data: { 'sla-select': true, 'sla-auto-apply': true } %>
+        </div>
+
+        <div class="tw-min-w-[12rem]">
+          <label class="<%= sla_label_classes %>" for="sla-filter-priorities"><%= l(:label_sla_filter_priority) %></label>
+          <%= select_tag 'priority_ids[]',
+                options_for_select(@available_priorities.map { |p| [p.name, p.id] }, @filters[:priority_ids]),
+                id: 'sla-filter-priorities', multiple: true, disabled: @filters[:tracker_id].blank?,
+                class: sla_input_classes, data: { 'sla-chips': true, 'sla-auto-apply-debounced': true } %>
+        </div>
+
+        <%= link_to sla_detail_table_url(@filters, @project, format: 'csv'),
+              class: 'tw-inline-flex tw-items-center tw-gap-2 tw-text-white tw-bg-primary-600 hover:tw-bg-primary-700 tw-font-medium ' \
+                     'tw-rounded-lg tw-text-sm tw-px-4 tw-py-2.5 tw-shadow-sm focus:tw-outline-none focus:tw-ring-4 focus:tw-ring-primary-200' do %>
+          <svg class="tw-w-4 tw-h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+          </svg>
+          <%= l(:button_sla_export_csv) %>
+        <% end %>
+      </div>
+    </div>
+
+    <div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-p-4 tw-shadow-sm">
       <label class="<%= sla_label_classes %>" for="sla-filter-projects"><%= l(:label_sla_filter_project) %></label>
       <%= select_tag 'project_ids[]',
             options_for_select(@permitted_projects.map { |p| [p.name, p.id] }, @filters[:project_ids]),
             id: 'sla-filter-projects', multiple: true, disabled: @locked_project,
-            class: sla_input_classes, data: { 'sla-chips': true } %>
+            class: "#{sla_input_classes} tw-max-w-xl", data: { 'sla-chips': true, 'sla-auto-apply-debounced': true } %>
       <% if @locked_project %>
         <p class="tw-text-xs tw-text-gray-400 tw-mt-1"><%= l(:text_sla_filter_locked_project_hint) %></p>
       <% end %>
-    </div>
-
-    <div class="tw-min-w-[10rem]">
-      <label class="<%= sla_label_classes %>" for="sla-filter-date-preset"><%= l(:label_sla_filter_date_range) %></label>
-      <%= select_tag 'date_preset',
-            options_for_select(sla_date_presets.map { |p| [sla_date_preset_label(p), p] }, @filters[:date_preset]),
-            id: 'sla-filter-date-preset', class: sla_input_classes, data: { 'sla-select': true } %>
-    </div>
-
-    <div id="sla-custom-range" class="tw-flex tw-gap-2 <%= 'hidden' unless @filters[:date_preset] == 'custom' %>">
-      <div>
-        <label class="<%= sla_label_classes %>" for="sla-filter-from"><%= l(:field_sla_date_from) %></label>
-        <%= text_field_tag 'from', @filters[:date_range]&.first, id: 'sla-filter-from',
-              class: sla_input_classes, autocomplete: 'off', data: { 'sla-datepicker': true } %>
-      </div>
-      <div>
-        <label class="<%= sla_label_classes %>" for="sla-filter-to"><%= l(:field_sla_date_to) %></label>
-        <%= text_field_tag 'to', @filters[:date_range]&.last, id: 'sla-filter-to',
-              class: sla_input_classes, autocomplete: 'off', data: { 'sla-datepicker': true } %>
-      </div>
-    </div>
-
-    <div class="tw-min-w-[10rem]">
-      <label class="<%= sla_label_classes %>" for="sla-filter-tracker"><%= l(:label_sla_filter_tracker) %></label>
-      <%= select_tag 'tracker_id',
-            options_for_select([[l(:label_sla_filter_all_trackers), '']] +
-                                @available_trackers.map { |t| [t.name, t.id] }, @filters[:tracker_id]),
-            id: 'sla-filter-tracker', class: sla_input_classes, data: { 'sla-select': true } %>
-    </div>
-
-    <div class="tw-min-w-[12rem]">
-      <label class="<%= sla_label_classes %>" for="sla-filter-priorities"><%= l(:label_sla_filter_priority) %></label>
-      <%= select_tag 'priority_ids[]',
-            options_for_select(@available_priorities.map { |p| [p.name, p.id] }, @filters[:priority_ids]),
-            id: 'sla-filter-priorities', multiple: true, disabled: @filters[:tracker_id].blank?,
-            class: sla_input_classes, data: { 'sla-chips': true } %>
-    </div>
-
-    <div class="tw-flex tw-gap-2 tw-ml-auto">
-      <%= submit_tag l(:button_sla_apply_filters),
-            class: 'tw-text-white tw-bg-primary-600 hover:tw-bg-primary-700 tw-font-medium ' \
-                   'tw-rounded-lg tw-text-sm tw-px-4 tw-py-2.5' %>
-      <%= link_to l(:button_sla_clear_filters), sla_dashboard_base_path(@project),
-            class: 'tw-text-gray-500 hover:tw-text-gray-700 tw-text-sm tw-px-4 tw-py-2.5' %>
     </div>
   <% end %>
 
@@ -67,7 +111,7 @@
                                   available_priorities: @available_priorities,
                                   locked_project: @locked_project) %>
   <% if chips.any? %>
-    <div class="tw-flex tw-flex-wrap tw-gap-2 tw-mt-3 tw-pt-3 tw-border-t tw-border-gray-100">
+    <div class="tw-flex tw-flex-wrap tw-gap-2 tw-mt-3">
       <% chips.each do |chip| %>
         <span class="tw-inline-flex tw-items-center tw-gap-1 tw-bg-primary-50 tw-text-primary-700 tw-text-xs tw-rounded-full tw-pl-2.5 tw-pr-1.5 tw-py-1">
           <%= chip[:label] %>

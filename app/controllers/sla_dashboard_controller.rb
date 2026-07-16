@@ -10,6 +10,8 @@
 # run for the project-less #cross_project action, so that action gets its own bespoke permission
 # check (there is no single global :view_sla_dashboard permission to authorize against, only a
 # per-project one - see SlaPolicy.enabled_projects_for).
+require 'csv'
+
 class SlaDashboardController < ApplicationController
   before_action :find_project_by_project_id, only: :index
   before_action :authorize, only: :index
@@ -18,6 +20,7 @@ class SlaDashboardController < ApplicationController
 
   helper :sla_compliance
   helper :sla_policies # reuses sla_input_classes/sla_label_classes for the filter bar's fields
+  include SlaComplianceHelper # reused for the CSV export's cell formatting (format_sla_duration, sla_card_label)
 
   def index
     render_dashboard
@@ -60,7 +63,10 @@ class SlaDashboardController < ApplicationController
     # Step 6.4 — detail table.
     build_detail_table
 
-    render :index
+    respond_to do |format|
+      format.html { render :index }
+      format.csv  { send_detail_csv }
+    end
   end
 
   # Never trusts client-submitted project/tracker/priority ids - always intersects against what
@@ -159,19 +165,23 @@ class SlaDashboardController < ApplicationController
   }.freeze
 
   # State tabs and their counts come straight from @counts (already computed for the summary
-  # cards) - no second aggregate query. Sort/state-filter/pagination params are clamped the same
-  # way resolve_filters clamps the main filters: an invalid value silently falls back to the
-  # default rather than 403ing or erroring.
+  # cards) - no second aggregate query, EXCEPT when a search term narrows the set further (@counts
+  # knows nothing about search, so that case falls back to a real COUNT). Sort/state/search/
+  # pagination params are clamped the same way resolve_filters clamps the main filters: an invalid
+  # value silently falls back to the default rather than 403ing or erroring.
+  #
+  # @detail_scope is the filtered+sorted relation with NO limit/offset - reused by CSV export
+  # (Export CSV) to return every matching row, not just the current page; @detail_results is the
+  # paginated slice of it that the HTML table actually renders.
   def build_detail_table
     @state_filter   = DETAIL_STATES.include?(params[:state]) ? params[:state] : 'all'
     @sort_column    = DETAIL_SORT_COLUMNS.key?(params[:sort]) ? params[:sort] : 'ticket'
     @sort_direction = %w[asc desc].include?(params[:sort_dir]) ? params[:sort_dir] : 'desc'
-
-    total_count = @state_filter == 'all' ? @counts.total : @counts.public_send(@state_filter)
-    @detail_pages = Redmine::Pagination::Paginator.new(total_count, per_page_option, params[:page])
+    @search_query   = params[:q].to_s.strip.presence
 
     base = @scope.joins(issue: %i[project tracker status]).left_joins(issue: :assigned_to)
     base = apply_state_filter(base, @state_filter)
+    base = apply_search_filter(base, @search_query)
 
     # sanitize_sql_array is required even for plain column names here (not just ORDER_RANK_SQL,
     # the one column expression that actually contains a :now bind placeholder) - passed a
@@ -179,9 +189,15 @@ class SlaDashboardController < ApplicationController
     # bind too; sanitize_sql_array leaves a string with no matching placeholder untouched.
     column_sql = ActiveRecord::Base.sanitize_sql_array([DETAIL_SORT_COLUMNS[@sort_column], now: Time.current])
     order_sql  = "#{column_sql} #{@sort_direction == 'desc' ? 'DESC' : 'ASC'}"
-    @detail_results = base.reorder(Arel.sql(order_sql))
-                          .limit(@detail_pages.per_page).offset(@detail_pages.offset)
-                          .includes(issue: %i[project tracker status assigned_to])
+    @detail_scope = base.reorder(Arel.sql(order_sql)).includes(issue: %i[project tracker status assigned_to])
+
+    total_count = @search_query ? base.count : detail_state_count(@state_filter)
+    @detail_pages   = Redmine::Pagination::Paginator.new(total_count, per_page_option, params[:page])
+    @detail_results = @detail_scope.limit(@detail_pages.per_page).offset(@detail_pages.offset)
+  end
+
+  def detail_state_count(state)
+    state == 'all' ? @counts.total : @counts.public_send(state)
   end
 
   # Reuses the exact same effective-state definition as the summary cards (Sla::EffectiveState) -
@@ -195,5 +211,57 @@ class SlaDashboardController < ApplicationController
     when 'no_sla'   then scope.where(Sla::EffectiveState::EFFECTIVE_NO_SLA)
     else scope
     end
+  end
+
+  # Matches ticket subject (substring) or an exact ticket id (with or without a leading '#').
+  def apply_search_filter(scope, query)
+    return scope if query.blank?
+
+    ticket_id = query[/\A#?(\d+)\z/, 1]
+    if ticket_id
+      scope.where('issues.subject LIKE :like OR issues.id = :id', like: "%#{query}%", id: ticket_id.to_i)
+    else
+      scope.where('issues.subject LIKE :like', like: "%#{query}%")
+    end
+  end
+
+  # --- Export CSV -------------------------------------------------------------------------------
+
+  # Every matching row (ignores pagination), same filters/state/search/sort as the HTML table.
+  # Capped by Redmine's own export-size setting (Setting.issues_export_limit) rather than a
+  # plugin-specific limit - reuses the admin's existing safety bound instead of inventing a
+  # second one.
+  def send_detail_csv
+    send_data(detail_csv, type: 'text/csv; header=present', filename: detail_csv_filename)
+  end
+
+  def detail_csv
+    CSV.generate do |csv|
+      csv << [l(:field_sla_detail_ticket), l(:field_sla_detail_project), l(:field_sla_detail_tracker),
+              l(:field_sla_detail_title), l(:field_sla_detail_status), l(:field_sla_detail_assignee),
+              l(:field_sla_detail_first_response), l(:field_sla_detail_resolution),
+              l(:field_sla_detail_result), l(:field_sla_detail_deviation)]
+
+      @detail_scope.limit(Setting.issues_export_limit.to_i).each do |sla_result|
+        csv << detail_csv_row(sla_result)
+      end
+    end
+  end
+
+  def detail_csv_row(sla_result)
+    issue = sla_result.issue
+    state = sla_result.effective_primary_state
+    result_label = sla_card_label(state.to_sym)
+    result_label = "#{result_label} (#{l(:label_sla_card_at_risk)})" if sla_result.effective_at_risk?
+
+    [issue.id, issue.project.name, issue.tracker.name, issue.subject, issue.status.name,
+     issue.assigned_to&.name, format_sla_duration(sla_result.response_seconds),
+     format_sla_duration(sla_result.resolution_seconds), result_label,
+     sla_result.deviation_seconds.present? ? format_sla_duration(sla_result.deviation_seconds) : nil]
+  end
+
+  def detail_csv_filename
+    scope_part = @project ? @project.identifier : 'all-projects'
+    "sla-compliance-#{scope_part}-#{Date.current.iso8601}.csv"
   end
 end

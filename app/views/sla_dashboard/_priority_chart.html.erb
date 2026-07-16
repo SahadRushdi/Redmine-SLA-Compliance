@@ -14,13 +14,25 @@
          data: @priority_breakdown.map(&:no_sla) }
      ]
    } %>
-<div>
-  <h3 class="tw-text-sm tw-font-semibold tw-text-gray-700 tw-mb-2"><%= l(:label_sla_chart_priority_breakdown) %></h3>
-  <div class="tw-relative tw-w-full" style="height: <%= [@priority_breakdown.size * 48 + 32, 128].max %>px;">
+<div class="tw-h-full tw-flex tw-flex-col">
+  <h3 class="tw-text-base tw-font-semibold tw-text-gray-900 tw-mb-3"><%= l(:label_sla_chart_priority_breakdown) %></h3>
+  <div class="tw-relative tw-w-full tw-flex-1 tw-min-h-[16rem]" style="height: <%= [@priority_breakdown.size * 48 + 32, 256].max %>px;">
     <% if @priority_breakdown.empty? %>
       <p class="tw-text-sm tw-text-gray-400 tw-py-8 tw-text-center"><%= l(:text_sla_detail_table_empty_state) %></p>
     <% else %>
       <canvas id="sla-priority-chart" data-chart="<%= priority_payload.to_json %>"></canvas>
+    <% end %>
+  </div>
+
+  <%# Same 4-color state mapping as the donut's legend - dot + label only (no counts) since the %>
+  <%# per-segment value labels already drawn on the bars themselves (sla_dashboard_charts.js) %>
+  <%# carry the numbers, avoiding a second place the same counts would need to stay in sync. %>
+  <div id="sla-priority-chart-legend" class="tw-flex tw-flex-wrap tw-gap-x-4 tw-gap-y-1 tw-mt-3 tw-pt-3 tw-border-t tw-border-gray-100 tw-text-xs tw-text-gray-600">
+    <% %i[met breached at_risk no_sla].each do |state| %>
+      <span class="tw-inline-flex tw-items-center tw-gap-1.5">
+        <span class="tw-w-2.5 tw-h-2.5 tw-rounded-full tw-inline-block" style="background-color: <%= sla_chart_color(state) %>"></span>
+        <%= state == :at_risk ? l(:label_sla_card_at_risk) : sla_card_label(state) %>
+      </span>
     <% end %>
   </div>
 </div>

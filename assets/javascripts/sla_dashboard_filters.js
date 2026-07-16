@@ -5,9 +5,31 @@
 (function () {
   'use strict';
 
-  var state = { bound: false };
+  var AUTO_APPLY_DEBOUNCE_MS = 700;
+  var state = { bound: false, debounceTimer: null };
 
   function byId(id) { return document.getElementById(id); }
+
+  function submitFormFor(el) {
+    var form = el.closest ? el.closest('form') : el.form;
+    if (!form) { return; }
+    (form.requestSubmit ? form.requestSubmit() : form.submit());
+  }
+
+  // Auto-apply (no Apply/Clear buttons - matches the time_analytics plugin's own auto-apply
+  // convention). Single-value controls (Tracker) submit the instant they change - same as the
+  // Date Range pills below. Multi-selects (Project, Priority) and the custom date inputs debounce
+  // briefly instead of submitting on every individual chip add/remove or keystroke, so picking
+  // several values (or filling both From/To) doesn't navigate away mid-selection.
+  function submitImmediately() {
+    submitFormFor(this);
+  }
+
+  function submitDebounced() {
+    var el = this;
+    if (state.debounceTimer) { clearTimeout(state.debounceTimer); }
+    state.debounceTimer = setTimeout(function () { submitFormFor(el); }, AUTO_APPLY_DEBOUNCE_MS);
+  }
 
   // Same pattern as sla_policy_form.js's initChips/initSingleSelects (chip multi-selects vs.
   // single-value dropdowns styled to match the rest of the scoped Flowbite UI).
@@ -32,6 +54,39 @@
     var field = byId('sla-custom-range');
     if (!preset || !field) { return; }
     field.classList.toggle('hidden', preset.value !== 'custom');
+  }
+
+  // Date Range pill button-group (Figma). The buttons are a purely visual/interaction layer over
+  // the real `#sla-filter-date-preset` <select>, which stays in the DOM (visually hidden) so the
+  // existing controller param/validation and functional-test assertions on that element are
+  // untouched. Clicking a non-custom preset submits immediately - matches the reference design
+  // (no separate "Apply" step for a date range change); clicking "Custom Range" only reveals the
+  // custom-range date inputs so the user can fill them in before submitting.
+  function selectDatePreset(btn) {
+    var select = byId('sla-filter-date-preset');
+    if (!select) { return; }
+
+    var value = btn.getAttribute('data-sla-preset-btn');
+    select.value = value;
+    toggleCustomRange();
+    markActivePresetButton(btn);
+
+    if (value !== 'custom') {
+      var form = select.closest('form');
+      if (form) { (form.requestSubmit ? form.requestSubmit() : form.submit()); }
+    }
+  }
+
+  function markActivePresetButton(activeBtn) {
+    document.querySelectorAll('[data-sla-preset-btn]').forEach(function (btn) {
+      var active = btn === activeBtn;
+      btn.classList.toggle('tw-bg-primary-600', active);
+      btn.classList.toggle('tw-text-white', active);
+      btn.classList.toggle('tw-border-primary-600', active);
+      btn.classList.toggle('tw-bg-white', !active);
+      btn.classList.toggle('tw-text-gray-700', !active);
+      btn.classList.toggle('tw-border-gray-300', !active);
+    });
   }
 
   // The flowbite-datepicker library appends its popup to `container` (document.body by default)
@@ -63,6 +118,12 @@
     state.bound = true;
 
     jQuery(document).on('change', '#sla-filter-date-preset', toggleCustomRange);
+    jQuery(document).on('click', '[data-sla-preset-btn]', function (e) {
+      e.preventDefault();
+      selectDatePreset(this);
+    });
+    jQuery(document).on('change', '[data-sla-auto-apply]', submitImmediately);
+    jQuery(document).on('change', '[data-sla-auto-apply-debounced]', submitDebounced);
   }
 
   function init() {

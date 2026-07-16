@@ -55,10 +55,50 @@
     });
   }
 
+  // Centered white value label inside each stacked-bar segment (matching the reference design) -
+  // scoped to this one chart by id so it never draws on the donut/trend charts, which share the
+  // same global Chart.js instance. Segments too narrow for their own label (< ~18px) are skipped
+  // rather than overlapping neighbours illegibly.
+  function registerPriorityValueLabels() {
+    if (Chart.plugins.getAll().some(function (p) { return p.id === 'slaPriorityValueLabels'; })) { return; }
+
+    Chart.plugins.register({
+      id: 'slaPriorityValueLabels',
+      afterDatasetsDraw: function (chart) {
+        if (chart.canvas.id !== 'sla-priority-chart') { return; }
+
+        var ctx = chart.ctx;
+        ctx.save();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        chart.data.datasets.forEach(function (dataset, datasetIndex) {
+          var meta = chart.getDatasetMeta(datasetIndex);
+          if (meta.hidden) { return; }
+
+          meta.data.forEach(function (bar, index) {
+            var value = dataset.data[index];
+            if (!value) { return; }
+
+            var width = bar._model.base - bar._model.x; // horizontalBar: base = left edge, x = right edge
+            if (Math.abs(width) < 18) { return; }
+
+            ctx.fillText(String(value), bar._model.x + width / 2, bar._model.y);
+          });
+        });
+
+        ctx.restore();
+      }
+    });
+  }
+
   function initPriorityChart() {
     var canvas = byId('sla-priority-chart');
     if (!canvas || canvas.slaChartInitialized || !window.Chart) { return; }
     canvas.slaChartInitialized = true;
+    registerPriorityValueLabels();
 
     var payload = readPayload(canvas);
     new Chart(canvas.getContext('2d'), {
@@ -123,11 +163,15 @@
     var group = byId('sla-trend-granularity');
     if (!group) { return; }
     Array.prototype.forEach.call(group.querySelectorAll('[data-sla-trend-granularity]'), function (btn) {
-      btn.classList.remove('tw-bg-primary-600', 'tw-text-white');
-      btn.classList.add('tw-bg-white', 'tw-text-gray-600');
+      var active = btn === button;
+      btn.classList.toggle('tw-bg-primary-600', active);
+      btn.classList.toggle('tw-text-white', active);
+      btn.classList.toggle('tw-border-primary-600', active);
+      btn.classList.toggle('tw-z-10', active);
+      btn.classList.toggle('tw-bg-white', !active);
+      btn.classList.toggle('tw-text-gray-600', !active);
+      btn.classList.toggle('tw-border-gray-300', !active);
     });
-    button.classList.remove('tw-bg-white', 'tw-text-gray-600');
-    button.classList.add('tw-bg-primary-600', 'tw-text-white');
   }
 
   function switchGranularity(button) {
