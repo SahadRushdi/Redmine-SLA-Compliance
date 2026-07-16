@@ -1,0 +1,42 @@
+<%# Created-vs-Resolved dual-line trend. All three granularities are embedded in one JSON payload %>
+<%# (Sla::TrendSeries computes day/week/month together) so the toggle below is a pure client-side %>
+<%# re-render - no page reload, no extra request. "Resolved" comes from the effective policy's %>
+<%# configured resolved-statuses (Sla::TrendSeries reads sla_results.resolved_at), never a %>
+<%# hardcoded status. This is a different data dimension (time series, not compliance state) from %>
+<%# the shared state legend above, so it gets its own small two-entry legend here. %>
+<% trend_payload = {
+     daily: { labels: @trend.daily.map(&:label), created: @trend.daily.map(&:created), resolved: @trend.daily.map(&:resolved) },
+     weekly: { labels: @trend.weekly.map(&:label), created: @trend.weekly.map(&:created), resolved: @trend.weekly.map(&:resolved) },
+     monthly: { labels: @trend.monthly.map(&:label), created: @trend.monthly.map(&:created), resolved: @trend.monthly.map(&:resolved) },
+     colors: { created: sla_chart_color(:created), resolved: sla_chart_color(:resolved) },
+     labelCreated: l(:label_sla_chart_created), labelResolved: l(:label_sla_chart_resolved)
+   } %>
+<div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-p-4 tw-mb-6 tw-shadow-sm">
+  <div class="tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-gap-2 tw-mb-4">
+    <h3 class="tw-text-sm tw-font-semibold tw-text-gray-700"><%= l(:label_sla_chart_trend) %></h3>
+
+    <div class="tw-flex tw-items-center tw-gap-4">
+      <span class="tw-inline-flex tw-items-center tw-gap-2 tw-text-xs tw-text-gray-600">
+        <span class="tw-w-3 tw-h-0.5 tw-inline-block" style="background-color: <%= sla_chart_color(:created) %>"></span>
+        <%= l(:label_sla_chart_created) %>
+      </span>
+      <span class="tw-inline-flex tw-items-center tw-gap-2 tw-text-xs tw-text-gray-600">
+        <span class="tw-w-3 tw-h-0.5 tw-inline-block" style="background-color: <%= sla_chart_color(:resolved) %>"></span>
+        <%= l(:label_sla_chart_resolved) %>
+      </span>
+
+      <div id="sla-trend-granularity" class="tw-inline-flex tw-rounded-lg tw-border tw-border-gray-200 tw-overflow-hidden">
+        <% [['daily', :label_sla_trend_daily], ['weekly', :label_sla_trend_weekly], ['monthly', :label_sla_trend_monthly]].each_with_index do |(value, key), i| %>
+          <button type="button" data-sla-trend-granularity="<%= value %>"
+                  class="tw-px-3 tw-py-1 tw-text-xs tw-font-medium <%= i.zero? ? 'tw-bg-primary-600 tw-text-white' : 'tw-bg-white tw-text-gray-600' %> <%= 'tw-border-l tw-border-gray-200' unless i.zero? %>">
+            <%= l(key) %>
+          </button>
+        <% end %>
+      </div>
+    </div>
+  </div>
+
+  <div class="tw-relative tw-w-full" style="height: 18rem;">
+    <canvas id="sla-trend-chart" data-chart="<%= trend_payload.to_json %>"></canvas>
+  </div>
+</div>

@@ -92,6 +92,32 @@ class Sla::ResultSummaryTest < ActiveSupport::TestCase
     assert_equal 0, counts.at_risk
   end
 
+  test 'no_sla rows split correctly into not_configured and not_tracked, reconciling to no_sla' do
+    make_result(issue_id: 1, primary_state: 'no_sla', no_sla_reason: 'not_configured')
+    make_result(issue_id: 2, primary_state: 'no_sla', no_sla_reason: 'not_configured')
+    make_result(issue_id: 3, primary_state: 'no_sla', no_sla_reason: 'not_tracked')
+
+    counts = Sla::ResultSummary.call(scope: SlaResult.where(issue_id: [1, 2, 3]), now: NOW)
+
+    assert_equal 3, counts.no_sla
+    assert_equal 2, counts.not_configured
+    assert_equal 1, counts.not_tracked
+    assert_equal counts.no_sla, counts.not_configured + counts.not_tracked
+  end
+
+  test 'a no_sla row with a nil no_sla_reason counts toward no_sla but neither breakdown field' do
+    # Schema-legal (no_sla_reason is nullable) even though ResultClassifier's contract always sets
+    # it alongside primary_state = 'no_sla' — this documents the gap rather than asserting a
+    # universal no_sla == not_configured + not_tracked guarantee the schema doesn't enforce.
+    make_result(issue_id: 1, primary_state: 'no_sla', no_sla_reason: nil)
+
+    counts = Sla::ResultSummary.call(scope: SlaResult.where(issue_id: 1), now: NOW)
+
+    assert_equal 1, counts.no_sla
+    assert_equal 0, counts.not_configured
+    assert_equal 0, counts.not_tracked
+  end
+
   test 'an at-risk met row with breach_at in the future is counted in both met and at_risk' do
     make_result(issue_id: 1, primary_state: 'met', at_risk: true, breach_at: NOW + 1.hour)
 
@@ -148,6 +174,23 @@ class Sla::ResultSummaryTest < ActiveSupport::TestCase
     assert_equal 0, counts.breached
   end
 
+  test 'a scope with a statically-impossible WHERE clause returns all-zero counts, not a NoMethodError' do
+    # where(project_id: []) hits ActiveRecord's null-relation optimization -- .take returns nil
+    # without issuing SQL at all, unlike a real query that matches zero rows. The dashboard
+    # legitimately builds exactly this scope whenever a user has zero permitted projects.
+    make_result(issue_id: 1, primary_state: 'met')
+
+    counts = Sla::ResultSummary.call(scope: SlaResult.where(project_id: []), now: NOW)
+
+    assert_equal 0, counts.total
+    assert_equal 0, counts.met
+    assert_equal 0, counts.breached
+    assert_equal 0, counts.at_risk
+    assert_equal 0, counts.no_sla
+    assert_equal 0, counts.not_configured
+    assert_equal 0, counts.not_tracked
+  end
+
   test 'an empty matching scope returns all-zero counts, not an exception or nils' do
     counts = Sla::ResultSummary.call(scope: SlaResult.where(issue_id: -1), now: NOW)
 
@@ -156,5 +199,7 @@ class Sla::ResultSummaryTest < ActiveSupport::TestCase
     assert_equal 0, counts.breached
     assert_equal 0, counts.at_risk
     assert_equal 0, counts.no_sla
+    assert_equal 0, counts.not_configured
+    assert_equal 0, counts.not_tracked
   end
 end

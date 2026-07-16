@@ -9,6 +9,8 @@ class SlaResult < ActiveRecord::Base
   PRIMARY_STATES = %w[met breached no_sla].freeze
   NO_SLA_REASONS = %w[not_configured not_tracked].freeze
 
+  include Sla::EffectiveState
+
   belongs_to :issue, optional: true
   belongs_to :project, optional: true
 

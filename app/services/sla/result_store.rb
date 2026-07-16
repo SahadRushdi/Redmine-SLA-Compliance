@@ -39,6 +39,7 @@ module Sla
         resolution_seconds: result.resolution_seconds,
         deviation_seconds:  result.deviation_seconds,
         cycle_started_at:   result.cycle_started_at,
+        resolved_at:        result.resolved_at,
         calculated_at:      now
       )
       record.save!

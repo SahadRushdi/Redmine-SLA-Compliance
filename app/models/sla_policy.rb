@@ -74,4 +74,18 @@ class SlaPolicy < ActiveRecord::Base
     end
     [nil, nil]
   end
+
+  # Projects +user+ may open the SLA dashboard on: active, visible, SLA-module-enabled, with an
+  # ENABLED effective policy, and view_sla_dashboard-permitted (role or Step 5.1 allow-list).
+  # +base_scope+ narrows the candidates before the per-project checks run — the project-level
+  # dashboard passes `@project.self_and_descendants` so a subtree scan never touches unrelated
+  # projects; the top-level (cross-project) dashboard leaves it at the full active+module-enabled
+  # universe.
+  def self.enabled_projects_for(user, base_scope: Project.active.has_module(:sla_compliance))
+    return [] if user.nil? || !user.logged?
+
+    base_scope.visible(user).to_a.select do |project|
+      user.allowed_to?(:view_sla_dashboard, project) && effective_for(project).present?
+    end
+  end
 end

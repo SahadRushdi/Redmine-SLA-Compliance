@@ -2,6 +2,9 @@
 # admin-managed lookups (target options, business calendars); the access allow-list user search
 # (Phase 5).
 Rails.application.routes.draw do
+  # Step 6.1 — top-level (cross-project) dashboard, alongside the project-nested one below.
+  get 'sla_dashboard', to: 'sla_dashboard#cross_project', as: :sla_dashboard_cross_project
+
   resources :projects, only: [] do
     resources :sla_dashboard, only: [:index], controller: 'sla_dashboard'
     resource :sla_policy, only: [:edit, :update, :destroy], controller: 'sla_policies'

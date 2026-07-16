@@ -14,14 +14,22 @@ module Sla
   # At-risk is NOT given the same live treatment: there is no precomputed instant to compare
   # against (only a boolean, refreshed solely by the full engine pass), so at-risk counts still
   # reflect the last sweep/event, same as today.
+  #
+  # `not_configured`/`not_tracked` split `no_sla` by `sla_results.no_sla_reason` (Step 6.2's card
+  # breakdown). `no_sla_reason` is nullable at the DB level even though ResultClassifier always
+  # sets it alongside `primary_state = 'no_sla'` — a hypothetical nil-reason row would count
+  # toward `no_sla` but neither breakdown field, so `no_sla == not_configured + not_tracked` is
+  # not a schema-enforced guarantee, only an engine-contract one.
   class ResultSummary
-    Counts = Struct.new(:total, :met, :breached, :at_risk, :no_sla, keyword_init: true)
+    Counts = Struct.new(:total, :met, :breached, :at_risk, :no_sla,
+                         :not_configured, :not_tracked, keyword_init: true)
 
-    LIVE_BREACHED = "(sla_results.primary_state = 'met' AND sla_results.breach_at IS NOT NULL " \
-                    'AND sla_results.breach_at < :now)'
-    EFFECTIVE_BREACHED = "(sla_results.primary_state = 'breached' OR #{LIVE_BREACHED})"
-    EFFECTIVE_MET      = "(sla_results.primary_state = 'met' AND NOT #{LIVE_BREACHED})"
-    EFFECTIVE_AT_RISK  = "(sla_results.at_risk = :at_risk_true AND #{EFFECTIVE_MET})"
+    # The live-reclassification SQL fragments themselves live on Sla::EffectiveState (included
+    # into SlaResult) — shared with Sla::PriorityBreakdown, the dashboard detail table, and
+    # per-row view rendering so every reader of the cache agrees on what "effective" means.
+    EFFECTIVE_MET      = Sla::EffectiveState::EFFECTIVE_MET
+    EFFECTIVE_BREACHED = Sla::EffectiveState::EFFECTIVE_BREACHED
+    EFFECTIVE_AT_RISK  = Sla::EffectiveState::EFFECTIVE_AT_RISK
 
     # Aliases deliberately avoid the real `sla_results` column names (e.g. `at_risk` is itself a
     # boolean column) — Rails type-casts a select() alias using any real attribute of the same name,
@@ -31,7 +39,11 @@ module Sla
       SUM(CASE WHEN #{EFFECTIVE_MET} THEN 1 ELSE 0 END) AS met_count,
       SUM(CASE WHEN #{EFFECTIVE_BREACHED} THEN 1 ELSE 0 END) AS breached_count,
       SUM(CASE WHEN #{EFFECTIVE_AT_RISK} THEN 1 ELSE 0 END) AS at_risk_count,
-      SUM(CASE WHEN sla_results.primary_state = 'no_sla' THEN 1 ELSE 0 END) AS no_sla_count
+      SUM(CASE WHEN sla_results.primary_state = 'no_sla' THEN 1 ELSE 0 END) AS no_sla_count,
+      SUM(CASE WHEN sla_results.primary_state = 'no_sla'
+               AND sla_results.no_sla_reason = 'not_configured' THEN 1 ELSE 0 END) AS not_configured_count,
+      SUM(CASE WHEN sla_results.primary_state = 'no_sla'
+               AND sla_results.no_sla_reason = 'not_tracked' THEN 1 ELSE 0 END) AS not_tracked_count
     SQL
 
     def self.call(scope: default_relation, now: Time.current)
@@ -57,9 +69,18 @@ module Sla
             .select(ActiveRecord::Base.sanitize_sql_array([AGGREGATE_SQL, now: @now, at_risk_true: true]))
             .take
 
+      # A scope with a statically-impossible WHERE clause (e.g. `where(project_id: [])`, which the
+      # dashboard legitimately builds whenever a user has zero permitted projects) short-circuits
+      # to an ActiveRecord null relation — `.take` returns nil without ever issuing SQL, unlike a
+      # scope that runs a real query and matches zero rows (which still returns one all-zero
+      # aggregate row, per ordinary SQL aggregate semantics with no GROUP BY).
+      return Counts.new(total: 0, met: 0, breached: 0, at_risk: 0, no_sla: 0,
+                        not_configured: 0, not_tracked: 0) if row.nil?
+
       Counts.new(total: row.total_count.to_i, met: row.met_count.to_i,
                  breached: row.breached_count.to_i, at_risk: row.at_risk_count.to_i,
-                 no_sla: row.no_sla_count.to_i)
+                 no_sla: row.no_sla_count.to_i, not_configured: row.not_configured_count.to_i,
+                 not_tracked: row.not_tracked_count.to_i)
     end
   end
 end

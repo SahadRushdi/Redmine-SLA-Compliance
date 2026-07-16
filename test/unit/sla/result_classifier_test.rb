@@ -84,6 +84,7 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
                            policy: nil, now: at(1))
     assert_equal 'no_sla', r.primary_state
     assert_equal 'not_configured', r.no_sla_reason
+    assert_nil r.resolved_at, 'a no_sla ticket was never evaluated for resolution'
   end
 
   test "tracker not under SLA -> no_sla / not_configured" do
@@ -114,6 +115,7 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
     refute r.at_risk
     assert_equal now + 1800, r.breach_at
     assert_nil r.deviation_seconds
+    assert_nil r.resolved_at, 'still open — no resolution has happened yet'
   end
 
   test "resolved within target is met with no breach_at" do
@@ -125,6 +127,7 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
     assert_equal 3600, r.resolution_seconds # net(base .. base+1h)
     refute r.at_risk
     assert_nil r.breach_at
+    assert_equal at(1), r.resolved_at
   end
 
   # --- at-risk flag ---------------------------------------------------------------------
@@ -157,6 +160,7 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
     assert_equal 'breached', r.primary_state
     assert_equal 7200, r.resolution_seconds
     assert_equal 3600, r.deviation_seconds
+    assert_equal at(2), r.resolved_at
   end
 
   # --- Best Effort (B4: a target with no numeric deadline) ------------------------------
@@ -232,6 +236,14 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
     assert_equal 1800, r.response_seconds # measured from the reopen at +5h
     assert_nil r.breach_at                # response already achieved; nothing pending
     refute r.at_risk
+  end
+
+  test "resolved, reopened, and resolved again reports resolved_at from the second resolution" do
+    d = Definition.new(resolution_seconds: 3600)
+    tl = timeline([[OPEN, RESOLVED, at(1)], [RESOLVED, OPEN, at(2)], [OPEN, RESOLVED, at(4)]])
+    r = classify(tl, definition: d, now: at(5))
+    assert_equal at(4), r.resolved_at, "closed_at's clock_start filter already excludes the " \
+                                       'first (pre-reopen) resolution for free'
   end
 
   # --- business-hours mode --------------------------------------------------------------

@@ -1,56 +1,19 @@
-<% html_title l(:label_sla_compliance) %>
+<% html_title(@project ? "#{l(:label_sla_compliance)} — #{@project.name}" : l(:label_sla_dashboard_all)) %>
 <%= render 'sla_compliance/assets' %>
-
-<%# Step 0.3 throwaway test page: proves scoped Tailwind + Flowbite render inside .sla-plugin %>
-<%# while Redmine's own chrome (loaded outside this wrapper) stays untouched. Replaced by the %>
-<%# real dashboard in Phase 6. %>
-<div class="sla-plugin">
-  <div class="tw-max-w-3xl tw-mx-auto tw-p-6">
-    <h1 class="tw-text-2xl tw-font-bold tw-text-gray-900 tw-mb-1">
-      <%= l(:label_sla_dashboard_coming_soon) %>
-    </h1>
-    <p class="tw-text-sm tw-text-gray-500 tw-mb-6"><%= l(:text_sla_ui_test_notice) %></p>
-
-    <%# Static Flowbite component: styled alert (no JS). %>
-    <div class="tw-flex tw-items-center tw-p-4 tw-mb-6 tw-text-sm tw-text-primary-800 tw-rounded-lg tw-bg-primary-50 tw-border tw-border-primary-200" role="alert">
-      <svg class="tw-shrink-0 tw-w-4 tw-h-4 tw-me-2" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
-        <path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5ZM9.5 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM12 15H8a1 1 0 0 1 0-2h1v-3H8a1 1 0 0 1 0-2h2a1 1 0 0 1 1 1v4h1a1 1 0 0 1 0 2Z"/>
-      </svg>
-      <span>Flowbite alert rendered with scoped <code>tw-</code> utilities.</span>
-    </div>
-
-    <%# Interactive Flowbite component: dropdown (JS toggles the `hidden` class — validates the shim). %>
-    <button id="slaTestDropdownButton" data-dropdown-toggle="slaTestDropdown" type="button"
-            class="tw-text-white tw-bg-primary-600 hover:tw-bg-primary-700 tw-font-medium tw-rounded-lg tw-text-sm tw-px-4 tw-py-2.5 tw-text-center tw-inline-flex tw-items-center">
-      Test dropdown
-      <svg class="tw-w-2.5 tw-h-2.5 tw-ms-2.5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
-        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 4 4 4-4"/>
-      </svg>
-    </button>
-    <div id="slaTestDropdown" class="hidden tw-z-10 tw-bg-white tw-divide-y tw-divide-gray-100 tw-rounded-lg tw-shadow tw-w-44 tw-mt-2 tw-border tw-border-gray-200">
-      <ul class="tw-py-2 tw-text-sm tw-text-gray-700">
-        <li><a href="#" class="tw-block tw-px-4 tw-py-2 hover:tw-bg-gray-100">SLA met</a></li>
-        <li><a href="#" class="tw-block tw-px-4 tw-py-2 hover:tw-bg-gray-100">SLA breached</a></li>
-        <li><a href="#" class="tw-block tw-px-4 tw-py-2 hover:tw-bg-gray-100">No SLA</a></li>
-      </ul>
-    </div>
-
-    <%# Tom Select proof: chip/tag multi-select (the component reused for status pickers & filters). %>
-    <div class="tw-mt-8">
-      <label for="slaTestChips" class="tw-block tw-mb-2 tw-text-sm tw-font-medium tw-text-gray-900">Status chips (Tom Select)</label>
-      <select id="slaTestChips" multiple placeholder="Select statuses...">
-        <option value="1">New</option>
-        <option value="2">In Progress</option>
-        <option value="3">Resolved</option>
-        <option value="4">Closed</option>
-      </select>
-    </div>
-  </div>
-</div>
-
-<%= javascript_tag do %>
-  document.addEventListener('DOMContentLoaded', function () {
-    var el = document.getElementById('slaTestChips');
-    if (el && window.TomSelect && !el.tomselect) { new TomSelect(el, { plugins: ['remove_button'] }); }
-  });
+<% content_for :header_tags do %>
+  <%= javascript_include_tag 'sla_dashboard_filters.js', plugin: 'redmine_sla_compliance' %>
+  <%= javascript_include_tag 'sla_dashboard_charts.js', plugin: 'redmine_sla_compliance' %>
 <% end %>
+
+<%# Shared template for both SlaDashboardController#index (project-level, @project set) and %>
+<%# #cross_project (top-level, @project nil). %>
+<div class="sla-plugin">
+  <h1 class="tw-text-2xl tw-font-bold tw-text-gray-900 tw-mb-4">
+    <%= @project ? "#{l(:label_sla_compliance)} — #{@project.name}" : l(:label_sla_dashboard_all) %>
+  </h1>
+
+  <%= render 'sla_dashboard/filter_bar' %>
+  <%= render 'sla_dashboard/summary_cards' %>
+  <%= render 'sla_dashboard/charts' %>
+  <%= render 'sla_dashboard/detail_table' %>
+</div>

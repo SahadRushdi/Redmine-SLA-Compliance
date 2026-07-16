@@ -30,7 +30,7 @@ module Sla
     # results, which never reach the at-risk path.
     Result = Struct.new(:primary_state, :no_sla_reason, :at_risk, :breach_at,
                         :response_seconds, :workaround_seconds, :resolution_seconds,
-                        :deviation_seconds, :cycle_started_at, keyword_init: true)
+                        :deviation_seconds, :cycle_started_at, :resolved_at, keyword_init: true)
 
     # @param policy [#business_hours?, #business_calendar, #first_response_rule,
     #   #at_risk_threshold, #pause_enabled, nil] the effective SlaPolicy (nil ⇒ not configured).
@@ -66,7 +66,8 @@ module Sla
         workaround_seconds: elapsed_for(milestones, :workaround),
         resolution_seconds: elapsed_for(milestones, :resolution),
         deviation_seconds:  breached ? max_overage(milestones) : nil,
-        cycle_started_at:   clock_start
+        cycle_started_at:   clock_start,
+        resolved_at:        closed_at
       )
     end
 

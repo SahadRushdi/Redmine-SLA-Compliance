@@ -1,0 +1,23 @@
+<%# Compliance-split donut: 3 legend categories (met/breached/no_sla), summing to @counts.total. %>
+<%# At-risk is rendered as a 4th ARC SEGMENT adjacent to "met" (same color family, a thin white %>
+<%# border between them reads as an in-slice boundary marker) but is NOT a 4th legend swatch — %>
+<%# the shared legend above (met/breached/no_sla + a separate "At Risk" flag chip) is the only %>
+<%# legend on the page for this dimension; Chart.js's own native legend is disabled below. %>
+<% met_on_track = @counts.met - @counts.at_risk %>
+<% donut_payload = {
+     labels: [l(:label_sla_chart_met_on_track), l(:label_sla_chart_met_at_risk),
+              l(:label_sla_card_breached), l(:label_sla_card_no_sla)],
+     data: [met_on_track, @counts.at_risk, @counts.breached, @counts.no_sla],
+     colors: [sla_chart_color(:met), sla_chart_color(:at_risk), sla_chart_color(:breached), sla_chart_color(:no_sla)],
+     total: @counts.total
+   } %>
+<div class="tw-flex tw-flex-col tw-items-center">
+  <h3 class="tw-text-sm tw-font-semibold tw-text-gray-700 tw-mb-2 tw-self-start"><%= l(:label_sla_chart_compliance_split) %></h3>
+  <div class="tw-relative tw-w-full tw-max-w-xs tw-h-64">
+    <canvas id="sla-donut-chart" data-chart="<%= donut_payload.to_json %>"></canvas>
+    <div class="tw-absolute tw-inset-0 tw-flex tw-flex-col tw-items-center tw-justify-center tw-pointer-events-none">
+      <span class="tw-text-2xl tw-font-bold tw-text-gray-900"><%= @counts.total %></span>
+      <span class="tw-text-xs tw-text-gray-500"><%= sla_card_label(:total) %></span>
+    </div>
+  </div>
+</div>

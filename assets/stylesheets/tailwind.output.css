@@ -1,3 +1,256 @@
+/*
+ * Step 6.1 — flowbite-datepicker's own stylesheet (the Custom date-range picker). Imported here,
+ * ahead of everything else, so postcss-import inlines it before postcss-prefix-selector scopes
+ * the whole file — see the ordering comment in postcss.config.js for why this one can't be
+ * plain-copied unscoped the way tom-select.min.css is (it ships its own Preflight-style
+ * `*, ::before, ::after` universal reset).
+ */
+.sla-plugin .datepicker {
+    display: none;
+}
+.sla-plugin .datepicker.active {
+    display: block;
+}
+.sla-plugin .datepicker-dropdown {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 20;
+    padding-top: 4px;
+}
+.sla-plugin .datepicker-dropdown.datepicker-orient-top {
+    padding-top: 0;
+    padding-bottom: 4px;
+}
+.sla-plugin .datepicker-picker {
+    display: inline-block;
+    border-radius: 4px;
+    background-color: white;
+}
+.sla-plugin .datepicker-dropdown .datepicker-picker {
+    box-shadow: 0 2px 3px rgba(10, 10, 10, 0.1), 0 0 0 1px rgba(10, 10, 10, 0.1);
+}
+.sla-plugin .datepicker-picker span {
+    display: block;
+    flex: 1;
+    border: 0;
+    border-radius: 4px;
+    cursor: default;
+    text-align: center;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+       -moz-user-select: none;
+            user-select: none;
+}
+.sla-plugin .datepicker-main {
+    padding: 2px;
+}
+.sla-plugin .datepicker-footer {
+    box-shadow: inset 0 1px 1px rgba(10, 10, 10, 0.1);
+    background-color: whitesmoke;
+}
+.sla-plugin .datepicker-controls, .sla-plugin .datepicker-view, .sla-plugin .datepicker-view .days-of-week, .sla-plugin .datepicker-grid {
+    display: flex;
+}
+.sla-plugin .datepicker-grid {
+    flex-wrap: wrap;
+}
+.sla-plugin .datepicker-view .dow, .sla-plugin .datepicker-view .days .datepicker-cell {
+    flex-basis: 14.28571%;
+}
+.sla-plugin .datepicker-view.datepicker-grid .datepicker-cell {
+    flex-basis: 25%;
+}
+.sla-plugin .datepicker-view .week, .sla-plugin .datepicker-cell {
+    height: 2.25rem;
+    line-height: 2.25rem;
+}
+.sla-plugin .datepicker-title {
+    box-shadow: inset 0 -1px 1px rgba(10, 10, 10, 0.1);
+    background-color: whitesmoke;
+    padding: 0.375rem 0.75rem;
+    text-align: center;
+    font-weight: 700;
+}
+.sla-plugin .datepicker-header .datepicker-controls {
+    padding: 2px 2px 0;
+}
+.sla-plugin .datepicker-controls .button {
+    display: inline-flex;
+    position: relative;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    border: 1px solid #dbdbdb;
+    border-radius: 4px;
+    box-shadow: none;
+    background-color: white;
+    cursor: pointer;
+    padding: calc(0.375em - 1px) 0.75em;
+    height: 2.25em;
+    vertical-align: top;
+    text-align: center;
+    line-height: 1.5;
+    white-space: nowrap;
+    color: #363636;
+    font-size: 1rem;
+}
+.sla-plugin .datepicker-controls .button:focus, .sla-plugin .datepicker-controls .button:active {
+    outline: none;
+}
+.sla-plugin .datepicker-controls .button:hover {
+    border-color: #b5b5b5;
+    color: #363636;
+}
+.sla-plugin .datepicker-controls .button:focus {
+    border-color: #3273dc;
+    color: #363636;
+}
+.sla-plugin .datepicker-controls .button:focus:not(:active) {
+    box-shadow: 0 0 0 0.125em rgba(50, 115, 220, 0.25);
+}
+.sla-plugin .datepicker-controls .button:active {
+    border-color: #4a4a4a;
+    color: #363636;
+}
+.sla-plugin .datepicker-controls .button[disabled] {
+    cursor: not-allowed;
+}
+.sla-plugin .datepicker-header .datepicker-controls .button {
+    border-color: transparent;
+    font-weight: bold;
+}
+.sla-plugin .datepicker-header .datepicker-controls .button:hover {
+    background-color: #f9f9f9;
+}
+.sla-plugin .datepicker-header .datepicker-controls .button:focus:not(:active) {
+    box-shadow: 0 0 0 0.125em rgba(255, 255, 255, 0.25);
+}
+.sla-plugin .datepicker-header .datepicker-controls .button:active {
+    background-color: #f2f2f2;
+}
+.sla-plugin .datepicker-header .datepicker-controls .button[disabled] {
+    box-shadow: none;
+}
+.sla-plugin .datepicker-footer .datepicker-controls .button {
+    margin: calc(0.375rem - 1px) 0.375rem;
+    border-radius: 2px;
+    width: 100%;
+    font-size: 0.75rem;
+}
+.sla-plugin .datepicker-controls .view-switch {
+    flex: auto;
+}
+.sla-plugin .datepicker-controls .prev-btn,
+.sla-plugin .datepicker-controls .next-btn {
+    padding-right: 0.375rem;
+    padding-left: 0.375rem;
+    width: 2.25rem;
+}
+.sla-plugin .datepicker-controls .prev-btn.disabled,
+.sla-plugin .datepicker-controls .next-btn.disabled {
+    visibility: hidden;
+}
+.sla-plugin .datepicker-view .dow {
+    height: 1.5rem;
+    line-height: 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+.sla-plugin .datepicker-view .week {
+    width: 2.25rem;
+    color: #b5b5b5;
+    font-size: 0.75rem;
+}
+@media (max-width: 22.5rem) {
+    .sla-plugin .datepicker-view .week {
+        width: 1.96875rem;
+    }
+}
+.sla-plugin .datepicker-grid {
+    width: 15.75rem;
+}
+@media (max-width: 22.5rem) {
+    .sla-plugin .calendar-weeks + .days .datepicker-grid {
+        width: 13.78125rem;
+    }
+}
+.sla-plugin .datepicker-cell:not(.disabled):hover {
+    background-color: #f9f9f9;
+    cursor: pointer;
+}
+.sla-plugin .datepicker-cell.focused:not(.selected) {
+    background-color: #e8e8e8;
+}
+.sla-plugin .datepicker-cell.selected, .sla-plugin .datepicker-cell.selected:hover {
+    background-color: #3273dc;
+    color: #fff;
+    font-weight: 600;
+}
+.sla-plugin .datepicker-cell.disabled {
+    color: #dbdbdb;
+}
+.sla-plugin .datepicker-cell.prev:not(.disabled), .sla-plugin .datepicker-cell.next:not(.disabled) {
+    color: #7a7a7a;
+}
+.sla-plugin .datepicker-cell.prev.selected, .sla-plugin .datepicker-cell.next.selected {
+    color: #e6e6e6;
+}
+.sla-plugin .datepicker-cell.highlighted:not(.selected):not(.range):not(.today) {
+    border-radius: 0;
+    background-color: whitesmoke;
+}
+.sla-plugin .datepicker-cell.highlighted:not(.selected):not(.range):not(.today):not(.disabled):hover {
+    background-color: #eeeeee;
+}
+.sla-plugin .datepicker-cell.highlighted:not(.selected):not(.range):not(.today).focused {
+    background-color: #e8e8e8;
+}
+.sla-plugin .datepicker-cell.today:not(.selected) {
+    background-color: #00d1b2;
+}
+.sla-plugin .datepicker-cell.today:not(.selected):not(.disabled) {
+    color: #fff;
+}
+.sla-plugin .datepicker-cell.today.focused:not(.selected) {
+    background-color: #00c4a7;
+}
+.sla-plugin .datepicker-cell.range-start:not(.selected), .sla-plugin .datepicker-cell.range-end:not(.selected) {
+    background-color: #b5b5b5;
+    color: #fff;
+}
+.sla-plugin .datepicker-cell.range-start.focused:not(.selected), .sla-plugin .datepicker-cell.range-end.focused:not(.selected) {
+    background-color: #afafaf;
+}
+.sla-plugin .datepicker-cell.range-start {
+    border-radius: 4px 0 0 4px;
+}
+.sla-plugin .datepicker-cell.range-end {
+    border-radius: 0 4px 4px 0;
+}
+.sla-plugin .datepicker-cell.range {
+    border-radius: 0;
+    background-color: #dbdbdb;
+}
+.sla-plugin .datepicker-cell.range:not(.disabled):not(.focused):not(.today):hover {
+    background-color: #d5d5d5;
+}
+.sla-plugin .datepicker-cell.range.disabled {
+    color: #c2c2c2;
+}
+.sla-plugin .datepicker-cell.range.focused {
+    background-color: #cfcfcf;
+}
+.sla-plugin .datepicker-view.datepicker-grid .datepicker-cell {
+    height: 4.5rem;
+    line-height: 4.5rem;
+}
+.sla-plugin .datepicker-input.in-edit {
+    border-color: #2366d1;
+}
+.sla-plugin .datepicker-input.in-edit:focus, .sla-plugin .datepicker-input.in-edit:active {
+    box-shadow: 0 0 0.25em 0.25em rgba(35, 102, 209, 0.2);
+}
 .sla-plugin *, .sla-plugin ::before, .sla-plugin ::after {
     --tw-border-spacing-x: 0;
     --tw-border-spacing-y: 0;
@@ -508,15 +761,26 @@
     white-space: nowrap;
     border-width: 0;
 }
+.sla-plugin .tw-pointer-events-none {
+    pointer-events: none;
+}
+.sla-plugin .tw-absolute {
+    position: absolute;
+}
 .sla-plugin .tw-relative {
     position: relative;
 }
-.sla-plugin .tw-z-10 {
-    z-index: 10;
+.sla-plugin .tw-sticky {
+    position: sticky;
 }
-.sla-plugin .tw-mx-auto {
-    margin-left: auto;
-    margin-right: auto;
+.sla-plugin .tw-inset-0 {
+    inset: 0px;
+}
+.sla-plugin .tw-top-0 {
+    top: 0px;
+}
+.sla-plugin .tw-z-20 {
+    z-index: 20;
 }
 .sla-plugin .tw-mb-1 {
     margin-bottom: 0.25rem;
@@ -539,14 +803,14 @@
 .sla-plugin .tw-mb-8 {
     margin-bottom: 2rem;
 }
-.sla-plugin .tw-me-2 {
-    margin-inline-end: 0.5rem;
+.sla-plugin .tw-ml-1 {
+    margin-left: 0.25rem;
 }
 .sla-plugin .tw-ml-2 {
     margin-left: 0.5rem;
 }
-.sla-plugin .tw-ms-2\.5 {
-    margin-inline-start: 0.625rem;
+.sla-plugin .tw-ml-auto {
+    margin-left: auto;
 }
 .sla-plugin .tw-ms-3 {
     margin-inline-start: 0.75rem;
@@ -563,9 +827,6 @@
 .sla-plugin .tw-mt-4 {
     margin-top: 1rem;
 }
-.sla-plugin .tw-mt-8 {
-    margin-top: 2rem;
-}
 .sla-plugin .tw-block {
     display: block;
 }
@@ -581,8 +842,14 @@
 .sla-plugin .tw-grid {
     display: grid;
 }
-.sla-plugin .tw-h-2\.5 {
-    height: 0.625rem;
+.sla-plugin .tw-h-0\.5 {
+    height: 0.125rem;
+}
+.sla-plugin .tw-h-2 {
+    height: 0.5rem;
+}
+.sla-plugin .tw-h-3 {
+    height: 0.75rem;
 }
 .sla-plugin .tw-h-4 {
     height: 1rem;
@@ -590,26 +857,38 @@
 .sla-plugin .tw-h-6 {
     height: 1.5rem;
 }
+.sla-plugin .tw-h-64 {
+    height: 16rem;
+}
 .sla-plugin .tw-w-11 {
     width: 2.75rem;
 }
-.sla-plugin .tw-w-2\.5 {
-    width: 0.625rem;
+.sla-plugin .tw-w-2 {
+    width: 0.5rem;
+}
+.sla-plugin .tw-w-3 {
+    width: 0.75rem;
 }
 .sla-plugin .tw-w-4 {
     width: 1rem;
 }
-.sla-plugin .tw-w-44 {
-    width: 11rem;
-}
 .sla-plugin .tw-w-full {
     width: 100%;
 }
-.sla-plugin .tw-max-w-3xl {
-    max-width: 48rem;
+.sla-plugin .tw-min-w-\[10rem\] {
+    min-width: 10rem;
 }
-.sla-plugin .tw-shrink-0 {
-    flex-shrink: 0;
+.sla-plugin .tw-min-w-\[12rem\] {
+    min-width: 12rem;
+}
+.sla-plugin .tw-min-w-\[14rem\] {
+    min-width: 14rem;
+}
+.sla-plugin .tw-min-w-full {
+    min-width: 100%;
+}
+.sla-plugin .tw-max-w-xs {
+    max-width: 20rem;
 }
 .sla-plugin .tw-cursor-pointer {
     cursor: pointer;
@@ -634,8 +913,20 @@
 .sla-plugin .tw-flex-wrap {
     flex-wrap: wrap;
 }
+.sla-plugin .tw-items-end {
+    align-items: flex-end;
+}
 .sla-plugin .tw-items-center {
     align-items: center;
+}
+.sla-plugin .tw-justify-center {
+    justify-content: center;
+}
+.sla-plugin .tw-justify-between {
+    justify-content: space-between;
+}
+.sla-plugin .tw-gap-1 {
+    gap: 0.25rem;
 }
 .sla-plugin .tw-gap-2 {
     gap: 0.5rem;
@@ -649,22 +940,31 @@
 .sla-plugin .tw-gap-6 {
     gap: 1.5rem;
 }
+.sla-plugin .tw-gap-x-6 {
+    -moz-column-gap: 1.5rem;
+         column-gap: 1.5rem;
+}
+.sla-plugin .tw-gap-y-2 {
+    row-gap: 0.5rem;
+}
 .sla-plugin .tw-space-y-1 > :not([hidden]) ~ :not([hidden]) {
     --tw-space-y-reverse: 0;
     margin-top: calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));
     margin-bottom: calc(0.25rem * var(--tw-space-y-reverse));
 }
-.sla-plugin .tw-divide-y > :not([hidden]) ~ :not([hidden]) {
-    --tw-divide-y-reverse: 0;
-    border-top-width: calc(1px * calc(1 - var(--tw-divide-y-reverse)));
-    border-bottom-width: calc(1px * var(--tw-divide-y-reverse));
+.sla-plugin .tw-self-start {
+    align-self: flex-start;
 }
-.sla-plugin .tw-divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
-    --tw-divide-opacity: 1;
-    border-color: rgb(243 244 246 / var(--tw-divide-opacity, 1));
+.sla-plugin .tw-overflow-hidden {
+    overflow: hidden;
 }
 .sla-plugin .tw-overflow-x-auto {
     overflow-x: auto;
+}
+.sla-plugin .tw-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .sla-plugin .tw-rounded {
     border-radius: 0.25rem;
@@ -681,8 +981,15 @@
 .sla-plugin .tw-border-b {
     border-bottom-width: 1px;
 }
+.sla-plugin .tw-border-l {
+    border-left-width: 1px;
+}
 .sla-plugin .tw-border-t {
     border-top-width: 1px;
+}
+.sla-plugin .tw-border-amber-200 {
+    --tw-border-opacity: 1;
+    border-color: rgb(253 230 138 / var(--tw-border-opacity, 1));
 }
 .sla-plugin .tw-border-blue-200 {
     --tw-border-opacity: 1;
@@ -700,13 +1007,29 @@
     --tw-border-opacity: 1;
     border-color: rgb(209 213 219 / var(--tw-border-opacity, 1));
 }
+.sla-plugin .tw-border-green-200 {
+    --tw-border-opacity: 1;
+    border-color: rgb(188 240 218 / var(--tw-border-opacity, 1));
+}
 .sla-plugin .tw-border-primary-200 {
     --tw-border-opacity: 1;
     border-color: rgb(191 219 254 / var(--tw-border-opacity, 1));
 }
+.sla-plugin .tw-border-red-200 {
+    --tw-border-opacity: 1;
+    border-color: rgb(251 213 213 / var(--tw-border-opacity, 1));
+}
+.sla-plugin .tw-bg-amber-50 {
+    --tw-bg-opacity: 1;
+    background-color: rgb(255 251 235 / var(--tw-bg-opacity, 1));
+}
 .sla-plugin .tw-bg-blue-50 {
     --tw-bg-opacity: 1;
     background-color: rgb(235 245 255 / var(--tw-bg-opacity, 1));
+}
+.sla-plugin .tw-bg-gray-100 {
+    --tw-bg-opacity: 1;
+    background-color: rgb(243 244 246 / var(--tw-bg-opacity, 1));
 }
 .sla-plugin .tw-bg-gray-200 {
     --tw-bg-opacity: 1;
@@ -716,6 +1039,10 @@
     --tw-bg-opacity: 1;
     background-color: rgb(249 250 251 / var(--tw-bg-opacity, 1));
 }
+.sla-plugin .tw-bg-green-50 {
+    --tw-bg-opacity: 1;
+    background-color: rgb(243 250 247 / var(--tw-bg-opacity, 1));
+}
 .sla-plugin .tw-bg-primary-50 {
     --tw-bg-opacity: 1;
     background-color: rgb(239 246 255 / var(--tw-bg-opacity, 1));
@@ -723,6 +1050,10 @@
 .sla-plugin .tw-bg-primary-600 {
     --tw-bg-opacity: 1;
     background-color: rgb(37 99 235 / var(--tw-bg-opacity, 1));
+}
+.sla-plugin .tw-bg-red-50 {
+    --tw-bg-opacity: 1;
+    background-color: rgb(253 242 242 / var(--tw-bg-opacity, 1));
 }
 .sla-plugin .tw-bg-white {
     --tw-bg-opacity: 1;
@@ -740,12 +1071,13 @@
 .sla-plugin .tw-p-5 {
     padding: 1.25rem;
 }
-.sla-plugin .tw-p-6 {
-    padding: 1.5rem;
-}
 .sla-plugin .tw-px-2 {
     padding-left: 0.5rem;
     padding-right: 0.5rem;
+}
+.sla-plugin .tw-px-3 {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
 }
 .sla-plugin .tw-px-4 {
     padding-left: 1rem;
@@ -759,6 +1091,14 @@
     padding-top: 0.125rem;
     padding-bottom: 0.125rem;
 }
+.sla-plugin .tw-py-1 {
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+.sla-plugin .tw-py-1\.5 {
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
+}
 .sla-plugin .tw-py-2 {
     padding-top: 0.5rem;
     padding-bottom: 0.5rem;
@@ -766,6 +1106,25 @@
 .sla-plugin .tw-py-2\.5 {
     padding-top: 0.625rem;
     padding-bottom: 0.625rem;
+}
+.sla-plugin .tw-py-8 {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+.sla-plugin .tw-pb-4 {
+    padding-bottom: 1rem;
+}
+.sla-plugin .tw-pl-2\.5 {
+    padding-left: 0.625rem;
+}
+.sla-plugin .tw-pr-1\.5 {
+    padding-right: 0.375rem;
+}
+.sla-plugin .tw-pr-4 {
+    padding-right: 1rem;
+}
+.sla-plugin .tw-pt-3 {
+    padding-top: 0.75rem;
 }
 .sla-plugin .tw-pt-4 {
     padding-top: 1rem;
@@ -782,6 +1141,10 @@
 .sla-plugin .tw-text-2xl {
     font-size: 1.5rem;
     line-height: 2rem;
+}
+.sla-plugin .tw-text-3xl {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
 }
 .sla-plugin .tw-text-base {
     font-size: 1rem;
@@ -800,6 +1163,9 @@
 }
 .sla-plugin .tw-font-medium {
     font-weight: 500;
+}
+.sla-plugin .tw-font-normal {
+    font-weight: 400;
 }
 .sla-plugin .tw-font-semibold {
     font-weight: 600;
@@ -828,26 +1194,36 @@
     --tw-text-opacity: 1;
     color: rgb(55 65 81 / var(--tw-text-opacity, 1));
 }
+.sla-plugin .tw-text-gray-800 {
+    --tw-text-opacity: 1;
+    color: rgb(31 41 55 / var(--tw-text-opacity, 1));
+}
 .sla-plugin .tw-text-gray-900 {
     --tw-text-opacity: 1;
     color: rgb(17 24 39 / var(--tw-text-opacity, 1));
+}
+.sla-plugin .tw-text-green-700 {
+    --tw-text-opacity: 1;
+    color: rgb(4 108 78 / var(--tw-text-opacity, 1));
 }
 .sla-plugin .tw-text-primary-600 {
     --tw-text-opacity: 1;
     color: rgb(37 99 235 / var(--tw-text-opacity, 1));
 }
-.sla-plugin .tw-text-primary-800 {
+.sla-plugin .tw-text-primary-700 {
     --tw-text-opacity: 1;
-    color: rgb(30 64 175 / var(--tw-text-opacity, 1));
+    color: rgb(29 78 216 / var(--tw-text-opacity, 1));
+}
+.sla-plugin .tw-text-red-700 {
+    --tw-text-opacity: 1;
+    color: rgb(200 30 30 / var(--tw-text-opacity, 1));
 }
 .sla-plugin .tw-text-white {
     --tw-text-opacity: 1;
     color: rgb(255 255 255 / var(--tw-text-opacity, 1));
 }
-.sla-plugin .tw-shadow {
-    --tw-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-    --tw-shadow-colored: 0 1px 3px 0 var(--tw-shadow-color), 0 1px 2px -1px var(--tw-shadow-color);
-    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
+.sla-plugin .tw-opacity-70 {
+    opacity: 0.7;
 }
 .sla-plugin .tw-shadow-sm {
     --tw-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
@@ -857,7 +1233,6 @@
 .sla-plugin .tw-ring-inset {
     --tw-ring-inset: inset;
 }
-
 /*
  * Flowbite-JS shim.
  *
@@ -866,7 +1241,6 @@
  * no effect. Re-declare it here; postcss-prefix-selector scopes it to `.sla-plugin .hidden`
  * at build time, so interactive Flowbite components work without un-prefixing utilities globally.
  */
-
 /*
  * Purplemine2 isolation for interactive controls (CLAUDE.md rule 4): explicitly reset
  * focus/border colors instead of letting the theme's global input/button rules win.
@@ -878,7 +1252,6 @@
 .sla-plugin button:focus {
   outline: none;
 }
-
 .sla-plugin input[type='text']:focus,
 .sla-plugin input[type='number']:focus,
 .sla-plugin input[type='url']:focus,
@@ -887,7 +1260,6 @@
   border-color: #2563eb; /* primary-600 — the only intentional blue in UI chrome */
   box-shadow: none;
 }
-
 /*
  * Tom Select (chip multi-selects): match the Flowbite input look, neutral at rest,
  * primary-600 on focus — never the theme's own focus treatment.
@@ -901,31 +1273,26 @@
   color: #111827;
   box-shadow: none;
 }
-
 .sla-plugin .ts-wrapper.focus .ts-control {
   border-color: #2563eb;
   box-shadow: 0 0 0 1px #2563eb;
   outline: none;
 }
-
 .sla-plugin .ts-wrapper.multi .ts-control > .item {
   background: #dbeafe; /* primary-100 chip */
   color: #1e40af; /* primary-800 */
   border-radius: 0.25rem;
   padding: 0 0.375rem;
 }
-
 .sla-plugin .ts-dropdown {
   border: 1px solid #d1d5db;
   border-radius: 0.5rem;
   font-size: 0.875rem;
 }
-
 .sla-plugin .ts-dropdown .active {
   background-color: #eff6ff; /* primary-50 */
   color: #111827;
 }
-
 /*
  * Native form-control appearance reset (select / text-like inputs / radio / checkbox).
  *
@@ -951,7 +1318,6 @@
   height: auto;
   min-height: 2.625rem; /* 42px: matches tw-p-2.5 (10px) + tw-text-sm line-height once unclamped */
 }
-
 .sla-plugin input[type='radio'] {
   -webkit-appearance: none;
   -moz-appearance: none;
@@ -964,17 +1330,14 @@
   background-color: #fff;
   flex-shrink: 0;
 }
-
 .sla-plugin input[type='radio']:checked {
   border-color: #2563eb; /* primary-600 */
   background-image: radial-gradient(circle, #2563eb 45%, transparent 50%);
 }
-
 .sla-plugin input[type='radio']:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
 }
-
 /* :not(.tw-sr-only) excludes the visually-hidden checkbox inside the Flowbite toggle switch
    (sla_compliance/_toggle.html.erb) — that one is already a fully custom, correctly-visible
    component and must keep its screen-reader-only, zero-size native input untouched. */
@@ -990,7 +1353,6 @@
   background-color: #fff;
   flex-shrink: 0;
 }
-
 .sla-plugin input[type='checkbox']:not(.tw-sr-only):checked {
   border-color: #2563eb;
   background-color: #2563eb;
@@ -999,12 +1361,10 @@
   background-size: 0.75rem;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M13.28 4.72a.75.75 0 0 1 0 1.06l-5.5 5.5a.75.75 0 0 1-1.06 0l-2.5-2.5a.75.75 0 1 1 1.06-1.06L6.5 9.94l4.97-4.97a.75.75 0 0 1 1.06 0Z'/%3E%3C/svg%3E");
 }
-
 .sla-plugin input[type='checkbox']:not(.tw-sr-only):focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
 }
-
 /*
  * Administration -> Plugins -> Configure bleed (Step 5.1 access-control section).
  *
@@ -1025,134 +1385,125 @@
   margin-left: 0;
   width: auto;
 }
-
 .tabular.settings .sla-plugin p {
   padding-left: 0;
   min-height: 0;
   clear: none;
 }
-
 .sla-plugin .after\:tw-absolute::after {
     content: var(--tw-content);
     position: absolute;
 }
-
 .sla-plugin .after\:tw-start-\[2px\]::after {
     content: var(--tw-content);
     inset-inline-start: 2px;
 }
-
 .sla-plugin .after\:tw-top-\[2px\]::after {
     content: var(--tw-content);
     top: 2px;
 }
-
 .sla-plugin .after\:tw-h-5::after {
     content: var(--tw-content);
     height: 1.25rem;
 }
-
 .sla-plugin .after\:tw-w-5::after {
     content: var(--tw-content);
     width: 1.25rem;
 }
-
 .sla-plugin .after\:tw-rounded-full::after {
     content: var(--tw-content);
     border-radius: 9999px;
 }
-
 .sla-plugin .after\:tw-border::after {
     content: var(--tw-content);
     border-width: 1px;
 }
-
 .sla-plugin .after\:tw-border-gray-300::after {
     content: var(--tw-content);
     --tw-border-opacity: 1;
     border-color: rgb(209 213 219 / var(--tw-border-opacity, 1));
 }
-
 .sla-plugin .after\:tw-bg-white::after {
     content: var(--tw-content);
     --tw-bg-opacity: 1;
     background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1));
 }
-
 .sla-plugin .after\:tw-transition-all::after {
     content: var(--tw-content);
     transition-property: all;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     transition-duration: 150ms;
 }
-
 .sla-plugin .after\:tw-content-\[\'\'\]::after {
     --tw-content: '';
     content: var(--tw-content);
 }
-
 .sla-plugin .last\:tw-border-0:last-child {
     border-width: 0px;
 }
-
 .sla-plugin .hover\:tw-bg-gray-100:hover {
     --tw-bg-opacity: 1;
     background-color: rgb(243 244 246 / var(--tw-bg-opacity, 1));
 }
-
+.sla-plugin .hover\:tw-bg-gray-200:hover {
+    --tw-bg-opacity: 1;
+    background-color: rgb(229 231 235 / var(--tw-bg-opacity, 1));
+}
 .sla-plugin .hover\:tw-bg-primary-700:hover {
     --tw-bg-opacity: 1;
     background-color: rgb(29 78 216 / var(--tw-bg-opacity, 1));
 }
-
+.sla-plugin .hover\:tw-text-gray-700:hover {
+    --tw-text-opacity: 1;
+    color: rgb(55 65 81 / var(--tw-text-opacity, 1));
+}
+.sla-plugin .hover\:tw-underline:hover {
+    text-decoration-line: underline;
+}
 .sla-plugin .focus\:tw-border-primary-500:focus {
     --tw-border-opacity: 1;
     border-color: rgb(59 130 246 / var(--tw-border-opacity, 1));
 }
-
 .sla-plugin .focus\:tw-ring-2:focus {
     --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
     --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
     box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
 }
-
 .sla-plugin .focus\:tw-ring-gray-200:focus {
     --tw-ring-opacity: 1;
     --tw-ring-color: rgb(229 231 235 / var(--tw-ring-opacity, 1));
 }
-
 .sla-plugin .focus\:tw-ring-primary-300:focus {
     --tw-ring-opacity: 1;
     --tw-ring-color: rgb(147 197 253 / var(--tw-ring-opacity, 1));
 }
-
 .sla-plugin .focus\:tw-ring-primary-500:focus {
     --tw-ring-opacity: 1;
     --tw-ring-color: rgb(59 130 246 / var(--tw-ring-opacity, 1));
 }
-
 .sla-plugin .tw-peer:checked ~ .peer-checked\:tw-bg-primary-600 {
     --tw-bg-opacity: 1;
     background-color: rgb(37 99 235 / var(--tw-bg-opacity, 1));
 }
-
 .sla-plugin .tw-peer:checked ~ .peer-checked\:after\:tw-translate-x-full::after {
     content: var(--tw-content);
     --tw-translate-x: 100%;
     transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
 }
-
 .sla-plugin .tw-peer:focus ~ .peer-focus\:tw-ring-2 {
     --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
     --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
     box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
 }
-
 .sla-plugin .tw-peer:focus ~ .peer-focus\:tw-ring-primary-300 {
     --tw-ring-opacity: 1;
     --tw-ring-color: rgb(147 197 253 / var(--tw-ring-opacity, 1));
 }
-
+@media (min-width: 640px) {
+    .sla-plugin .sm\:tw-grid-cols-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
 @media (min-width: 768px) {
     .sla-plugin .md\:tw-ml-auto {
         margin-left: auto;
@@ -1186,5 +1537,13 @@
     }
     .sla-plugin .md\:tw-gap-6 {
         gap: 1.5rem;
+    }
+}
+@media (min-width: 1024px) {
+    .sla-plugin .lg\:tw-grid-cols-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .sla-plugin .lg\:tw-grid-cols-5 {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
     }
 }

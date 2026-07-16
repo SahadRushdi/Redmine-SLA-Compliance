@@ -1,0 +1,47 @@
+<%# Step 6.2 — summary cards. All numbers come from Sla::ResultSummary via @counts, computed once %>
+<%# in the controller from the sla_results cache — nothing here recomputes SLA state. %>
+<%# Reconciliation: total == met + breached + no_sla; at_risk is a subset of met, shown alongside %>
+<%# it, never added into the total; no_sla == not_configured + not_tracked. %>
+<%# Card values carry stable ids (also useful for functional tests, since assigns() isn't %>
+<%# available in this Rails version without rails-controller-testing). %>
+<div class="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 lg:tw-grid-cols-5 tw-gap-4 tw-mb-6">
+  <div class="tw-rounded-lg tw-border tw-p-4 <%= sla_card_color_classes(:total) %>">
+    <p class="tw-text-sm tw-font-medium"><%= sla_card_label(:total) %></p>
+    <p class="tw-text-3xl tw-font-bold tw-mt-1" id="sla-card-total-value"><%= @counts.total %></p>
+    <p class="tw-text-xs tw-opacity-70 tw-mt-1"><%= l(:text_sla_card_reconciliation_hint) %></p>
+  </div>
+
+  <div class="tw-rounded-lg tw-border tw-p-4 <%= sla_card_color_classes(:met) %>">
+    <p class="tw-text-sm tw-font-medium"><%= sla_card_label(:met) %></p>
+    <p class="tw-text-3xl tw-font-bold tw-mt-1">
+      <span id="sla-card-met-percentage"><%= sla_percentage(@counts.met, @counts.total) %></span>%
+      <span class="tw-text-base tw-font-normal tw-opacity-70">(<span id="sla-card-met-value"><%= @counts.met %></span>)</span>
+    </p>
+    <p class="tw-text-xs tw-opacity-70 tw-mt-1"><%= l(:text_sla_card_met_hint) %></p>
+    <p class="tw-text-xs tw-font-medium tw-mt-2">
+      <%= l(:label_sla_card_at_risk) %>: <span id="sla-card-met-at-risk-value"><%= @counts.at_risk %></span>
+    </p>
+  </div>
+
+  <div class="tw-rounded-lg tw-border tw-p-4 <%= sla_card_color_classes(:breached) %>">
+    <p class="tw-text-sm tw-font-medium"><%= sla_card_label(:breached) %></p>
+    <p class="tw-text-3xl tw-font-bold tw-mt-1">
+      <span id="sla-card-breached-percentage"><%= sla_percentage(@counts.breached, @counts.total) %></span>%
+      <span class="tw-text-base tw-font-normal tw-opacity-70">(<span id="sla-card-breached-value"><%= @counts.breached %></span>)</span>
+    </p>
+  </div>
+
+  <div class="tw-rounded-lg tw-border tw-p-4 <%= sla_card_color_classes(:at_risk) %>">
+    <p class="tw-text-sm tw-font-medium"><%= sla_card_label(:at_risk) %></p>
+    <p class="tw-text-3xl tw-font-bold tw-mt-1" id="sla-card-at-risk-value"><%= @counts.at_risk %></p>
+  </div>
+
+  <div class="tw-rounded-lg tw-border tw-p-4 <%= sla_card_color_classes(:no_sla) %>">
+    <p class="tw-text-sm tw-font-medium"><%= sla_card_label(:no_sla) %></p>
+    <p class="tw-text-3xl tw-font-bold tw-mt-1" id="sla-card-no-sla-value"><%= @counts.no_sla %></p>
+    <p class="tw-text-xs tw-mt-1">
+      <%= l(:label_sla_card_not_configured) %>: <span id="sla-card-not-configured-value"><%= @counts.not_configured %></span> ·
+      <%= l(:label_sla_card_not_tracked) %>: <span id="sla-card-not-tracked-value"><%= @counts.not_tracked %></span>
+    </p>
+  </div>
+</div>

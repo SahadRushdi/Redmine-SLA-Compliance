@@ -50,6 +50,18 @@ Redmine::Plugin.register :redmine_sla_compliance do
        param: :project_id,
        if: Proc.new { |p| User.current.allowed_to?(:view_sla_dashboard, p) }
 
+  # Step 6.1 — top-level (cross-project) entry point. Named distinctly from the :project_menu
+  # item above so its dasherized CSS class (.sla-dashboard-all) never collides with the existing
+  # project-tab link's (.sla-compliance), and so each is independently testable. For
+  # :application_menu items Redmine passes project = nil to this proc and does NOT separately
+  # auto-authorize a Hash url the way it does for :project_menu items, so gating lives entirely
+  # here — there is no single global :view_sla_dashboard permission to check, only a per-project
+  # one, hence the SlaPolicy.enabled_projects_for scan.
+  menu :application_menu, :sla_dashboard_all,
+       { controller: 'sla_dashboard', action: 'cross_project' },
+       caption: :label_sla_dashboard_all,
+       if: Proc.new { |_project| User.current.logged? && SlaPolicy.enabled_projects_for(User.current).any? }
+
   # Global plugin settings screen stub (fleshed out in Phase 5 — access control / lookups).
   menu :admin_menu, :sla_compliance_settings,
        { controller: 'settings', action: 'plugin', id: 'redmine_sla_compliance' },

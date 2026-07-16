@@ -1,0 +1,80 @@
+<%# Step 6.1 — sticky filter bar. Plain GET form + full-page resubmit (matches Redmine's own %>
+<%# report/filter pages) — no AJAX needed for 6.1/6.2. Tracker/Priority option lists are already %>
+<%# narrowed server-side (SlaDashboardController#resolve_filters) to what's actually configured %>
+<%# for the currently selected project(s)/tracker. %>
+<div class="sla-dashboard-filter-bar tw-sticky tw-top-0 tw-z-20 tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-p-4 tw-mb-6 tw-shadow-sm">
+  <%= form_tag(sla_dashboard_base_path(@project), method: :get,
+                class: 'tw-flex tw-flex-wrap tw-items-end tw-gap-4') do %>
+
+    <div class="tw-min-w-[14rem]">
+      <label class="<%= sla_label_classes %>" for="sla-filter-projects"><%= l(:label_sla_filter_project) %></label>
+      <%= select_tag 'project_ids[]',
+            options_for_select(@permitted_projects.map { |p| [p.name, p.id] }, @filters[:project_ids]),
+            id: 'sla-filter-projects', multiple: true, disabled: @locked_project,
+            class: sla_input_classes, data: { 'sla-chips': true } %>
+      <% if @locked_project %>
+        <p class="tw-text-xs tw-text-gray-400 tw-mt-1"><%= l(:text_sla_filter_locked_project_hint) %></p>
+      <% end %>
+    </div>
+
+    <div class="tw-min-w-[10rem]">
+      <label class="<%= sla_label_classes %>" for="sla-filter-date-preset"><%= l(:label_sla_filter_date_range) %></label>
+      <%= select_tag 'date_preset',
+            options_for_select(sla_date_presets.map { |p| [sla_date_preset_label(p), p] }, @filters[:date_preset]),
+            id: 'sla-filter-date-preset', class: sla_input_classes, data: { 'sla-select': true } %>
+    </div>
+
+    <div id="sla-custom-range" class="tw-flex tw-gap-2 <%= 'hidden' unless @filters[:date_preset] == 'custom' %>">
+      <div>
+        <label class="<%= sla_label_classes %>" for="sla-filter-from"><%= l(:field_sla_date_from) %></label>
+        <%= text_field_tag 'from', @filters[:date_range]&.first, id: 'sla-filter-from',
+              class: sla_input_classes, autocomplete: 'off', data: { 'sla-datepicker': true } %>
+      </div>
+      <div>
+        <label class="<%= sla_label_classes %>" for="sla-filter-to"><%= l(:field_sla_date_to) %></label>
+        <%= text_field_tag 'to', @filters[:date_range]&.last, id: 'sla-filter-to',
+              class: sla_input_classes, autocomplete: 'off', data: { 'sla-datepicker': true } %>
+      </div>
+    </div>
+
+    <div class="tw-min-w-[10rem]">
+      <label class="<%= sla_label_classes %>" for="sla-filter-tracker"><%= l(:label_sla_filter_tracker) %></label>
+      <%= select_tag 'tracker_id',
+            options_for_select([[l(:label_sla_filter_all_trackers), '']] +
+                                @available_trackers.map { |t| [t.name, t.id] }, @filters[:tracker_id]),
+            id: 'sla-filter-tracker', class: sla_input_classes, data: { 'sla-select': true } %>
+    </div>
+
+    <div class="tw-min-w-[12rem]">
+      <label class="<%= sla_label_classes %>" for="sla-filter-priorities"><%= l(:label_sla_filter_priority) %></label>
+      <%= select_tag 'priority_ids[]',
+            options_for_select(@available_priorities.map { |p| [p.name, p.id] }, @filters[:priority_ids]),
+            id: 'sla-filter-priorities', multiple: true, disabled: @filters[:tracker_id].blank?,
+            class: sla_input_classes, data: { 'sla-chips': true } %>
+    </div>
+
+    <div class="tw-flex tw-gap-2 tw-ml-auto">
+      <%= submit_tag l(:button_sla_apply_filters),
+            class: 'tw-text-white tw-bg-primary-600 hover:tw-bg-primary-700 tw-font-medium ' \
+                   'tw-rounded-lg tw-text-sm tw-px-4 tw-py-2.5' %>
+      <%= link_to l(:button_sla_clear_filters), sla_dashboard_base_path(@project),
+            class: 'tw-text-gray-500 hover:tw-text-gray-700 tw-text-sm tw-px-4 tw-py-2.5' %>
+    </div>
+  <% end %>
+
+  <% chips = sla_dashboard_chips(@filters, project: @project, permitted_projects: @permitted_projects,
+                                  available_trackers: @available_trackers,
+                                  available_priorities: @available_priorities,
+                                  locked_project: @locked_project) %>
+  <% if chips.any? %>
+    <div class="tw-flex tw-flex-wrap tw-gap-2 tw-mt-3 tw-pt-3 tw-border-t tw-border-gray-100">
+      <% chips.each do |chip| %>
+        <span class="tw-inline-flex tw-items-center tw-gap-1 tw-bg-primary-50 tw-text-primary-700 tw-text-xs tw-rounded-full tw-pl-2.5 tw-pr-1.5 tw-py-1">
+          <%= chip[:label] %>
+          <%= link_to '×', chip[:url], class: 'tw-ml-1 tw-cursor-pointer tw-font-bold',
+                'aria-label': l(:button_sla_remove_filter) %>
+        </span>
+      <% end %>
+    </div>
+  <% end %>
+</div>

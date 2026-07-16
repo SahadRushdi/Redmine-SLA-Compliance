@@ -1,3 +1,12 @@
+/*
+ * Step 6.1 — flowbite-datepicker's own stylesheet (the Custom date-range picker). Imported here,
+ * ahead of everything else, so postcss-import inlines it before postcss-prefix-selector scopes
+ * the whole file — see the ordering comment in postcss.config.js for why this one can't be
+ * plain-copied unscoped the way tom-select.min.css is (it ships its own Preflight-style
+ * `*, ::before, ::after` universal reset).
+ */
+@import 'flowbite-datepicker/dist/css/datepicker.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

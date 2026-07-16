@@ -1,0 +1,27 @@
+<%# Step 6.3 — charts. The donut and priority bar both encode the same met/breached/at_risk/ %>
+<%# no_sla state dimension, so they share ONE legend (Global Rule 9), rendered once here from %>
+<%# @counts (already computed for the summary cards) rather than duplicated per chart or %>
+<%# rebuilt via JS — every number on this page traces back to the same source. Both charts %>
+<%# disable Chart.js's own native legend (see sla_dashboard_charts.js) so this is the only one. %>
+<div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-p-4 tw-mb-6 tw-shadow-sm">
+  <div id="sla-chart-legend" class="tw-flex tw-flex-wrap tw-items-center tw-gap-x-6 tw-gap-y-2 tw-mb-4 tw-pb-4 tw-border-b tw-border-gray-100">
+    <% %i[met breached no_sla].each do |state| %>
+      <span class="tw-inline-flex tw-items-center tw-gap-2 tw-text-sm tw-text-gray-700">
+        <span class="tw-w-3 tw-h-3 tw-rounded-full tw-inline-block" style="background-color: <%= sla_chart_color(state) %>"></span>
+        <%= sla_card_label(state) %>
+        <span class="tw-text-gray-400">(<%= @counts.public_send(state) %>)</span>
+      </span>
+    <% end %>
+    <span class="tw-inline-flex tw-items-center tw-gap-1 tw-text-xs tw-font-medium tw-bg-amber-50 tw-text-amber-700 tw-rounded-full tw-px-2 tw-py-1">
+      <span class="tw-w-2 tw-h-2 tw-rounded-full tw-inline-block" style="background-color: <%= sla_chart_color(:at_risk) %>"></span>
+      <%= l(:label_sla_card_at_risk) %>: <%= @counts.at_risk %>
+    </span>
+  </div>
+
+  <div class="tw-grid tw-grid-cols-1 lg:tw-grid-cols-2 tw-gap-6">
+    <%= render 'sla_dashboard/priority_chart' %>
+    <%= render 'sla_dashboard/donut_chart' %>
+  </div>
+</div>
+
+<%= render 'sla_dashboard/trend_chart' %>

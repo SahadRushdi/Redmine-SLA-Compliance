@@ -77,6 +77,7 @@ class Sla::ResultStoreTest < ActiveSupport::TestCase
     assert_equal 1800, row.response_seconds
     assert_equal now + 1800, row.breach_at   # earliest pending breach = response
     assert_nil row.deviation_seconds
+    assert_nil row.resolved_at
     assert_equal now.to_i, row.calculated_at.to_i
     assert_equal row, outcome.record
   end
@@ -142,6 +143,20 @@ class Sla::ResultStoreTest < ActiveSupport::TestCase
     assert_equal 3600, row.resolution_seconds
     assert_nil row.breach_at
     refute row.at_risk
+    assert_equal at(1).to_i, row.resolved_at.to_i
+  end
+
+  test "reopening a resolved ticket resets the cached resolved_at to nil until it resolves again" do
+    issue = make_issue
+    add_status_change(issue, from: NEW, to: RESOLVED, at: at(1))
+    recalc(issue, now: at(2))
+    row = SlaResult.find_by(issue_id: issue.id)
+    assert_not_nil row.resolved_at, 'precondition: resolved once already'
+
+    add_status_change(issue, from: RESOLVED, to: NEW, at: at(3)) # reopen
+    recalc(issue, now: at(4))
+
+    assert_nil row.reload.resolved_at
   end
 
   # --- at-risk transition reporting (drives the sweep's one-time queue) ------------------
