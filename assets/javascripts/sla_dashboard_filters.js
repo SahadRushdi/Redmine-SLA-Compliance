@@ -53,7 +53,21 @@
     var preset = byId('sla-filter-date-preset');
     var field = byId('sla-custom-range');
     if (!preset || !field) { return; }
-    field.classList.toggle('hidden', preset.value !== 'custom');
+
+    var custom = preset.value === 'custom';
+    field.classList.toggle('hidden', !custom);
+
+    // An open popup lives under `.sla-plugin`, not under #sla-custom-range (initDateRangePicker
+    // re-homes it), so hiding the wrapper does NOT hide the calendar with it — it would be left
+    // floating over the dashboard, anchored to an input that is no longer there. Close it here.
+    if (!custom) { hideRangePickers(); }
+  }
+
+  function hideRangePickers() {
+    ['sla-filter-from', 'sla-filter-to'].forEach(function (id) {
+      var input = byId(id);
+      if (input && input.datepicker && input.datepicker.hide) { input.datepicker.hide(); }
+    });
   }
 
   // Date Range pill button-group (Figma). The buttons are a purely visual/interaction layer over
@@ -89,28 +103,83 @@
     });
   }
 
-  // The flowbite-datepicker library appends its popup to `container` (document.body by default)
-  // synchronously inside the Datepicker constructor — the popup DOM node already exists the
-  // instant `new Datepicker(...)` returns, well before the user ever opens it. Flowbite's own
-  // wrapper class doesn't expose a `container` option, so instead the popup is physically moved
-  // into `.sla-plugin` right here — keeping it inside the plugin's scoped Tailwind/Flowbite CSS
-  // (compiled by the same build as everything else in this plugin) instead of rendering
-  // unstyled outside the wrapper (CLAUDE.md theme-isolation rule 4).
-  function initDatepickers() {
+  // Custom Range: ONE linked flowbite DateRangePicker across the From/To inputs (matching the
+  // My Time page), not two independent Datepickers. The link is what makes the two popups agree —
+  // it tints the days between the two dates (.range) and stops To being set before From. The
+  // library discovers its two inputs itself via `element.querySelectorAll('input')` in DOM order,
+  // so `#sla-custom-range` (the wrapper holding both) IS the picker element.
+  //
+  // Each popup is appended to `config.container` (document.body by default) synchronously inside
+  // the constructor — the popup DOM node exists the instant `new Datepicker(...)` returns, well
+  // before the user ever opens it. Every rule in this plugin's stylesheet is scoped under
+  // `.sla-plugin` (postcss.config.js), and every Tailwind class in the library's own popup
+  // template is unprefixed, so a popup left in document.body is matched by NOTHING: not
+  // `.datepicker { display: none }`, not `.datepicker-dropdown { position: absolute }`, not the
+  // `tw-`-prefixed utilities. It renders as an unstyled, permanently-visible block at the end of
+  // <body> and the input looks dead on click.
+  //
+  // So each popup is re-homed into `.sla-plugin`. Two things are required, not one:
+  //   1. The popup is `datepicker.picker.element`. `datepicker.element` is the INPUT — reading
+  //      that instead makes the move a silent no-op (the input is already inside the scope).
+  //   2. `config.container` must be updated to match. The library reads it lazily in `place()`
+  //      (relative-to-container coordinates) and `detach()` (removeChild) — leaving it pointing
+  //      at document.body while the popup lives elsewhere positions it against the wrong box.
+  //      The library takes a `container` option for exactly this, but Flowbite's wrapper class
+  //      whitelists the options it forwards and drops it, hence assigning after construction.
+  // `.sla-plugin` is `position: relative` (tailwind.input.css) so it is the popup's offsetParent,
+  // which is what makes those container-relative coordinates land correctly.
+  //
+  // `todayHighlight` goes through each inner picker's own setOptions for the same reason: it's
+  // not on Flowbite's forwarded-options whitelist either. Same approach the time_analytics
+  // plugin takes with its own range picker.
+  function initDateRangePicker() {
     var scope = document.querySelector('.sla-plugin');
-    if (!scope || !window.Datepicker) { return; }
+    var rangeEl = byId('sla-custom-range');
+    if (!scope || !rangeEl || rangeEl.slaRangePicker || !window.Datepicker) { return; }
 
-    document.querySelectorAll('[data-sla-datepicker]').forEach(function (el) {
-      if (el.slaDatepicker) { return; }
+    var instance = new window.Datepicker(rangeEl, {
+      rangePicker: true,
+      autohide: true,
+      format: 'yyyy-mm-dd'
+    });
+    rangeEl.slaRangePicker = instance;
 
-      var instance = new window.Datepicker(el, { autohide: true, format: 'yyyy-mm-dd' });
-      el.slaDatepicker = instance;
-
-      var popupEl = instance.getDatepickerInstance && instance.getDatepickerInstance().element;
-      if (popupEl && !scope.contains(popupEl)) {
-        scope.appendChild(popupEl);
+    var inner = instance.getDatepickerInstance && instance.getDatepickerInstance();
+    var datepickers = (inner && inner.datepickers) || [];
+    datepickers.forEach(function (dp) {
+      dp.setOptions({ todayHighlight: true });
+      if (dp.picker && dp.picker.element) {
+        dp.config.container = scope;
+        scope.appendChild(dp.picker.element);
       }
     });
+
+    // Why this can't ride on the generic [data-sla-auto-apply-debounced] `change` binding, and
+    // why it can't be delegated off `document`:
+    //   - The library sets `inputField.value` programmatically, and assigning .value NEVER fires
+    //     a native `change`. It signals a pick with its own `changeDate` CustomEvent instead
+    //     (`datepicker.element.dispatchEvent(new CustomEvent('changeDate', ...))`). That is why
+    //     choosing dates previously left the dashboard sitting there un-refreshed.
+    //   - That CustomEvent is constructed WITHOUT `bubbles: true`, so it never reaches a
+    //     delegated jQuery handler on document. It has to be bound on the input itself.
+    // `change` is still bound alongside it so typing a date by hand and tabbing out also applies.
+    ['sla-filter-from', 'sla-filter-to'].forEach(function (id) {
+      var input = byId(id);
+      if (!input) { return; }
+      input.addEventListener('changeDate', submitDateRangeDebounced);
+      input.addEventListener('change', submitDateRangeDebounced);
+    });
+  }
+
+  // Only submit once BOTH ends of the range are filled — picking From always fires changeDate
+  // before the user has had a chance to touch To, and submitting there would navigate away
+  // mid-selection. Same completeness guard the time_analytics range picker uses, over this
+  // plugin's existing shared debounce.
+  function submitDateRangeDebounced() {
+    var from = byId('sla-filter-from');
+    var to = byId('sla-filter-to');
+    if (!from || !to || !from.value || !to.value) { return; }
+    submitDebounced.call(from);
   }
 
   function bindOnce() {
@@ -130,7 +199,7 @@
     if (!byId('sla-filter-date-preset')) { return; }
     initChips();
     initSingleSelects();
-    initDatepickers();
+    initDateRangePicker();
     toggleCustomRange();
     bindOnce();
   }

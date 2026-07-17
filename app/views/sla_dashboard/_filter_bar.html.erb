@@ -54,16 +54,24 @@
                 id: 'sla-filter-date-preset', class: 'tw-hidden' %>
         </div>
 
-        <div id="sla-custom-range" class="tw-flex tw-gap-2 <%= 'hidden' unless @filters[:date_preset] == 'custom' %>">
+        <%# One LINKED range picker across both inputs, not two independent ones — this is what %>
+        <%# tints the days between From and To (matching the My Time page). The library finds its %>
+        <%# two inputs via `element.querySelectorAll('input')` in DOM order, so this wrapper is %>
+        <%# the picker element itself and From must stay before To. %>
+        <%# The inputs deliberately carry no auto-apply data attribute: the library sets .value %>
+        <%# programmatically, which never fires a native `change` event — see the changeDate %>
+        <%# binding in sla_dashboard_filters.js. %>
+        <div id="sla-custom-range" data-sla-daterangepicker
+             class="tw-flex tw-gap-2 <%= 'hidden' unless @filters[:date_preset] == 'custom' %>">
           <div>
             <label class="<%= sla_label_classes %>" for="sla-filter-from"><%= l(:field_sla_date_from) %></label>
             <%= text_field_tag 'from', @filters[:date_range]&.first, id: 'sla-filter-from',
-                  class: sla_input_classes, autocomplete: 'off', data: { 'sla-datepicker': true, 'sla-auto-apply-debounced': true } %>
+                  class: sla_input_classes, autocomplete: 'off' %>
           </div>
           <div>
             <label class="<%= sla_label_classes %>" for="sla-filter-to"><%= l(:field_sla_date_to) %></label>
             <%= text_field_tag 'to', @filters[:date_range]&.last, id: 'sla-filter-to',
-                  class: sla_input_classes, autocomplete: 'off', data: { 'sla-datepicker': true, 'sla-auto-apply-debounced': true } %>
+                  class: sla_input_classes, autocomplete: 'off' %>
           </div>
         </div>
 

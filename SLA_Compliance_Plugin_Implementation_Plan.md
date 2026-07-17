@@ -308,7 +308,7 @@ minute — no app restart, no dynamic Rufus job rescheduling.
 
 ---
 
-# PHASE 5 — Access Control
+# PHASE 5 — Access Control ✅Done
 
 ### Step 5.1 — Role-based visibility & edit
 - **Goal:** Configurable who can view/edit config and dashboard; default Admin-only.
