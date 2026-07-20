@@ -1,29 +1,27 @@
 <%# Step 6.4 — ticket-level detail. Reads the exact same @scope every other part of the %>
-<%# dashboard reads, filtered/sorted server-side (Sla::EffectiveState - same effective-state %>
-<%# definition as the summary cards, so this table can never disagree with them). State tabs, %>
-<%# sort headers, search, per-page, and pagination all resubmit as plain GET links/forms that %>
-<%# preserve the active project/tracker/priority/date filters (sla_detail_table_url), matching %>
-<%# the rest of the dashboard's full-page-resubmit model - no AJAX. %>
-<% current_state = @state_filter == 'all' ? nil : @state_filter %>
+<%# dashboard reads (Sla::EffectiveState - same effective-state definition as the summary cards, %>
+<%# so this table can never disagree with them). State tabs, search and the main filters resubmit %>
+<%# as plain GET links/forms (they change WHICH rows are in scope). Sorting and pagination are %>
+<%# CLIENT-SIDE (sla_dashboard_detail_table.js) over the full row set rendered here - no reload. %>
+<% detail_columns = [
+     ['ticket', l(:field_sla_detail_ticket), 'number'], ['project', l(:field_sla_detail_project), 'text'],
+     ['tracker', l(:field_sla_detail_tracker), 'text'], ['title', l(:field_sla_detail_title), 'text'],
+     ['status', l(:field_sla_detail_status), 'number'], ['assignee', l(:field_sla_detail_assignee), 'text'],
+     ['first_response', l(:field_sla_detail_first_response), 'number'], ['resolution', l(:field_sla_detail_resolution), 'number'],
+     ['result', l(:field_sla_detail_result), 'number'], ['deviation', l(:field_sla_detail_deviation), 'number']
+   ] %>
 <% detail_states = [['all', l(:label_sla_detail_state_all), @counts.total]] +
      %w[met breached at_risk no_sla].map { |s| [s, sla_card_label(s.to_sym), @counts.public_send(s)] } %>
-<% detail_columns = [
-     ['ticket', l(:field_sla_detail_ticket)], ['project', l(:field_sla_detail_project)],
-     ['tracker', l(:field_sla_detail_tracker)], ['title', l(:field_sla_detail_title)],
-     ['status', l(:field_sla_detail_status)], ['assignee', l(:field_sla_detail_assignee)],
-     ['first_response', l(:field_sla_detail_first_response)], ['resolution', l(:field_sla_detail_resolution)],
-     ['result', l(:field_sla_detail_result)], ['deviation', l(:field_sla_detail_deviation)]
-   ] %>
-<div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-p-5 tw-shadow-sm">
+<div id="sla-detail-table" data-sla-detail-table
+     class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-p-5 tw-shadow-sm">
   <div class="tw-flex tw-items-center tw-justify-between tw-flex-wrap tw-gap-3 tw-mb-4">
     <h3 class="tw-text-base tw-font-semibold tw-text-gray-900"><%= l(:label_sla_detail_table) %></h3>
 
     <div class="tw-flex tw-items-center tw-gap-3">
       <%# Reconstructs every OTHER currently-active GET param as hidden fields (generic - never %>
       <%# needs updating when a new filter param is added), so a search only ever narrows the %>
-      <%# existing view rather than resetting it. Page resets since the result set is new. %>
-      <%= form_tag(sla_dashboard_base_path(@project), method: :get,
-                    class: 'tw-relative') do %>
+      <%# existing view rather than resetting it. %>
+      <%= form_tag(sla_dashboard_base_path(@project), method: :get, class: 'tw-relative') do %>
         <% request.query_parameters.except('q', 'page').each do |key, value| %>
           <% Array(value).each { |v| hidden_field_tag(value.is_a?(Array) ? "#{key}[]" : key, v, id: nil) } %>
         <% end %>
@@ -35,21 +33,14 @@
                      'focus:tw-ring-primary-500 focus:tw-border-primary-500 tw-pl-10 tw-pr-3 tw-py-2.5 tw-w-80' %>
       <% end %>
 
-      <%# `data-sla-select` upgrades this to a TomSelect (sla_dashboard_filters.js#initSingleSelects) %>
-      <%# so the open menu is a themed component, not the OS-native dropdown. Each option's value is %>
-      <%# the target URL; TomSelect fires a native change on selection, which the inline onchange %>
-      <%# navigates to (and it still works as a plain <select> if JS is unavailable). %>
+      <%# Client-side page size (sla_dashboard_detail_table.js) — a plain, non-typeable dropdown %>
+      <%# list; changing it re-paginates the already-rendered rows without a reload. %>
       <div id="sla-detail-perpage" class="tw-flex tw-items-center tw-gap-2 tw-text-sm tw-text-gray-500">
         <label for="sla-detail-per-page" class="tw-whitespace-nowrap"><%= l(:label_sla_detail_per_page) %></label>
         <%= select_tag 'sla-detail-per-page',
-              options_for_select(Setting.per_page_options_array.map { |n|
-                [n, sla_detail_table_url(@filters, @project, state: current_state, sort: @sort_column, sort_dir: @sort_direction,
-                                          q: @search_query, per_page: n)]
-              }, sla_detail_table_url(@filters, @project, state: current_state, sort: @sort_column, sort_dir: @sort_direction,
-                                       q: @search_query, per_page: @detail_pages.per_page)),
-              id: 'sla-detail-per-page', onchange: 'window.location.href = this.value;',
-              data: { 'sla-select': true },
-              class: 'tw-bg-white tw-border tw-border-gray-300 tw-text-gray-900 tw-text-sm tw-rounded-lg focus:tw-ring-primary-500 focus:tw-border-primary-500 tw-p-2' %>
+              options_for_select(Setting.per_page_options_array, Setting.per_page_options_array.first),
+              id: 'sla-detail-per-page', data: { 'sla-perpage': true },
+              class: 'tw-bg-white tw-border tw-border-gray-300 tw-text-gray-900 tw-text-sm tw-rounded-lg focus:tw-ring-primary-500 focus:tw-border-primary-500 tw-py-2 tw-pl-3 tw-pr-8' %>
       </div>
     </div>
   </div>
@@ -67,17 +58,15 @@
     <table class="tw-min-w-full tw-text-sm tw-text-left">
       <thead>
         <tr class="tw-border-b tw-border-gray-200 tw-text-gray-500">
-          <% detail_columns.each do |key, label| %>
-            <% next_dir = (@sort_column == key && @sort_direction == 'desc') ? 'asc' : 'desc' %>
-            <th class="tw-py-2 tw-pr-4 tw-font-medium tw-whitespace-nowrap">
-              <%= link_to sla_detail_table_url(@filters, @project, state: current_state, q: @search_query,
-                                                sort: key, sort_dir: next_dir),
-                    class: 'tw-inline-flex tw-items-center tw-gap-1 tw-text-gray-500 hover:tw-text-gray-700' do %>
+          <% detail_columns.each do |key, label, type| %>
+            <%# Client-side sort trigger (no href). The grey up/down icon is managed by JS: neutral %>
+            <%# when inactive, a single arrow for the active column/direction. Never blue. %>
+            <th data-sla-sort="<%= key %>" data-sla-sort-type="<%= type %>"
+                class="tw-py-2 tw-pr-4 tw-font-medium tw-whitespace-nowrap tw-cursor-pointer tw-select-none">
+              <span class="tw-inline-flex tw-items-center tw-gap-1 tw-text-gray-500 hover:tw-text-gray-700">
                 <%= label %>
-                <% if @sort_column == key %>
-                  <span class="tw-text-primary-600"><%= @sort_direction == 'desc' ? '↓' : '↑' %></span>
-                <% end %>
-              <% end %>
+                <span class="sla-sort-icon tw-inline-flex tw-text-gray-400" aria-hidden="true"></span>
+              </span>
             </th>
           <% end %>
         </tr>
@@ -85,8 +74,8 @@
       <tbody id="sla-detail-table-body">
         <% @detail_results.each do |sla_result| %>
           <% issue = sla_result.issue %>
-          <tr class="tw-border-b tw-border-gray-100 hover:tw-bg-gray-50" id="sla-detail-row-<%= issue.id %>">
-            <td class="tw-py-2.5 tw-pr-4">
+          <tr data-sla-row class="tw-border-b tw-border-gray-100 hover:tw-bg-gray-50" id="sla-detail-row-<%= issue.id %>">
+            <td class="tw-py-2.5 tw-pr-4" data-sla-sort-value="<%= issue.id %>">
               <%= link_to "##{issue.id}", issue_path(issue), target: '_blank', rel: 'noopener',
                     class: 'tw-text-primary-600 tw-font-medium hover:tw-underline' %>
             </td>
@@ -96,11 +85,11 @@
               <%= link_to issue.subject, issue_path(issue), target: '_blank', rel: 'noopener',
                     class: 'tw-text-gray-800 hover:tw-underline' %>
             </td>
-            <td class="tw-py-2.5 tw-pr-4"><%= issue.status.name %></td>
+            <td class="tw-py-2.5 tw-pr-4" data-sla-sort-value="<%= issue.status.position %>"><%= issue.status.name %></td>
             <td class="tw-py-2.5 tw-pr-4"><%= issue.assigned_to&.name %></td>
-            <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap"><%= format_sla_duration(sla_result.response_seconds) %></td>
-            <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap"><%= format_sla_duration(sla_result.resolution_seconds) %></td>
-            <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap">
+            <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap" data-sla-sort-value="<%= sla_result.response_seconds %>"><%= format_sla_duration(sla_result.response_seconds) %></td>
+            <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap" data-sla-sort-value="<%= sla_result.resolution_seconds %>"><%= format_sla_duration(sla_result.resolution_seconds) %></td>
+            <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap" data-sla-sort-value="<%= sla_result_sort_rank(sla_result) %>">
               <% effective_state = sla_result.effective_primary_state %>
               <span class="tw-inline-block tw-rounded-full tw-px-2 tw-py-0.5 tw-text-xs tw-font-medium <%= sla_card_color_classes(effective_state.to_sym) %>">
                 <%= sla_card_label(effective_state.to_sym) %>
@@ -115,13 +104,14 @@
             <%# (stale persisted "met" + a passed breach_at) correctly shows the Breached badge %>
             <%# above but has no computed deviation yet - the engine hasn't run for it since it %>
             <%# breached, and this dashboard never computes SLA state live (Global Rule 4). %>
-            <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap <%= 'tw-text-red-600 tw-font-medium' if sla_result.deviation_seconds.present? %>">
+            <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap <%= 'tw-text-red-600 tw-font-medium' if sla_result.deviation_seconds.present? %>"
+                data-sla-sort-value="<%= sla_result.deviation_seconds %>">
               <%= sla_result.deviation_seconds.present? ? "+#{format_sla_duration(sla_result.deviation_seconds)}" : '—' %>
             </td>
           </tr>
         <% end %>
         <% if @detail_results.empty? %>
-          <tr>
+          <tr data-sla-empty-row>
             <td colspan="<%= detail_columns.size %>" class="tw-py-8 tw-text-center tw-text-gray-400">
               <%= l(:text_sla_detail_table_empty_state) %>
             </td>
@@ -131,7 +121,9 @@
     </table>
   </div>
 
-  <div class="tw-mt-4">
-    <%= pagination_links_full @detail_pages %>
-  </div>
+  <%# Client-side pagination (Showing a–b of N + page controls), rendered by JS from the rows above. %>
+  <div id="sla-detail-pagination"
+       data-l-showing="<%= l(:label_sla_detail_showing) %>" data-l-of="<%= l(:label_sla_detail_of) %>"
+       data-l-prev="<%= l(:label_previous) %>" data-l-next="<%= l(:label_next) %>"
+       class="tw-mt-4 tw-flex tw-items-center tw-justify-between tw-flex-wrap tw-gap-3 tw-text-sm tw-text-gray-500"></div>
 </div>

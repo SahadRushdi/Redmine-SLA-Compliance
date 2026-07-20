@@ -138,66 +138,52 @@ class SlaDashboardController < ApplicationController
     end
   end
 
-  # Date._parse is a non-raising probe (unlike Date.parse) so a malformed custom date never 500s
-  # the page - falls back to no date filter, same as an unrecognized preset.
   def custom_date_range(from, to)
-    parsed_from = Date._parse(from.to_s).present? ? Date.parse(from) : nil
-    parsed_to   = Date._parse(to.to_s).present?   ? Date.parse(to)   : nil
+    parsed_from = parse_filter_date(from)
+    parsed_to   = parse_filter_date(to)
     return nil if parsed_from.nil? || parsed_to.nil? || parsed_from > parsed_to
 
     parsed_from..parsed_to
   end
 
+  # Parses the mm/dd/yyyy the custom-range inputs submit (matching the My Time picker), tolerating
+  # ISO yyyy-mm-dd for any link-carried/legacy value. Never raises on a malformed value — returns
+  # nil so the page falls back to no date filter instead of 500ing, same as an unrecognized preset.
+  def parse_filter_date(value)
+    string = value.to_s.strip
+    return nil if string.blank?
+
+    ['%m/%d/%Y', '%Y-%m-%d'].each do |format|
+      return Date.strptime(string, format)
+    rescue ArgumentError
+      next
+    end
+    nil
+  end
+
   # --- Step 6.4: detail table -----------------------------------------------------------------
 
   DETAIL_STATES = %w[all met breached at_risk no_sla].freeze
-  DETAIL_SORT_COLUMNS = {
-    'ticket'         => 'issues.id',
-    'project'        => 'projects.name',
-    'tracker'        => 'trackers.name',
-    'title'          => 'issues.subject',
-    'status'         => 'issue_statuses.position',
-    'assignee'       => 'users.lastname',
-    'first_response' => 'sla_results.response_seconds',
-    'resolution'     => 'sla_results.resolution_seconds',
-    'result'         => Sla::EffectiveState::ORDER_RANK_SQL,
-    'deviation'      => 'sla_results.deviation_seconds'
-  }.freeze
 
-  # State tabs and their counts come straight from @counts (already computed for the summary
-  # cards) - no second aggregate query, EXCEPT when a search term narrows the set further (@counts
-  # knows nothing about search, so that case falls back to a real COUNT). Sort/state/search/
-  # pagination params are clamped the same way resolve_filters clamps the main filters: an invalid
-  # value silently falls back to the default rather than 403ing or erroring.
+  # Sorting and pagination are handled client-side (sla_dashboard_detail_table.js) over the rows
+  # rendered here — no page reload for either. State tabs, search and the main filters still
+  # resubmit as plain GET (they change WHICH rows are in scope), and each is clamped the same way
+  # resolve_filters clamps the main filters: an invalid value silently falls back to the default.
   #
-  # @detail_scope is the filtered+sorted relation with NO limit/offset - reused by CSV export
-  # (Export CSV) to return every matching row, not just the current page; @detail_results is the
-  # paginated slice of it that the HTML table actually renders.
+  # @detail_scope is the full filtered relation (stable newest-ticket-first order, no limit/offset)
+  # reused by CSV export; @detail_results is the capped set of rows the HTML table renders in one
+  # shot for the client-side sorter/paginator to work over. Bounded by Redmine's own export-size
+  # setting so a pathological scope can't emit an unbounded page.
   def build_detail_table
-    @state_filter   = DETAIL_STATES.include?(params[:state]) ? params[:state] : 'all'
-    @sort_column    = DETAIL_SORT_COLUMNS.key?(params[:sort]) ? params[:sort] : 'ticket'
-    @sort_direction = %w[asc desc].include?(params[:sort_dir]) ? params[:sort_dir] : 'desc'
-    @search_query   = params[:q].to_s.strip.presence
+    @state_filter = DETAIL_STATES.include?(params[:state]) ? params[:state] : 'all'
+    @search_query = params[:q].to_s.strip.presence
 
     base = @scope.joins(issue: %i[project tracker status]).left_joins(issue: :assigned_to)
     base = apply_state_filter(base, @state_filter)
     base = apply_search_filter(base, @search_query)
 
-    # sanitize_sql_array is required even for plain column names here (not just ORDER_RANK_SQL,
-    # the one column expression that actually contains a :now bind placeholder) - passed a
-    # `now:` hash unconditionally so this stays correct if a future sort column ever needs a
-    # bind too; sanitize_sql_array leaves a string with no matching placeholder untouched.
-    column_sql = ActiveRecord::Base.sanitize_sql_array([DETAIL_SORT_COLUMNS[@sort_column], now: Time.current])
-    order_sql  = "#{column_sql} #{@sort_direction == 'desc' ? 'DESC' : 'ASC'}"
-    @detail_scope = base.reorder(Arel.sql(order_sql)).includes(issue: %i[project tracker status assigned_to])
-
-    total_count = @search_query ? base.count : detail_state_count(@state_filter)
-    @detail_pages   = Redmine::Pagination::Paginator.new(total_count, per_page_option, params[:page])
-    @detail_results = @detail_scope.limit(@detail_pages.per_page).offset(@detail_pages.offset)
-  end
-
-  def detail_state_count(state)
-    state == 'all' ? @counts.total : @counts.public_send(state)
+    @detail_scope   = base.reorder('issues.id DESC').includes(issue: %i[project tracker status assigned_to])
+    @detail_results = @detail_scope.limit(Setting.issues_export_limit.to_i)
   end
 
   # Reuses the exact same effective-state definition as the summary cards (Sla::EffectiveState) -

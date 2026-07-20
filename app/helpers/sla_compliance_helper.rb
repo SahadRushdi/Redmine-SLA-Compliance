@@ -121,41 +121,18 @@ module SlaComplianceHelper
     l("label_sla_date_preset_#{preset}")
   end
 
-  # One removable chip per non-default active filter: individually selected projects (only shown
-  # once the selection has been narrowed below "every permitted project" — the unnarrowed default
-  # isn't an "active filter" worth a chip), the selected tracker, each selected priority, and the
-  # date range when it isn't the default preset.
-  def sla_dashboard_chips(filters, project:, permitted_projects:, available_trackers:, available_priorities:, locked_project:)
-    chips = []
-
-    unless locked_project
-      selected = permitted_projects.select { |p| filters[:project_ids].include?(p.id) }
-      if selected.size < permitted_projects.size
-        selected.each do |proj|
-          chips << { label: proj.name, url: sla_dashboard_url_without(filters, project, :project_ids, proj.id) }
-        end
-      end
-    end
-
-    filters[:tracker_ids].each do |tid|
-      tracker = available_trackers.detect { |t| t.id == tid }
-      chips << { label: tracker.name, url: sla_dashboard_url_without(filters, project, :tracker_ids, tid) } if tracker
-    end
-
-    filters[:priority_ids].each do |pid|
-      priority = available_priorities.detect { |p| p.id == pid }
-      chips << { label: priority.name, url: sla_dashboard_url_without(filters, project, :priority_ids, pid) } if priority
-    end
-
-    if filters[:date_preset] != 'this_week' || filters[:date_range]
-      chips << { label: sla_date_preset_label(filters[:date_preset]),
-                 url: sla_dashboard_url_without(filters, project, :date_preset, nil) }
-    end
-
-    chips
-  end
-
   # --- Step 6.4: detail table -----------------------------------------------------------------
+
+  # Numeric rank for the detail table's client-side "Result" sort, derived from the SAME live
+  # effective state the badge shows (met on-track < met at-risk < breached < no_sla) so the sort
+  # order matches what the row displays.
+  def sla_result_sort_rank(sla_result)
+    case sla_result.effective_primary_state
+    when 'breached' then 2
+    when 'no_sla'   then 3
+    else sla_result.effective_at_risk? ? 1 : 0
+    end
+  end
 
   # Every state-tab / sort-header / search / per-page / pagination / export link in the detail
   # table goes through this, so the active project/tracker/priority/date filters are always
@@ -191,23 +168,14 @@ module SlaComplianceHelper
       tracker_ids: filters[:tracker_ids],
       priority_ids: filters[:priority_ids],
       date_preset: filters[:date_preset],
-      from: filters[:date_range]&.first,
-      to: filters[:date_range]&.last
+      from: sla_date_param(filters[:date_range]&.first),
+      to: sla_date_param(filters[:date_range]&.last)
     }
   end
 
-  def sla_dashboard_url_without(filters, project, key, value)
-    query = sla_dashboard_query_params(filters)
-    case key
-    # Removing a tracker leaves priority_ids untouched — resolve_filters re-clamps them against the
-    # remaining trackers' priorities (and drops them all if the last tracker is removed).
-    when :project_ids, :priority_ids, :tracker_ids then query[key] = Array(query[key]) - [value]
-    when :date_preset then query[:date_preset] = nil
-                            query[:from] = nil
-                            query[:to] = nil
-    end
-    query = query.reject { |_, v| v.blank? }
-
-    project ? project_sla_dashboard_index_path(project, query) : sla_dashboard_cross_project_path(query)
+  # Serialize a date for the from/to query params in the same mm/dd/yyyy format the custom-range
+  # inputs display and the controller parses — so a link round-trips through resolve_filters.
+  def sla_date_param(date)
+    date&.strftime('%m/%d/%Y')
   end
 end

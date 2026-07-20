@@ -39,15 +39,18 @@
         </div>
       <% end %>
 
-      <%# Deliberately styled as a subset callout (dashed divider, smaller text, no bold value) - %>
-      <%# never a peer row that could read as a 4th category summed into the total above. %>
-      <div class="tw-flex tw-items-center tw-justify-between tw-gap-3 tw-text-xs tw-text-amber-700 tw-pt-2 tw-mt-1 tw-border-t tw-border-dashed tw-border-gray-200">
-        <span class="tw-inline-flex tw-items-center tw-gap-2">
+      <%# At-risk is a subset of Met (the "(of Met)" hint keeps that clear), but it's rendered as a %>
+      <%# regular legend row — same layout/size/weight as met/breached/no_sla above — rather than a %>
+      <%# dashed callout, so the legend reads as one consistent list. %>
+      <div class="tw-flex tw-items-center tw-justify-between tw-gap-3 tw-text-sm">
+        <span class="tw-inline-flex tw-items-center tw-gap-2 tw-text-gray-700">
           <span class="tw-w-2.5 tw-h-2.5 tw-rounded-full tw-inline-block tw-flex-shrink-0" style="background-color: <%= sla_chart_color(:at_risk) %>"></span>
-          <%= l(:label_sla_card_at_risk) %> <span class="tw-text-amber-600 tw-opacity-75">(<%= l(:label_sla_chart_met_at_risk_hint) %>)</span>
+          <%= l(:label_sla_card_at_risk) %>
+          <span class="tw-text-gray-400 tw-text-xs">(<%= l(:label_sla_chart_met_at_risk_hint) %>)</span>
         </span>
-        <span class="tw-whitespace-nowrap tw-font-medium">
-          <%= @counts.at_risk %> (<%= sla_percentage(@counts.at_risk, @counts.total) %>%)
+        <span class="tw-whitespace-nowrap">
+          <span class="tw-font-semibold tw-text-gray-900"><%= @counts.at_risk %></span>
+          <span class="tw-text-gray-400 tw-text-xs">(<%= sla_percentage(@counts.at_risk, @counts.total) %>%)</span>
         </span>
       </div>
     </div>

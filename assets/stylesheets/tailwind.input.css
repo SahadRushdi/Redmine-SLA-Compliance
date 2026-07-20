@@ -127,6 +127,10 @@ textarea:focus {
 #sla-filter-form .ts-wrapper .ts-control {
   background-color: #ffffff;
   border-color: #d1d5db; /* gray-300 */
+  /* Match the Date Range pills' height (px-3 py-2.5 text-sm) so Tracker/Priority sit level. */
+  min-height: 2.625rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
 }
 
 #sla-filter-form .ts-wrapper.focus .ts-control {
@@ -144,23 +148,6 @@ textarea:focus {
   box-shadow: 0 0 0 1px #2563eb;
 }
 
-/*
- * Detail-table "Per page" dropdown — replace the OS-native <select> with the same clean white
- * TomSelect used by the filters (neutral at rest, blue on focus, themed `.ts-dropdown` list when
- * open) so the open menu reads as a proper styled component instead of a browser default.
- */
-#sla-detail-perpage .ts-wrapper { background-color: transparent; border: 0; padding: 0; box-shadow: none; }
-
-#sla-detail-perpage .ts-control {
-  background-color: #ffffff;
-  border-color: #d1d5db; /* gray-300 */
-  min-width: 4.5rem;
-}
-
-#sla-detail-perpage .ts-wrapper.focus .ts-control {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 1px #2563eb;
-}
 
 /*
  * Native form-control appearance reset (select / text-like inputs / radio / checkbox).

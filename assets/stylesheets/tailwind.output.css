@@ -810,9 +810,6 @@
 .sla-plugin .tw-mb-8 {
     margin-bottom: 2rem;
 }
-.sla-plugin .tw-ml-1 {
-    margin-left: 0.25rem;
-}
 .sla-plugin .tw-ml-2 {
     margin-left: 0.5rem;
 }
@@ -921,6 +918,9 @@
 .sla-plugin .-tw-translate-y-1\/2 {
     --tw-translate-y: -50%;
     transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+.sla-plugin .tw-cursor-not-allowed {
+    cursor: not-allowed;
 }
 .sla-plugin .tw-cursor-pointer {
     cursor: pointer;
@@ -1035,9 +1035,6 @@
 .sla-plugin .tw-border-solid {
     border-style: solid;
 }
-.sla-plugin .tw-border-dashed {
-    border-style: dashed;
-}
 .sla-plugin .tw-border-amber-300 {
     --tw-border-opacity: 1;
     border-color: rgb(252 211 77 / var(--tw-border-opacity, 1));
@@ -1133,9 +1130,6 @@
 .sla-plugin .tw-p-1\.5 {
     padding: 0.375rem;
 }
-.sla-plugin .tw-p-2 {
-    padding: 0.5rem;
-}
 .sla-plugin .tw-p-2\.5 {
     padding: 0.625rem;
 }
@@ -1165,10 +1159,6 @@
     padding-top: 0.125rem;
     padding-bottom: 0.125rem;
 }
-.sla-plugin .tw-py-1 {
-    padding-top: 0.25rem;
-    padding-bottom: 0.25rem;
-}
 .sla-plugin .tw-py-1\.5 {
     padding-top: 0.375rem;
     padding-bottom: 0.375rem;
@@ -1188,11 +1178,8 @@
 .sla-plugin .tw-pl-10 {
     padding-left: 2.5rem;
 }
-.sla-plugin .tw-pl-2\.5 {
-    padding-left: 0.625rem;
-}
-.sla-plugin .tw-pr-1\.5 {
-    padding-right: 0.375rem;
+.sla-plugin .tw-pl-3 {
+    padding-left: 0.75rem;
 }
 .sla-plugin .tw-pr-3 {
     padding-right: 0.75rem;
@@ -1200,8 +1187,8 @@
 .sla-plugin .tw-pr-4 {
     padding-right: 1rem;
 }
-.sla-plugin .tw-pt-2 {
-    padding-top: 0.5rem;
+.sla-plugin .tw-pr-8 {
+    padding-right: 2rem;
 }
 .sla-plugin .tw-pt-3 {
     padding-top: 0.75rem;
@@ -1250,10 +1237,6 @@
 .sla-plugin .tw-font-semibold {
     font-weight: 600;
 }
-.sla-plugin .tw-text-amber-600 {
-    --tw-text-opacity: 1;
-    color: rgb(217 119 6 / var(--tw-text-opacity, 1));
-}
 .sla-plugin .tw-text-amber-700 {
     --tw-text-opacity: 1;
     color: rgb(180 83 9 / var(--tw-text-opacity, 1));
@@ -1261,6 +1244,10 @@
 .sla-plugin .tw-text-blue-900 {
     --tw-text-opacity: 1;
     color: rgb(35 56 118 / var(--tw-text-opacity, 1));
+}
+.sla-plugin .tw-text-gray-300 {
+    --tw-text-opacity: 1;
+    color: rgb(209 213 219 / var(--tw-text-opacity, 1));
 }
 .sla-plugin .tw-text-gray-400 {
     --tw-text-opacity: 1;
@@ -1312,9 +1299,6 @@
 }
 .sla-plugin .tw-opacity-70 {
     opacity: 0.7;
-}
-.sla-plugin .tw-opacity-75 {
-    opacity: 0.75;
 }
 .sla-plugin .tw-shadow-none {
     --tw-shadow: 0 0 #0000;
@@ -1439,6 +1423,10 @@
 .sla-plugin #sla-filter-form .ts-wrapper .ts-control {
   background-color: #ffffff;
   border-color: #d1d5db; /* gray-300 */
+  /* Match the Date Range pills' height (px-3 py-2.5 text-sm) so Tracker/Priority sit level. */
+  min-height: 2.625rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
 }
 .sla-plugin #sla-filter-form .ts-wrapper.focus .ts-control {
   border-color: #2563eb; /* primary-600 */
@@ -1449,21 +1437,6 @@
   border-color: #d1d5db; /* gray-300 */
 }
 .sla-plugin #sla-filter-form input[type='text']:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 1px #2563eb;
-}
-/*
- * Detail-table "Per page" dropdown — replace the OS-native <select> with the same clean white
- * TomSelect used by the filters (neutral at rest, blue on focus, themed `.ts-dropdown` list when
- * open) so the open menu reads as a proper styled component instead of a browser default.
- */
-.sla-plugin #sla-detail-perpage .ts-wrapper { background-color: transparent; border: 0; padding: 0; box-shadow: none; }
-.sla-plugin #sla-detail-perpage .ts-control {
-  background-color: #ffffff;
-  border-color: #d1d5db; /* gray-300 */
-  min-width: 4.5rem;
-}
-.sla-plugin #sla-detail-perpage .ts-wrapper.focus .ts-control {
   border-color: #2563eb;
   box-shadow: 0 0 0 1px #2563eb;
 }

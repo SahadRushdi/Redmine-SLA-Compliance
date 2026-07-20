@@ -68,12 +68,12 @@
         <div id="sla-custom-range" data-sla-daterangepicker
              class="tw-flex tw-gap-2 <%= 'hidden' unless @filters[:date_preset] == 'custom' %>">
           <div>
-            <%= text_field_tag 'from', @filters[:date_range]&.first, id: 'sla-filter-from',
+            <%= text_field_tag 'from', @filters[:date_range]&.first&.strftime('%m/%d/%Y'), id: 'sla-filter-from',
                   class: sla_input_classes, autocomplete: 'off',
                   placeholder: l(:field_sla_date_from), 'aria-label': l(:field_sla_date_from) %>
           </div>
           <div>
-            <%= text_field_tag 'to', @filters[:date_range]&.last, id: 'sla-filter-to',
+            <%= text_field_tag 'to', @filters[:date_range]&.last&.strftime('%m/%d/%Y'), id: 'sla-filter-to',
                   class: sla_input_classes, autocomplete: 'off',
                   placeholder: l(:field_sla_date_to), 'aria-label': l(:field_sla_date_to) %>
           </div>
@@ -118,22 +118,6 @@
             class: "#{sla_input_classes} tw-max-w-xl", data: { 'sla-chips': true, 'sla-auto-apply-debounced': true } %>
       <% if @locked_project %>
         <p class="tw-text-xs tw-text-gray-400 tw-mt-1"><%= l(:text_sla_filter_locked_project_hint) %></p>
-      <% end %>
-    </div>
-  <% end %>
-
-  <% chips = sla_dashboard_chips(@filters, project: @project, permitted_projects: @permitted_projects,
-                                  available_trackers: @available_trackers,
-                                  available_priorities: @available_priorities,
-                                  locked_project: @locked_project) %>
-  <% if chips.any? %>
-    <div class="tw-flex tw-flex-wrap tw-gap-2 tw-mt-3">
-      <% chips.each do |chip| %>
-        <span class="tw-inline-flex tw-items-center tw-gap-1 tw-bg-primary-50 tw-text-primary-700 tw-text-xs tw-rounded-full tw-pl-2.5 tw-pr-1.5 tw-py-1">
-          <%= chip[:label] %>
-          <%= link_to '×', chip[:url], class: 'tw-ml-1 tw-cursor-pointer tw-font-bold',
-                'aria-label': l(:button_sla_remove_filter) %>
-        </span>
       <% end %>
     </div>
   <% end %>

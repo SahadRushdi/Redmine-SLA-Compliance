@@ -356,24 +356,30 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_select "#sla-detail-state-tabs a[href*='date_preset=this_month']", minimum: 1
   end
 
-  test "clicking a column sort header preserves the active filters and points at the toggled direction" do
-    SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
-    seed_reconciled_dataset
-
-    get :index, params: { project_id: @project.id, date_preset: 'this_month', sort: 'ticket', sort_dir: 'desc' }
-
-    assert_select "th a[href*='sort=ticket'][href*='sort_dir=asc'][href*='date_preset=this_month']", 1
-  end
-
-  test "detail table pagination links preserve the active filters" do
+  test "column headers are client-side sort triggers (typed, no server round-trip link)" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
     list!(:viewer, @user.id)
     seed_reconciled_dataset
 
     get :index, params: { project_id: @project.id, date_preset: 'this_month' }
 
-    assert_response :success # pagination_links_full merges request.query_parameters automatically
+    assert_response :success
+    assert_select "th[data-sla-sort='ticket'][data-sla-sort-type='number']", 1
+    assert_select "th[data-sla-sort='result'][data-sla-sort-type='number']", 1
+    assert_select 'thead th a', 0 # sorting is client-side now — no per-header server links
+  end
+
+  test "the detail table renders every matching row for client-side pagination (no server pager)" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    list!(:viewer, @user.id)
+    seed_reconciled_dataset
+
+    get :index, params: { project_id: @project.id, date_preset: 'this_month' }
+
+    assert_response :success
+    assert_select '#sla-detail-pagination', 1
+    # All 5 rows are in the DOM for the client-side sorter/paginator to work over.
+    assert_select '#sla-detail-table-body tr[data-sla-row]', 5
   end
 
   test "deviation column is blank for every non-breach row and populated for the persisted breach row" do
@@ -531,7 +537,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
     issues.each_value { |issue| assert_select "#sla-detail-row-#{issue.id}", 0 }
   end
 
-  test "the per-page selector changes how many detail rows render per page" do
+  test "the per-page control offers the configured options; all rows render for client-side paging" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
     list!(:viewer, @user.id)
     tracker_id = @project.trackers.first.id
@@ -541,11 +547,15 @@ class SlaDashboardControllerTest < ActionController::TestCase
     end
 
     with_settings per_page_options: '2, 25, 50' do
-      get :index, params: { project_id: @project.id, per_page: 2 }
+      get :index, params: { project_id: @project.id }
     end
 
     assert_response :success
-    assert_select '#sla-detail-table-body tr[id^="sla-detail-row-"]', 2
+    # Page size is a client-side concern now, so all 4 rows are rendered; the dropdown exposes the
+    # admin's configured per-page options for the JS paginator to use.
+    assert_select '#sla-detail-per-page[data-sla-perpage]', 1
+    assert_select "#sla-detail-per-page option[value='2']", 1
+    assert_select '#sla-detail-table-body tr[data-sla-row]', 4
   end
 
   # --- the menu entry: seeing the dashboard means being shown the way to it --------------------

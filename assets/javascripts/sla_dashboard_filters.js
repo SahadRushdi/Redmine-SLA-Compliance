@@ -140,7 +140,7 @@
     var instance = new window.Datepicker(rangeEl, {
       rangePicker: true,
       autohide: true,
-      format: 'yyyy-mm-dd'
+      format: 'mm/dd/yyyy' // matches the My Time page's picker (Time Analytics plugin)
     });
     rangeEl.slaRangePicker = instance;
 
