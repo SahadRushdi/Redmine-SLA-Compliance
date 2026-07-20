@@ -1,14 +1,11 @@
 /* SLA dashboard charts (Step 6.3). All chart *data* is computed server-side from the sla_results
- * cache (Sla::ResultSummary / Sla::PriorityBreakdown / Sla::TrendSeries) and embedded as JSON in
- * each canvas's data-chart attribute - this file only builds Chart.js instances from that JSON
- * and wires the Daily/Weekly/Monthly toggle (a pure client-side re-render, all three granularities
- * are already in the trend payload). Same IIFE / idempotent-init / DOMContentLoaded convention as
- * sla_dashboard_filters.js. Chart.js v2 API (matches the chart.js version already vendored by
- * every other plugin in this Redmine install - see redmine_time_analytics / redmine_stats). */
+ * cache (Sla::ResultSummary / Sla::PriorityBreakdown) and embedded as JSON in each canvas's
+ * data-chart attribute - this file only builds Chart.js instances from that JSON. Same IIFE /
+ * idempotent-init / DOMContentLoaded convention as sla_dashboard_filters.js. Chart.js v2 API
+ * (matches the chart.js version already vendored by every other plugin in this Redmine install -
+ * see redmine_time_analytics / redmine_stats). */
 (function () {
   'use strict';
-
-  var state = { bound: false, trendChart: null, trendPayload: null };
 
   function byId(id) { return document.getElementById(id); }
 
@@ -55,10 +52,12 @@
     });
   }
 
-  // Centered white value label inside each stacked-bar segment (matching the reference design) -
-  // scoped to this one chart by id so it never draws on the donut/trend charts, which share the
-  // same global Chart.js instance. Segments too narrow for their own label (< ~18px) are skipped
-  // rather than overlapping neighbours illegibly.
+  // Two label passes on the priority chart (scoped to this one chart by id so it never draws on
+  // the donut, which shares the same global Chart.js instance):
+  //   1. white per-segment value centered inside each stacked segment wide enough to fit (< ~18px
+  //      segments are skipped rather than overlapping neighbours illegibly);
+  //   2. the per-row TOTAL (sum of every segment) in dark bold just past the right end of each
+  //      stack — matching the reference design's 27 / 74 / 111 at the end of each bar.
   function registerPriorityValueLabels() {
     if (Chart.plugins.getAll().some(function (p) { return p.id === 'slaPriorityValueLabels'; })) { return; }
 
@@ -68,25 +67,42 @@
         if (chart.canvas.id !== 'sla-priority-chart') { return; }
 
         var ctx = chart.ctx;
+        var datasets = chart.data.datasets;
+        var rowCount = (datasets[0] && datasets[0].data.length) || 0;
+        var totals = [], rowRight = [], rowY = [];
+        for (var i = 0; i < rowCount; i++) { totals[i] = 0; rowRight[i] = 0; rowY[i] = null; }
+
         ctx.save();
+
+        // Pass 1 — per-segment values, white, centered in each segment.
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 12px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        chart.data.datasets.forEach(function (dataset, datasetIndex) {
+        datasets.forEach(function (dataset, datasetIndex) {
           var meta = chart.getDatasetMeta(datasetIndex);
           if (meta.hidden) { return; }
 
           meta.data.forEach(function (bar, index) {
-            var value = dataset.data[index];
-            if (!value) { return; }
+            var value = dataset.data[index] || 0;
+            totals[index] += value;
+            if (bar._model.x > rowRight[index]) { rowRight[index] = bar._model.x; }
+            rowY[index] = bar._model.y;
 
+            if (!value) { return; }
             var width = bar._model.base - bar._model.x; // horizontalBar: base = left edge, x = right edge
             if (Math.abs(width) < 18) { return; }
-
             ctx.fillText(String(value), bar._model.x + width / 2, bar._model.y);
           });
+        });
+
+        // Pass 2 — per-row totals, dark gray, just past the right end of each stack.
+        ctx.fillStyle = '#374151'; // gray-700
+        ctx.textAlign = 'left';
+        totals.forEach(function (total, index) {
+          if (rowY[index] === null) { return; }
+          ctx.fillText(String(total), rowRight[index] + 8, rowY[index]);
         });
 
         ctx.restore();
@@ -101,6 +117,9 @@
     registerPriorityValueLabels();
 
     var payload = readPayload(canvas);
+    // Cap bar height so a single/few priorities render as slim bars (reference design) instead of
+    // stretching to fill the whole card.
+    payload.datasets.forEach(function (dataset) { dataset.maxBarThickness = 26; });
     new Chart(canvas.getContext('2d'), {
       type: 'horizontalBar',
       data: { labels: payload.labels, datasets: payload.datasets },
@@ -108,9 +127,13 @@
         responsive: true,
         maintainAspectRatio: false,
         legend: { display: false }, // same shared legend as the donut - identical color mapping
+        layout: { padding: { right: 40 } }, // room for the per-row total labels drawn past each bar
+        // No outer frame/gridlines (reference design): hide the x scale entirely and drop the
+        // y-axis border/gridlines, keeping only the priority category labels.
         scales: {
-          xAxes: [{ stacked: true, ticks: { beginAtZero: true, precision: 0 } }],
-          yAxes: [{ stacked: true }]
+          xAxes: [{ stacked: true, display: false, gridLines: { display: false, drawBorder: false },
+                    ticks: { beginAtZero: true, precision: 0, display: false } }],
+          yAxes: [{ stacked: true, gridLines: { display: false, drawBorder: false } }]
         },
         tooltips: {
           callbacks: {
@@ -124,82 +147,10 @@
     });
   }
 
-  function trendDatasets(payload, granularity) {
-    var bucket = payload[granularity];
-    return {
-      labels: bucket.labels,
-      datasets: [
-        { label: payload.labelCreated, data: bucket.created, borderColor: payload.colors.created,
-          backgroundColor: payload.colors.created, fill: false, tension: 0.2, pointRadius: 2 },
-        { label: payload.labelResolved, data: bucket.resolved, borderColor: payload.colors.resolved,
-          backgroundColor: payload.colors.resolved, fill: false, tension: 0.2, pointRadius: 2 }
-      ]
-    };
-  }
-
-  function initTrend() {
-    var canvas = byId('sla-trend-chart');
-    if (!canvas || canvas.slaChartInitialized || !window.Chart) { return; }
-    canvas.slaChartInitialized = true;
-
-    state.trendPayload = readPayload(canvas);
-    var initial = trendDatasets(state.trendPayload, 'daily');
-    state.trendChart = new Chart(canvas.getContext('2d'), {
-      type: 'line',
-      data: initial,
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        legend: { display: false }, // rendered as a small static legend in ERB above the canvas
-        scales: {
-          xAxes: [{ ticks: { autoSkip: true, maxTicksLimit: 12 } }],
-          yAxes: [{ ticks: { beginAtZero: true, precision: 0 } }]
-        }
-      }
-    });
-  }
-
-  function setActiveGranularityButton(button) {
-    var group = byId('sla-trend-granularity');
-    if (!group) { return; }
-    Array.prototype.forEach.call(group.querySelectorAll('[data-sla-trend-granularity]'), function (btn) {
-      var active = btn === button;
-      btn.classList.toggle('tw-bg-primary-600', active);
-      btn.classList.toggle('tw-text-white', active);
-      btn.classList.toggle('tw-border-primary-600', active);
-      btn.classList.toggle('tw-z-10', active);
-      btn.classList.toggle('tw-bg-white', !active);
-      btn.classList.toggle('tw-text-gray-600', !active);
-      btn.classList.toggle('tw-border-gray-300', !active);
-    });
-  }
-
-  function switchGranularity(button) {
-    if (!state.trendChart || !state.trendPayload) { return; }
-    var granularity = button.getAttribute('data-sla-trend-granularity');
-    var next = trendDatasets(state.trendPayload, granularity);
-    state.trendChart.data.labels = next.labels;
-    state.trendChart.data.datasets[0].data = next.datasets[0].data;
-    state.trendChart.data.datasets[1].data = next.datasets[1].data;
-    state.trendChart.update();
-    setActiveGranularityButton(button);
-  }
-
-  function bindOnce() {
-    if (state.bound) { return; }
-    state.bound = true;
-
-    jQuery(document).on('click', '[data-sla-trend-granularity]', function () {
-      switchGranularity(this);
-    });
-  }
-
   function init() {
-    if (!byId('sla-donut-chart') && !byId('sla-priority-chart') && !byId('sla-trend-chart')) { return; }
+    if (!byId('sla-donut-chart') && !byId('sla-priority-chart')) { return; }
     initDonut();
     initPriorityChart();
-    initTrend();
-    bindOnce();
   }
 
   window.slaDashboardCharts = { init: init };

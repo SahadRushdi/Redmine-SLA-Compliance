@@ -5,7 +5,7 @@
 <%# Card values carry stable ids (also useful for functional tests, since assigns() isn't %>
 <%# available in this Rails version without rails-controller-testing). %>
 <div class="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 lg:tw-grid-cols-5 tw-gap-4 tw-mb-6">
-  <div class="tw-rounded-lg tw-border tw-p-4 tw-flex tw-items-start tw-gap-3 tw-transition-shadow hover:tw-shadow-md <%= sla_card_color_classes(:total) %>">
+  <div class="tw-rounded-xl tw-border tw-p-4 tw-flex tw-items-start tw-gap-3 tw-shadow-sm tw-transition-shadow hover:tw-shadow-md <%= sla_card_color_classes(:total) %>">
     <span class="tw-inline-flex tw-items-center tw-justify-center tw-w-10 tw-h-10 tw-rounded-full tw-flex-shrink-0 <%= sla_card_icon_classes(:total) %>"><%= sla_card_icon(:total) %></span>
     <div class="tw-min-w-0">
       <p class="tw-text-sm tw-font-medium"><%= sla_card_label(:total) %></p>
@@ -14,7 +14,7 @@
     </div>
   </div>
 
-  <div class="tw-rounded-lg tw-border tw-p-4 tw-flex tw-items-start tw-gap-3 tw-transition-shadow hover:tw-shadow-md <%= sla_card_color_classes(:met) %>">
+  <div class="tw-rounded-xl tw-border tw-p-4 tw-flex tw-items-start tw-gap-3 tw-shadow-sm tw-transition-shadow hover:tw-shadow-md <%= sla_card_color_classes(:met) %>">
     <span class="tw-inline-flex tw-items-center tw-justify-center tw-w-10 tw-h-10 tw-rounded-full tw-flex-shrink-0 <%= sla_card_icon_classes(:met) %>"><%= sla_card_icon(:met) %></span>
     <div class="tw-min-w-0">
       <p class="tw-text-sm tw-font-medium"><%= sla_card_label(:met) %></p>
@@ -29,7 +29,7 @@
     </div>
   </div>
 
-  <div class="tw-rounded-lg tw-border tw-p-4 tw-flex tw-items-start tw-gap-3 tw-transition-shadow hover:tw-shadow-md <%= sla_card_color_classes(:breached) %>">
+  <div class="tw-rounded-xl tw-border tw-p-4 tw-flex tw-items-start tw-gap-3 tw-shadow-sm tw-transition-shadow hover:tw-shadow-md <%= sla_card_color_classes(:breached) %>">
     <span class="tw-inline-flex tw-items-center tw-justify-center tw-w-10 tw-h-10 tw-rounded-full tw-flex-shrink-0 <%= sla_card_icon_classes(:breached) %>"><%= sla_card_icon(:breached) %></span>
     <div class="tw-min-w-0">
       <p class="tw-text-sm tw-font-medium"><%= sla_card_label(:breached) %></p>
@@ -40,7 +40,7 @@
     </div>
   </div>
 
-  <div class="tw-rounded-lg tw-border tw-p-4 tw-flex tw-items-start tw-gap-3 tw-transition-shadow hover:tw-shadow-md <%= sla_card_color_classes(:at_risk) %>">
+  <div class="tw-rounded-xl tw-border tw-p-4 tw-flex tw-items-start tw-gap-3 tw-shadow-sm tw-transition-shadow hover:tw-shadow-md <%= sla_card_color_classes(:at_risk) %>">
     <span class="tw-inline-flex tw-items-center tw-justify-center tw-w-10 tw-h-10 tw-rounded-full tw-flex-shrink-0 <%= sla_card_icon_classes(:at_risk) %>"><%= sla_card_icon(:at_risk) %></span>
     <div class="tw-min-w-0">
       <p class="tw-text-sm tw-font-medium"><%= sla_card_label(:at_risk) %></p>
@@ -48,7 +48,7 @@
     </div>
   </div>
 
-  <div class="tw-rounded-lg tw-border tw-p-4 tw-flex tw-items-start tw-gap-3 tw-transition-shadow hover:tw-shadow-md <%= sla_card_color_classes(:no_sla) %>">
+  <div class="tw-rounded-xl tw-border tw-p-4 tw-flex tw-items-start tw-gap-3 tw-shadow-sm tw-transition-shadow hover:tw-shadow-md <%= sla_card_color_classes(:no_sla) %>">
     <span class="tw-inline-flex tw-items-center tw-justify-center tw-w-10 tw-h-10 tw-rounded-full tw-flex-shrink-0 <%= sla_card_icon_classes(:no_sla) %>"><%= sla_card_icon(:no_sla) %></span>
     <div class="tw-min-w-0">
       <p class="tw-text-sm tw-font-medium"><%= sla_card_label(:no_sla) %></p>

@@ -191,7 +191,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
     SlaPolicy.create!(project_id: @project.id, enabled: true)
     list!(:viewer, @user.id)
 
-    get :index, params: { project_id: @project.id, tracker_id: 999 }
+    get :index, params: { project_id: @project.id, tracker_ids: [999] }
 
     assert_response :success
     # 999 isn't a configured tracker (no SlaDefinition exists for it), so it shouldn't even be
@@ -278,7 +278,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   # --- Step 6.3: charts --------------------------------------------------------------------------
 
-  test "renders exactly one donut, one priority bar, and one trend canvas element" do
+  test "renders exactly one donut and one priority bar canvas element" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
     list!(:viewer, @user.id)
     seed_reconciled_dataset
@@ -288,7 +288,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_response :success
     assert_select '#sla-donut-chart', 1
     assert_select '#sla-priority-chart', 1
-    assert_select '#sla-trend-chart', 1
+    assert_select '#sla-trend-chart', 0
   end
 
   test "the donut's embedded data sums to @counts.total, with at_risk as a separate field, not a fourth category" do

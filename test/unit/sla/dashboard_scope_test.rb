@@ -39,7 +39,7 @@ class Sla::DashboardScopeTest < ActiveSupport::TestCase
     make_result(matching)
     make_result(other)
 
-    scope = Sla::DashboardScope.call(project_ids: [1], tracker_id: 1)
+    scope = Sla::DashboardScope.call(project_ids: [1], tracker_ids: [1])
 
     assert_equal [matching.id], scope.pluck(:issue_id)
   end
@@ -74,7 +74,7 @@ class Sla::DashboardScopeTest < ActiveSupport::TestCase
     make_result(matches_all)
     make_result(wrong_tracker)
 
-    scope = Sla::DashboardScope.call(project_ids: [1], tracker_id: 1, priority_ids: [4],
+    scope = Sla::DashboardScope.call(project_ids: [1], tracker_ids: [1], priority_ids: [4],
                                      date_range: Date.new(2026, 7, 1)..Date.new(2026, 7, 31))
 
     assert_equal [matches_all.id], scope.pluck(:issue_id)

@@ -103,9 +103,30 @@ textarea:focus {
  * their existing neutral grey look (the shared .ts-wrapper .ts-control rule above) untouched —
  * an ID-scoped selector outranks that rule's class/element selectors without needing !important.
  */
+
+/*
+ * Strip the box the Tracker/Priority/Project selects' own `sla_input_classes` leak onto the
+ * TomSelect wrapper — TomSelect copies the original <select>'s classes onto `.ts-wrapper`, so
+ * `tw-bg-gray-50 tw-border tw-border-gray-300 tw-rounded-lg tw-p-2.5` render a gray padded box
+ * AROUND the real white `.ts-control` below (and its padding crowds the Export CSV button). The
+ * control provides its own border/radius/padding, so the wrapper must be a bare container.
+ * ID-scoped (`1,1,0`) so it outranks the copied `tw-*` utilities without !important.
+ */
+#sla-filter-form .ts-wrapper {
+  background-color: transparent;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+/*
+ * Neutral at rest, primary-blue only on focus/click — the fields carry a plain gray border until
+ * the user interacts (the previous permanent blue border read as "always active"). Applies to the
+ * Tracker/Priority TomSelect controls and the custom-range From/To text inputs alike.
+ */
 #sla-filter-form .ts-wrapper .ts-control {
   background-color: #ffffff;
-  border-color: #3b82f6; /* primary-500 */
+  border-color: #d1d5db; /* gray-300 */
 }
 
 #sla-filter-form .ts-wrapper.focus .ts-control {
@@ -115,10 +136,28 @@ textarea:focus {
 
 #sla-filter-form input[type='text'] {
   background-color: #ffffff;
-  border-color: #3b82f6;
+  border-color: #d1d5db; /* gray-300 */
 }
 
 #sla-filter-form input[type='text']:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px #2563eb;
+}
+
+/*
+ * Detail-table "Per page" dropdown — replace the OS-native <select> with the same clean white
+ * TomSelect used by the filters (neutral at rest, blue on focus, themed `.ts-dropdown` list when
+ * open) so the open menu reads as a proper styled component instead of a browser default.
+ */
+#sla-detail-perpage .ts-wrapper { background-color: transparent; border: 0; padding: 0; box-shadow: none; }
+
+#sla-detail-perpage .ts-control {
+  background-color: #ffffff;
+  border-color: #d1d5db; /* gray-300 */
+  min-width: 4.5rem;
+}
+
+#sla-detail-perpage .ts-wrapper.focus .ts-control {
   border-color: #2563eb;
   box-shadow: 0 0 0 1px #2563eb;
 }

@@ -5,12 +5,10 @@
 <%# repeats only the dot+label key (no numbers) so the same counts never have to stay in sync in %>
 <%# two places. Both charts disable Chart.js's own native legend (see sla_dashboard_charts.js). %>
 <div class="tw-grid tw-grid-cols-1 lg:tw-grid-cols-2 tw-gap-6 tw-mb-6">
-  <div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-shadow-sm tw-p-4">
+  <div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-shadow-sm tw-p-5">
     <%= render 'sla_dashboard/priority_chart' %>
   </div>
-  <div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-shadow-sm tw-p-4">
+  <div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-shadow-sm tw-p-5">
     <%= render 'sla_dashboard/donut_chart' %>
   </div>
 </div>
-
-<%= render 'sla_dashboard/trend_chart' %>

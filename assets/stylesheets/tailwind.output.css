@@ -852,9 +852,6 @@
 .sla-plugin .tw-hidden {
     display: none;
 }
-.sla-plugin .tw-h-0\.5 {
-    height: 0.125rem;
-}
 .sla-plugin .tw-h-10 {
     height: 2.5rem;
 }
@@ -876,9 +873,6 @@
 .sla-plugin .tw-h-full {
     height: 100%;
 }
-.sla-plugin .tw-min-h-\[16rem\] {
-    min-height: 16rem;
-}
 .sla-plugin .tw-w-10 {
     width: 2.5rem;
 }
@@ -887,9 +881,6 @@
 }
 .sla-plugin .tw-w-2\.5 {
     width: 0.625rem;
-}
-.sla-plugin .tw-w-3 {
-    width: 0.75rem;
 }
 .sla-plugin .tw-w-4 {
     width: 1rem;
@@ -900,17 +891,14 @@
 .sla-plugin .tw-w-5 {
     width: 1.25rem;
 }
-.sla-plugin .tw-w-56 {
-    width: 14rem;
+.sla-plugin .tw-w-80 {
+    width: 20rem;
 }
 .sla-plugin .tw-w-full {
     width: 100%;
 }
 .sla-plugin .tw-min-w-0 {
     min-width: 0px;
-}
-.sla-plugin .tw-min-w-\[10rem\] {
-    min-width: 10rem;
 }
 .sla-plugin .tw-min-w-\[12rem\] {
     min-width: 12rem;
@@ -959,9 +947,6 @@
 }
 .sla-plugin .tw-items-start {
     align-items: flex-start;
-}
-.sla-plugin .tw-items-end {
-    align-items: flex-end;
 }
 .sla-plugin .tw-items-center {
     align-items: center;
@@ -1027,6 +1012,9 @@
 .sla-plugin .tw-rounded-lg {
     border-radius: 0.5rem;
 }
+.sla-plugin .tw-rounded-xl {
+    border-radius: 0.75rem;
+}
 .sla-plugin .tw-rounded-l-lg {
     border-top-left-radius: 0.5rem;
     border-bottom-left-radius: 0.5rem;
@@ -1050,9 +1038,9 @@
 .sla-plugin .tw-border-dashed {
     border-style: dashed;
 }
-.sla-plugin .tw-border-amber-200 {
+.sla-plugin .tw-border-amber-300 {
     --tw-border-opacity: 1;
-    border-color: rgb(253 230 138 / var(--tw-border-opacity, 1));
+    border-color: rgb(252 211 77 / var(--tw-border-opacity, 1));
 }
 .sla-plugin .tw-border-blue-200 {
     --tw-border-opacity: 1;
@@ -1070,21 +1058,21 @@
     --tw-border-opacity: 1;
     border-color: rgb(209 213 219 / var(--tw-border-opacity, 1));
 }
-.sla-plugin .tw-border-green-200 {
+.sla-plugin .tw-border-green-300 {
     --tw-border-opacity: 1;
-    border-color: rgb(188 240 218 / var(--tw-border-opacity, 1));
+    border-color: rgb(132 225 188 / var(--tw-border-opacity, 1));
 }
-.sla-plugin .tw-border-primary-200 {
+.sla-plugin .tw-border-primary-300 {
     --tw-border-opacity: 1;
-    border-color: rgb(191 219 254 / var(--tw-border-opacity, 1));
+    border-color: rgb(147 197 253 / var(--tw-border-opacity, 1));
 }
 .sla-plugin .tw-border-primary-600 {
     --tw-border-opacity: 1;
     border-color: rgb(37 99 235 / var(--tw-border-opacity, 1));
 }
-.sla-plugin .tw-border-red-200 {
+.sla-plugin .tw-border-red-300 {
     --tw-border-opacity: 1;
-    border-color: rgb(251 213 213 / var(--tw-border-opacity, 1));
+    border-color: rgb(248 180 180 / var(--tw-border-opacity, 1));
 }
 .sla-plugin .tw-bg-amber-100 {
     --tw-bg-opacity: 1;
@@ -1197,14 +1185,17 @@
     padding-top: 2rem;
     padding-bottom: 2rem;
 }
+.sla-plugin .tw-pl-10 {
+    padding-left: 2.5rem;
+}
 .sla-plugin .tw-pl-2\.5 {
     padding-left: 0.625rem;
 }
-.sla-plugin .tw-pl-9 {
-    padding-left: 2.25rem;
-}
 .sla-plugin .tw-pr-1\.5 {
     padding-right: 0.375rem;
+}
+.sla-plugin .tw-pr-3 {
+    padding-right: 0.75rem;
 }
 .sla-plugin .tw-pr-4 {
     padding-right: 1rem;
@@ -1426,9 +1417,28 @@
  * their existing neutral grey look (the shared .ts-wrapper .ts-control rule above) untouched —
  * an ID-scoped selector outranks that rule's class/element selectors without needing !important.
  */
+/*
+ * Strip the box the Tracker/Priority/Project selects' own `sla_input_classes` leak onto the
+ * TomSelect wrapper — TomSelect copies the original <select>'s classes onto `.ts-wrapper`, so
+ * `tw-bg-gray-50 tw-border tw-border-gray-300 tw-rounded-lg tw-p-2.5` render a gray padded box
+ * AROUND the real white `.ts-control` below (and its padding crowds the Export CSV button). The
+ * control provides its own border/radius/padding, so the wrapper must be a bare container.
+ * ID-scoped (`1,1,0`) so it outranks the copied `tw-*` utilities without !important.
+ */
+.sla-plugin #sla-filter-form .ts-wrapper {
+  background-color: transparent;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}
+/*
+ * Neutral at rest, primary-blue only on focus/click — the fields carry a plain gray border until
+ * the user interacts (the previous permanent blue border read as "always active"). Applies to the
+ * Tracker/Priority TomSelect controls and the custom-range From/To text inputs alike.
+ */
 .sla-plugin #sla-filter-form .ts-wrapper .ts-control {
   background-color: #ffffff;
-  border-color: #3b82f6; /* primary-500 */
+  border-color: #d1d5db; /* gray-300 */
 }
 .sla-plugin #sla-filter-form .ts-wrapper.focus .ts-control {
   border-color: #2563eb; /* primary-600 */
@@ -1436,9 +1446,24 @@
 }
 .sla-plugin #sla-filter-form input[type='text'] {
   background-color: #ffffff;
-  border-color: #3b82f6;
+  border-color: #d1d5db; /* gray-300 */
 }
 .sla-plugin #sla-filter-form input[type='text']:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px #2563eb;
+}
+/*
+ * Detail-table "Per page" dropdown — replace the OS-native <select> with the same clean white
+ * TomSelect used by the filters (neutral at rest, blue on focus, themed `.ts-dropdown` list when
+ * open) so the open menu reads as a proper styled component instead of a browser default.
+ */
+.sla-plugin #sla-detail-perpage .ts-wrapper { background-color: transparent; border: 0; padding: 0; box-shadow: none; }
+.sla-plugin #sla-detail-perpage .ts-control {
+  background-color: #ffffff;
+  border-color: #d1d5db; /* gray-300 */
+  min-width: 4.5rem;
+}
+.sla-plugin #sla-detail-perpage .ts-wrapper.focus .ts-control {
   border-color: #2563eb;
   box-shadow: 0 0 0 1px #2563eb;
 }

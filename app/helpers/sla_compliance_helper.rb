@@ -28,12 +28,14 @@ module SlaComplianceHelper
 
   # --- Step 6.2: summary cards ---------------------------------------------------------------
 
+  # Border one step more saturated than the pastel fill (-300 vs -50 bg) so each card reads as a
+  # clearly delineated tile against the near-white page, matching the reference design.
   SLA_CARD_COLOR_CLASSES = {
-    total: 'tw-bg-primary-50 tw-text-primary-700 tw-border-primary-200',
-    met: 'tw-bg-green-50 tw-text-green-700 tw-border-green-200',
-    breached: 'tw-bg-red-50 tw-text-red-700 tw-border-red-200',
-    at_risk: 'tw-bg-amber-50 tw-text-amber-700 tw-border-amber-200',
-    no_sla: 'tw-bg-gray-50 tw-text-gray-700 tw-border-gray-200'
+    total: 'tw-bg-primary-50 tw-text-primary-700 tw-border-primary-300',
+    met: 'tw-bg-green-50 tw-text-green-700 tw-border-green-300',
+    breached: 'tw-bg-red-50 tw-text-red-700 tw-border-red-300',
+    at_risk: 'tw-bg-amber-50 tw-text-amber-700 tw-border-amber-300',
+    no_sla: 'tw-bg-gray-50 tw-text-gray-700 tw-border-gray-300'
   }.freeze
 
   def sla_card_color_classes(state)
@@ -93,13 +95,9 @@ module SlaComplianceHelper
   # --- Step 6.3: chart colors ----------------------------------------------------------------
 
   # Real Tableau 10 hex values (Global Rule 7), chosen so the compliance-state colors
-  # simultaneously match the summary cards' semantic palette (green/red/orange/gray) and the
-  # trend chart's Created line matches CLAUDE.md's explicit "#4E79A7 is intentional chart data
-  # encoding" callout. Resolved deliberately uses a color (teal) not already carrying
-  # compliance-state meaning elsewhere on the page.
+  # simultaneously match the summary cards' semantic palette (green/red/orange/gray).
   SLA_CHART_COLORS = {
-    met: '#59A14F', at_risk: '#F28E2B', breached: '#E15759', no_sla: '#BAB0AC',
-    created: '#4E79A7', resolved: '#76B7B2'
+    met: '#59A14F', at_risk: '#F28E2B', breached: '#E15759', no_sla: '#BAB0AC'
   }.freeze
 
   def sla_chart_color(key)
@@ -139,9 +137,9 @@ module SlaComplianceHelper
       end
     end
 
-    if filters[:tracker_id]
-      tracker = available_trackers.detect { |t| t.id == filters[:tracker_id] }
-      chips << { label: tracker.name, url: sla_dashboard_url_without(filters, project, :tracker_id, nil) } if tracker
+    filters[:tracker_ids].each do |tid|
+      tracker = available_trackers.detect { |t| t.id == tid }
+      chips << { label: tracker.name, url: sla_dashboard_url_without(filters, project, :tracker_ids, tid) } if tracker
     end
 
     filters[:priority_ids].each do |pid|
@@ -190,7 +188,7 @@ module SlaComplianceHelper
   def sla_dashboard_query_params(filters)
     {
       project_ids: filters[:project_ids],
-      tracker_id: filters[:tracker_id],
+      tracker_ids: filters[:tracker_ids],
       priority_ids: filters[:priority_ids],
       date_preset: filters[:date_preset],
       from: filters[:date_range]&.first,
@@ -201,9 +199,9 @@ module SlaComplianceHelper
   def sla_dashboard_url_without(filters, project, key, value)
     query = sla_dashboard_query_params(filters)
     case key
-    when :project_ids, :priority_ids then query[key] = Array(query[key]) - [value]
-    when :tracker_id then query[:tracker_id] = nil
-                           query[:priority_ids] = []
+    # Removing a tracker leaves priority_ids untouched — resolve_filters re-clamps them against the
+    # remaining trackers' priorities (and drops them all if the last tracker is removed).
+    when :project_ids, :priority_ids, :tracker_ids then query[key] = Array(query[key]) - [value]
     when :date_preset then query[:date_preset] = nil
                             query[:from] = nil
                             query[:to] = nil

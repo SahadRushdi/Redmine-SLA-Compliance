@@ -14,7 +14,7 @@
      ['first_response', l(:field_sla_detail_first_response)], ['resolution', l(:field_sla_detail_resolution)],
      ['result', l(:field_sla_detail_result)], ['deviation', l(:field_sla_detail_deviation)]
    ] %>
-<div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-p-4 tw-shadow-sm">
+<div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-p-5 tw-shadow-sm">
   <div class="tw-flex tw-items-center tw-justify-between tw-flex-wrap tw-gap-3 tw-mb-4">
     <h3 class="tw-text-base tw-font-semibold tw-text-gray-900"><%= l(:label_sla_detail_table) %></h3>
 
@@ -31,10 +31,15 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
         </svg>
         <%= search_field_tag :q, @search_query, id: 'sla-detail-search', placeholder: l(:label_sla_detail_search_placeholder),
-              class: "#{sla_input_classes} tw-pl-9 tw-w-56" %>
+              class: 'tw-bg-white tw-border tw-border-gray-300 tw-text-gray-900 tw-text-sm tw-rounded-lg ' \
+                     'focus:tw-ring-primary-500 focus:tw-border-primary-500 tw-pl-10 tw-pr-3 tw-py-2.5 tw-w-80' %>
       <% end %>
 
-      <div class="tw-flex tw-items-center tw-gap-2 tw-text-sm tw-text-gray-500">
+      <%# `data-sla-select` upgrades this to a TomSelect (sla_dashboard_filters.js#initSingleSelects) %>
+      <%# so the open menu is a themed component, not the OS-native dropdown. Each option's value is %>
+      <%# the target URL; TomSelect fires a native change on selection, which the inline onchange %>
+      <%# navigates to (and it still works as a plain <select> if JS is unavailable). %>
+      <div id="sla-detail-perpage" class="tw-flex tw-items-center tw-gap-2 tw-text-sm tw-text-gray-500">
         <label for="sla-detail-per-page" class="tw-whitespace-nowrap"><%= l(:label_sla_detail_per_page) %></label>
         <%= select_tag 'sla-detail-per-page',
               options_for_select(Setting.per_page_options_array.map { |n|
@@ -43,7 +48,8 @@
               }, sla_detail_table_url(@filters, @project, state: current_state, sort: @sort_column, sort_dir: @sort_direction,
                                        q: @search_query, per_page: @detail_pages.per_page)),
               id: 'sla-detail-per-page', onchange: 'window.location.href = this.value;',
-              class: 'tw-bg-gray-50 tw-border tw-border-gray-300 tw-text-gray-900 tw-text-sm tw-rounded-lg focus:tw-ring-primary-500 focus:tw-border-primary-500 tw-p-2' %>
+              data: { 'sla-select': true },
+              class: 'tw-bg-white tw-border tw-border-gray-300 tw-text-gray-900 tw-text-sm tw-rounded-lg focus:tw-ring-primary-500 focus:tw-border-primary-500 tw-p-2' %>
       </div>
     </div>
   </div>

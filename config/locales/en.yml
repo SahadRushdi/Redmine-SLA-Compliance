@@ -19,6 +19,7 @@ en:
   label_sla_filter_tracker: "Tracker"
   label_sla_filter_priority: "Priority"
   label_sla_filter_all_trackers: "All trackers"
+  label_sla_filter_all_priorities: "All priorities"
   label_sla_date_preset_this_week: "This Week"
   label_sla_date_preset_last_week: "Last Week"
   label_sla_date_preset_this_month: "This Month"
@@ -44,15 +45,9 @@ en:
   # --- Dashboard charts (Phase 6, Step 6.3) -------------------------------------------------
   label_sla_chart_compliance_split: "Compliance Split"
   label_sla_chart_priority_breakdown: "Tickets by Priority"
-  label_sla_chart_trend: "Created vs Resolved"
   label_sla_chart_met_on_track: "SLA Met (on track)"
   label_sla_chart_met_at_risk: "SLA Met (at risk)"
   label_sla_chart_met_at_risk_hint: "of Met"
-  label_sla_chart_created: "Created"
-  label_sla_chart_resolved: "Resolved"
-  label_sla_trend_daily: "Daily"
-  label_sla_trend_weekly: "Weekly"
-  label_sla_trend_monthly: "Monthly"
 
   # --- Dashboard detail table (Phase 6, Step 6.4) -------------------------------------------
   label_sla_detail_table: "Ticket-Level Detail"

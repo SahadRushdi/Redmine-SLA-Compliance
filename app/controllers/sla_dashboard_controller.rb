@@ -51,14 +51,13 @@ class SlaDashboardController < ApplicationController
 
   def render_dashboard
     resolve_filters
-    @scope  = Sla::DashboardScope.call(project_ids: @filters[:project_ids], tracker_id: @filters[:tracker_id],
+    @scope  = Sla::DashboardScope.call(project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
                                         priority_ids: @filters[:priority_ids], date_range: @filters[:date_range])
     @counts = Sla::ResultSummary.call(scope: @scope)
 
-    # Step 6.3 — charts. Both read the same filtered @scope; no live SLA computation, only
+    # Step 6.3 — charts. Reads the same filtered @scope; no live SLA computation, only
     # aggregation over the sla_results cache (Global Rule 4).
     @priority_breakdown = Sla::PriorityBreakdown.call(scope: @scope)
-    @trend              = Sla::TrendSeries.call(scope: @scope, date_range: @filters[:date_range])
 
     # Step 6.4 — detail table.
     build_detail_table
@@ -83,10 +82,9 @@ class SlaDashboardController < ApplicationController
     project_ids = permitted_ids if project_ids.empty?
 
     @available_trackers = configured_trackers(project_ids)
-    tracker_id = params[:tracker_id].presence&.to_i
-    tracker_id = nil unless @available_trackers.map(&:id).include?(tracker_id)
+    tracker_ids = Array(params[:tracker_ids]).map(&:to_i) & @available_trackers.map(&:id)
 
-    @available_priorities = tracker_id ? configured_priorities(project_ids, tracker_id) : IssuePriority.none
+    @available_priorities = tracker_ids.any? ? configured_priorities(project_ids, tracker_ids) : IssuePriority.none
     priority_ids = Array(params[:priority_ids]).map(&:to_i) & @available_priorities.map(&:id)
 
     date_preset = params[:date_preset].presence
@@ -94,7 +92,7 @@ class SlaDashboardController < ApplicationController
 
     @filters = {
       project_ids: project_ids,
-      tracker_id: tracker_id,
+      tracker_ids: tracker_ids,
       priority_ids: priority_ids,
       date_preset: date_preset,
       date_range: resolve_date_range(date_preset, params[:from], params[:to])
@@ -109,9 +107,11 @@ class SlaDashboardController < ApplicationController
     Tracker.where(id: tracker_ids).sorted
   end
 
-  def configured_priorities(project_ids, tracker_id)
+  # Union of the priorities configured across every selected tracker (a multi-tracker selection
+  # can span several via per-project inheritance), minus the admin's "unclassified" priority.
+  def configured_priorities(project_ids, tracker_ids)
     priority_ids = effective_policies(project_ids).flat_map do |p|
-      p.sla_definitions.where(tracker_id: tracker_id).distinct.pluck(:priority_id)
+      p.sla_definitions.where(tracker_id: tracker_ids).distinct.pluck(:priority_id)
     end.uniq - [Sla::PluginSettings.unclassified_priority_id]
     IssuePriority.where(id: priority_ids).sorted
   end

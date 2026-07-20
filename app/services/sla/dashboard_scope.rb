@@ -11,21 +11,21 @@ module Sla
   # valid — the caller (SlaDashboardController#resolve_filters) is responsible for clamping
   # user-submitted ids against what's actually permitted/configured before calling this.
   class DashboardScope
-    def self.call(project_ids:, tracker_id: nil, priority_ids: [], date_range: nil)
-      new(project_ids: project_ids, tracker_id: tracker_id, priority_ids: priority_ids,
+    def self.call(project_ids:, tracker_ids: [], priority_ids: [], date_range: nil)
+      new(project_ids: project_ids, tracker_ids: tracker_ids, priority_ids: priority_ids,
           date_range: date_range).call
     end
 
-    def initialize(project_ids:, tracker_id: nil, priority_ids: [], date_range: nil)
+    def initialize(project_ids:, tracker_ids: [], priority_ids: [], date_range: nil)
       @project_ids = project_ids
-      @tracker_id = tracker_id
+      @tracker_ids = tracker_ids
       @priority_ids = priority_ids
       @date_range = date_range
     end
 
     def call
       scope = SlaResult.joins(:issue).where(project_id: @project_ids)
-      scope = scope.where(issues: { tracker_id: @tracker_id }) if @tracker_id
+      scope = scope.where(issues: { tracker_id: @tracker_ids }) if @tracker_ids.present?
       scope = scope.where(issues: { priority_id: @priority_ids }) if @priority_ids.present?
       scope = scope.where(issues: { created_on: @date_range }) if @date_range
       scope
