@@ -323,11 +323,20 @@
   color: #1d4ed8;
 }
 /* The days BETWEEN From and To - the linked-range tint that only exists because the two inputs
-   share one DateRangePicker. flowbite.min.js already strips this cell's rounding at render time
-   (it removes rounded-base/-s/-e when a cell becomes .range), so square corners need no CSS here. */
+   share one DateRangePicker.
+   border-radius: 0 is required here, not decorative: flowbite.min.js strips ITS OWN rounding
+   classes (rounded-base/-s/-e) when a cell becomes .range, but those classes do nothing in this
+   build anyway (unprefixed). The rounding these cells actually have comes from THIS file's own
+   base `.datepicker-cell { border-radius: 0.5rem }` rule, which nothing was resetting for plain
+   .range cells - at every internal grid line where four rounded-corner range cells meet, each
+   cell's rounded corner leaves a small notch, and together the four notches show through as a
+   tiny diamond/star of the popup's white background at that intersection (the "sparkle" look
+   reported against the light-blue range band - a border-radius bug, not an overlap/positioning
+   one, unlike the two previous rounds' fixes). */
 .sla-plugin .datepicker-cell.range {
   background-color: #dbeafe; /* primary-100 */
   color: #1d4ed8; /* primary-700 */
+  border-radius: 0;
 }
 .sla-plugin .datepicker-cell.range:hover,
 .sla-plugin .datepicker-cell.range.focused {
