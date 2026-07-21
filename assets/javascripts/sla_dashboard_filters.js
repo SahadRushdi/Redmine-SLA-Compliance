@@ -6,7 +6,7 @@
   'use strict';
 
   var AUTO_APPLY_DEBOUNCE_MS = 700;
-  var state = { bound: false, debounceTimer: null };
+  var state = { bound: false, debounceTimer: null, rangeOutsideCloseBound: false };
 
   function byId(id) { return document.getElementById(id); }
 
@@ -176,7 +176,16 @@
     var inner = instance.getDatepickerInstance && instance.getDatepickerInstance();
     var datepickers = (inner && inner.datepickers) || [];
     datepickers.forEach(function (dp) {
-      dp.setOptions({ todayHighlight: true });
+      // showOnFocus/showOnClick: false hands ALL opening/closing over to bindManualRangeToggle
+      // below, instead of Flowbite's own triggers. This isn't a style preference - Flowbite's
+      // built-in autohide (onClickOutside in flowbite.min.js) starts with
+      // `if (element !== document.activeElement) return;`, and by the time that listener runs for
+      // the FROM picker, clicking TO has already moved focus there, so the guard is always true
+      // and hide() never gets called. Both popups stay open and overlap (visibly, since they're
+      // both `position: absolute` and anchored to adjacent inputs) - the exact same bug the
+      // time_analytics plugin's own range picker (My Time / My Team pages) hit and works around
+      // with this identical manual-toggle approach, not a new pattern invented here.
+      dp.setOptions({ todayHighlight: true, showOnFocus: false, showOnClick: false, autohide: true });
       if (dp.picker && dp.picker.element) {
         dp.config.container = scope;
         scope.appendChild(dp.picker.element);
@@ -199,31 +208,61 @@
       input.addEventListener('change', submitDateRangeDebounced);
     });
 
-    bindSiblingPickerClose();
+    bindManualRangeToggle();
   }
 
-  // Flowbite's own `autohide` never closes the FROM popup when you click straight from FROM into
-  // TO (or vice versa): its outside-click check (onClickOutside in flowbite.min.js) bails out via
-  // `if (element !== document.activeElement) return;` before ever calling hide() - and by the time
-  // that click's listener runs, the browser has already moved focus to the OTHER input, so that
-  // guard is always true for the picker that should be closing. Both popups stay open and overlap
-  // (same bug the time_analytics plugin's own range picker works around with its own manual
-  // "hide the sibling" handler - this is that same fix, not a new pattern).
-  function bindSiblingPickerClose() {
-    var pairs = [['sla-filter-from', 'sla-filter-to'], ['sla-filter-to', 'sla-filter-from']];
-    pairs.forEach(function (pair) {
-      var input = byId(pair[0]);
-      var siblingId = pair[1];
-      if (!input) { return; }
-      // mousedown, not click/focus: it fires before the browser moves focus to this input, so the
-      // sibling's popup is gone before Flowbite's own show-on-focus opens this input's popup -
-      // closing it afterward would show it, then hide it, then show this one (a visible flicker).
-      input.addEventListener('mousedown', function () {
-        var sibling = byId(siblingId);
-        if (sibling && sibling.datepicker && sibling.datepicker.active) {
-          sibling.datepicker.hide();
+  // Full manual show/hide control for the two linked pickers, replacing Flowbite's own (broken,
+  // see above) showOnFocus/showOnClick/autohide triggers - same working pattern as the
+  // time_analytics plugin's My Time/My Team range pickers, ported here rather than duplicated
+  // per-view: one click handler per input (toggle this picker, always closing the sibling's
+  // first), Escape to close, and a document-level outside-click that closes both.
+  function bindManualRangeToggle() {
+    var from = byId('sla-filter-from');
+    var to = byId('sla-filter-to');
+
+    function bindToggle(input, sibling) {
+      if (!input || input.dataset.slaRangeToggleBound === '1') { return; }
+      input.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!input.datepicker) { return; }
+        if (sibling && sibling.datepicker && sibling.datepicker.active) { sibling.datepicker.hide(); }
+        if (input.datepicker.active) { input.datepicker.hide(); } else { input.datepicker.show(); }
+      });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && input.datepicker && input.datepicker.hide) {
+          input.datepicker.hide();
+          input.blur();
         }
       });
+      input.dataset.slaRangeToggleBound = '1';
+    }
+    bindToggle(from, to);
+    bindToggle(to, from);
+
+    // Neither input should open its picker just because the page loaded with focus already on
+    // it (autofocus, browser form-restore, tabbing through on page load before the user has
+    // actually clicked either field) - showOnFocus is already off, but this is a defensive
+    // belt-and-braces pass matching the time_analytics plugin's own suppressAutoOpen, run once
+    // synchronously and once after a short delay to also catch anything a slower-to-init browser
+    // extension/autofill triggers just after load.
+    function suppressAutoOpen() {
+      [from, to].forEach(function (input) {
+        if (input && document.activeElement === input) { input.blur(); }
+      });
+      hideRangePickers();
+    }
+    setTimeout(suppressAutoOpen, 0);
+    setTimeout(suppressAutoOpen, 120);
+
+    if (state.rangeOutsideCloseBound) { return; }
+    state.rangeOutsideCloseBound = true;
+    document.addEventListener('mousedown', function (e) {
+      var target = e.target;
+      var rangeEl = byId('sla-custom-range');
+      var insideRangeUi = (rangeEl && rangeEl.contains(target)) || !!(target.closest && target.closest('.datepicker'));
+      if (insideRangeUi) { return; }
+      hideRangePickers();
     });
   }
 

@@ -248,11 +248,17 @@
   padding: 0.25rem;
 }
 /* .datepicker-view (flex, from flowbite.min.js's View base class) wraps the days-of-week header
-   and the day grid; both are 7-column grids so weekday letters line up with the dates below. */
+   and the day grid; both are 7-column grids so weekday letters line up with the dates below.
+   Fixed width (matching flowbite.min.js's own template - `datepicker-grid w-64 grid grid-cols-7`,
+   16rem) rather than letting `1fr` columns size off an `inline-block` ancestor
+   (.datepicker-picker) that is itself sized by ITS content - that circular sizing relationship is
+   what was causing the picker to reflow/resize between renders, misaligning the two range
+   pickers' grids by a few sub-pixels wherever they overlapped mid-transition. */
 .sla-plugin .days-of-week,
 .sla-plugin .datepicker-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
+  width: 16rem;
 }
 .sla-plugin .days-of-week {
   margin-bottom: 0.25rem;
