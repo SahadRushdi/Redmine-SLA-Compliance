@@ -181,12 +181,40 @@
     }
   };
 
+  // The visible Flowbite Dropdown button/menu is purely presentational - the real <select
+  // data-sla-perpage> (now visually hidden) stays the one source of truth Table.prototype.bind
+  // listens to above, so picking a menu item just updates that select's value and dispatches the
+  // same `change` event a native picker would have fired, then updates the trigger button's own
+  // label and closes the menu. Flowbite's Dropdown component handles the button<->menu toggle
+  // open/positioning itself (data-dropdown-toggle, auto-initialized on window load) - this only
+  // handles what happens once an option is actually clicked, which Flowbite's own dropdown always
+  // leaves for the page to wire up itself.
+  function initPerPageDropdown() {
+    var select = byId('sla-detail-per-page');
+    var trigger = byId('sla-detail-perpage-trigger');
+    var menu = byId('sla-detail-perpage-menu');
+    if (!select || !trigger || !menu) { return; }
+
+    var label = trigger.querySelector('[data-sla-perpage-label]');
+
+    menu.querySelectorAll('[data-sla-perpage-option]').forEach(function (option) {
+      option.addEventListener('click', function () {
+        var value = option.getAttribute('data-sla-perpage-option');
+        select.value = value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        if (label) { label.textContent = value; }
+        menu.classList.add('hidden');
+      });
+    });
+  }
+
   function init() {
     var root = byId('sla-detail-table');
     if (!root || root.slaDetailInitialized) { return; }
     root.slaDetailInitialized = true;
 
     var table = new Table(root);
+    initPerPageDropdown();
     if (!table.rows.length) { return; } // empty-state row only — nothing to sort/paginate
     table.bind();
     table.render();

@@ -14,29 +14,50 @@
   <div class="tw-flex tw-items-center tw-justify-between tw-flex-wrap tw-gap-3 tw-mb-3">
     <h3 class="tw-text-base tw-font-semibold tw-text-gray-900"><%= l(:label_sla_chart_trend) %></h3>
 
-    <%# Same segmented-pill-over-a-hidden-<select> pattern as the Date Range pills in %>
-    <%# _filter_bar.html.erb, but this partial renders outside that partial's own <form> element %>
-    <%# (it's included from _charts.html.erb, a sibling of _filter_bar.html.erb under %>
-    <%# sla_dashboard/index.html.erb) — the hidden select carries `form="sla-filter-form"` so it %>
-    <%# still participates in that form's submission, and the click handler in %>
-    <%# sla_dashboard_filters.js targets #sla-filter-form directly rather than via `closest('form')`. %>
-    <div class="tw-inline-flex tw-rounded-lg tw-shadow-sm" role="group" aria-label="<%= l(:label_sla_filter_granularity) %>">
-      <% sla_granularities.each_with_index do |granularity, i| %>
-        <% active = @filters[:granularity] == granularity %>
-        <%# tw-shadow-none: Purplemine2's global `button{}` rule sets a permanent blue 1px %>
-        <%# box-shadow line under every button — see the matching note in _filter_bar.html.erb. %>
-        <button type="button" data-sla-granularity-btn="<%= granularity %>"
-                class="tw-px-3 tw-py-1.5 tw-text-xs tw-font-medium tw-border tw-border-solid tw-shadow-none tw-transition-colors focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-inset focus:tw-ring-primary-300
-                       <%= 'tw-rounded-l-lg' if i.zero? %> <%= 'tw-rounded-r-lg' if i == sla_granularities.size - 1 %>
-                       <%= '-tw-ml-px' unless i.zero? %>
-                       <%= active ? 'tw-bg-primary-600 tw-text-white tw-border-primary-600 tw-z-10' : 'tw-bg-white tw-text-gray-700 tw-border-gray-300 hover:tw-bg-gray-50' %>">
-          <%= sla_granularity_label(granularity) %>
-        </button>
+    <div class="tw-flex tw-items-center tw-gap-4 tw-flex-wrap">
+      <%# ERB-rendered legend (Chart.js's own native legend/onClick is disabled in %>
+      <%# sla_dashboard_charts.js) - same data-sla-legend-target/-dataset click pattern the %>
+      <%# priority chart's legend uses, for the same click-to-highlight-not-hide behavior. Swatch %>
+      <%# colors can't be filled in here: Created/Resolved get their colors from %>
+      <%# chartjs-plugin-colorschemes at construction time, not a fixed sla_chart_color(state) the %>
+      <%# way every other legend on this dashboard is - sla_dashboard_charts.js sets each %>
+      <%# .sla-legend-swatch's background-color once it knows what colorschemes actually assigned. %>
+      <% unless @trend_series.empty? %>
+        <div id="sla-trend-chart-legend" class="tw-flex tw-items-center tw-gap-x-4 tw-text-xs tw-text-gray-600">
+          <% [[l(:label_sla_created), 0], [l(:label_sla_resolved), 1]].each do |label, index| %>
+            <span class="tw-inline-flex tw-items-center tw-gap-1.5 tw-cursor-pointer tw-rounded tw-px-1 -tw-mx-1 hover:tw-bg-gray-50"
+                  data-sla-legend-target="sla-trend-chart" data-sla-legend-dataset="<%= index %>">
+              <span class="sla-legend-swatch tw-w-2.5 tw-h-2.5 tw-rounded-full tw-inline-block"></span>
+              <%= label %>
+            </span>
+          <% end %>
+        </div>
       <% end %>
+
+      <%# Same segmented-pill-over-a-hidden-<select> pattern as the Date Range pills in %>
+      <%# _filter_bar.html.erb, but this partial renders outside that partial's own <form> element %>
+      <%# (it's included from _charts.html.erb, a sibling of _filter_bar.html.erb under %>
+      <%# sla_dashboard/index.html.erb) — the hidden select carries `form="sla-filter-form"` so it %>
+      <%# still participates in that form's submission, and the click handler in %>
+      <%# sla_dashboard_filters.js targets #sla-filter-form directly rather than via `closest('form')`. %>
+      <div class="tw-inline-flex tw-rounded-lg tw-shadow-sm" role="group" aria-label="<%= l(:label_sla_filter_granularity) %>">
+        <% sla_granularities.each_with_index do |granularity, i| %>
+          <% active = @filters[:granularity] == granularity %>
+          <%# tw-shadow-none: Purplemine2's global `button{}` rule sets a permanent blue 1px %>
+          <%# box-shadow line under every button — see the matching note in _filter_bar.html.erb. %>
+          <button type="button" data-sla-granularity-btn="<%= granularity %>"
+                  class="tw-px-3 tw-py-1.5 tw-text-xs tw-font-medium tw-border tw-border-solid tw-shadow-none tw-transition-colors focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-inset focus:tw-ring-primary-300
+                         <%= 'tw-rounded-l-lg' if i.zero? %> <%= 'tw-rounded-r-lg' if i == sla_granularities.size - 1 %>
+                         <%= '-tw-ml-px' unless i.zero? %>
+                         <%= active ? 'tw-bg-primary-600 tw-text-white tw-border-primary-600 tw-z-10' : 'tw-bg-white tw-text-gray-700 tw-border-gray-300 hover:tw-bg-gray-50' %>">
+            <%= sla_granularity_label(granularity) %>
+          </button>
+        <% end %>
+      </div>
+      <%= select_tag 'granularity',
+            options_for_select(sla_granularities.map { |g| [sla_granularity_label(g), g] }, @filters[:granularity]),
+            id: 'sla-filter-granularity', form: 'sla-filter-form', class: 'tw-hidden' %>
     </div>
-    <%= select_tag 'granularity',
-          options_for_select(sla_granularities.map { |g| [sla_granularity_label(g), g] }, @filters[:granularity]),
-          id: 'sla-filter-granularity', form: 'sla-filter-form', class: 'tw-hidden' %>
   </div>
 
   <div class="tw-relative tw-w-full" style="height: 18rem;">

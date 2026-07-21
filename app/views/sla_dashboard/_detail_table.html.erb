@@ -35,12 +35,51 @@
 
       <%# Client-side page size (sla_dashboard_detail_table.js) — a plain, non-typeable dropdown %>
       <%# list; changing it re-paginates the already-rendered rows without a reload. %>
+      <%#
+        A native <select>'s OPEN option list is drawn by the browser/OS itself - there is no CSS
+        that reaches inside it, in any browser, which is why it still looked like a bare OS popup
+        no matter what classes were on the <select> itself. Replaced with Flowbite's own Dropdown
+        component (button + a plain, fully our-own-CSS <div> menu - not a <select> at all, so
+        nothing here is browser-chrome). Same hidden-real-<select>-driven-by-a-visible-custom-
+        control pattern already used for the Date Range and Granularity pills elsewhere on this
+        dashboard: the real <select data-sla-perpage> stays, invisible, as the one source of truth
+        sla_dashboard_detail_table.js already reads via its `change` event - nothing there changes.
+        Flowbite's Dropdown uses Popper.js for positioning (unlike the datepicker), so it does not
+        need re-homing into `.sla-plugin` the way that popup does.
+      %>
+      <%#
+        Purplemine2's theme CSS carries global `button:hover`/`button:focus`/`button:active`
+        rules that set `background-color: #004dc2` (blue) + `color: #fff` + a box-shadow line -
+        the exact same collision already worked around on every OTHER button in this plugin
+        (Date Range pills, Granularity pills, the pager buttons below this table). Every button
+        here needs the same treatment: an explicit, unconditional `tw-bg-white`/`tw-text-gray-*`
+        rest state (its higher selector specificity - two classes vs. Purplemine2's one
+        pseudo-class + one element - wins outright, no `focus:`/`active:` override needed on top
+        of it) and `tw-shadow-none` (kills the stray blue underline). Missing either one is
+        exactly what let Purplemine2's blue show through here.
+      %>
       <div id="sla-detail-perpage" class="tw-flex tw-items-center tw-gap-2 tw-text-sm tw-text-gray-500">
-        <label for="sla-detail-per-page" class="tw-whitespace-nowrap"><%= l(:label_sla_detail_per_page) %></label>
+        <label for="sla-detail-perpage-trigger" class="tw-whitespace-nowrap"><%= l(:label_sla_detail_per_page) %></label>
+        <button type="button" id="sla-detail-perpage-trigger" data-dropdown-toggle="sla-detail-perpage-menu"
+                class="tw-inline-flex tw-items-center tw-gap-1.5 tw-bg-white tw-text-gray-900 tw-border tw-border-gray-300 tw-text-sm tw-rounded-lg tw-py-2 tw-pl-3 tw-pr-2.5 tw-shadow-none hover:tw-bg-gray-50 focus:tw-outline-none focus:tw-ring-4 focus:tw-ring-primary-100">
+          <span data-sla-perpage-label><%= Setting.per_page_options_array.first %></span>
+          <svg class="tw-w-3 tw-h-3 tw-text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        <div id="sla-detail-perpage-menu" class="hidden tw-z-10 tw-bg-white tw-border tw-border-gray-200 tw-divide-y tw-divide-gray-100 tw-rounded-lg tw-shadow-lg tw-w-20">
+          <ul class="tw-list-none tw-m-0 tw-py-1 tw-pl-0 tw-text-sm tw-text-gray-700">
+            <% Setting.per_page_options_array.each do |n| %>
+              <li>
+                <button type="button" data-sla-perpage-option="<%= n %>"
+                        class="tw-block tw-w-full tw-text-left tw-bg-white tw-text-gray-700 tw-border-0 tw-shadow-none tw-px-4 tw-py-2 hover:tw-bg-gray-50 hover:tw-text-gray-900 focus:tw-outline-none"><%= n %></button>
+              </li>
+            <% end %>
+          </ul>
+        </div>
         <%= select_tag 'sla-detail-per-page',
               options_for_select(Setting.per_page_options_array, Setting.per_page_options_array.first),
-              id: 'sla-detail-per-page', data: { 'sla-perpage': true },
-              class: 'tw-bg-white tw-border tw-border-gray-300 tw-text-gray-900 tw-text-sm tw-rounded-lg focus:tw-ring-primary-500 focus:tw-border-primary-500 tw-py-2 tw-pl-3 tw-pr-8' %>
+              id: 'sla-detail-per-page', data: { 'sla-perpage': true }, class: 'tw-hidden' %>
       </div>
     </div>
   </div>

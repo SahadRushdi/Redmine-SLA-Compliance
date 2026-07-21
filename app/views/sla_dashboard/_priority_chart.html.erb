@@ -29,9 +29,18 @@
   <%# Same 4-color state mapping as the donut's legend - dot + label only (no counts) since the %>
   <%# per-segment value labels already drawn on the bars themselves (sla_dashboard_charts.js) %>
   <%# carry the numbers, avoiding a second place the same counts would need to stay in sync. %>
+  <%# priority_dataset_index matches priority_payload's own dataset order above (met=0, at_risk=1, %>
+  <%# breached=2, no_sla=3) - unlike the donut (one dataset, many arc indices), this chart has one %>
+  <%# dataset PER state, so highlighting is by dataset index, not data-point index. Kept as an %>
+  <%# explicit map rather than each_with_index so the legend's own display order (met, breached, %>
+  <%# at_risk, no_sla - matching the donut's) doesn't have to match the dataset construction order %>
+  <%# above. Click-to-highlight (dim the other datasets' bars, not hide any of them) is wired in %>
+  <%# sla_dashboard_charts.js - same behavior as the donut's and trend chart's legends. %>
+  <% priority_dataset_index = { met: 0, at_risk: 1, breached: 2, no_sla: 3 } %>
   <div id="sla-priority-chart-legend" class="tw-flex tw-flex-wrap tw-gap-x-4 tw-gap-y-1 tw-mt-3 tw-pt-3 tw-border-t tw-border-gray-100 tw-text-xs tw-text-gray-600">
     <% %i[met breached at_risk no_sla].each do |state| %>
-      <span class="tw-inline-flex tw-items-center tw-gap-1.5">
+      <span class="tw-inline-flex tw-items-center tw-gap-1.5 tw-cursor-pointer tw-rounded tw-px-1 -tw-mx-1 hover:tw-bg-gray-50"
+            data-sla-legend-target="sla-priority-chart" data-sla-legend-dataset="<%= priority_dataset_index[state] %>">
         <span class="tw-w-2.5 tw-h-2.5 tw-rounded-full tw-inline-block" style="background-color: <%= sla_chart_color(state) %>"></span>
         <%= state == :at_risk ? l(:label_sla_card_at_risk) : sla_card_label(state) %>
       </span>

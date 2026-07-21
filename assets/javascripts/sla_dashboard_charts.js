@@ -17,13 +17,136 @@
     return total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
   }
 
+  // #ffffff/#fff or rgb(a)(...) -> the same color at a lower alpha, for dimming a non-highlighted
+  // series rather than hiding it. Unrecognized formats pass through unchanged (safe no-op) rather
+  // than throwing, since colorschemes/the server payload controls the actual color values, not
+  // this file.
+  var DIMMED_ALPHA = 0.15;
+
+  function fadeColor(color, alpha) {
+    if (typeof color !== 'string') { return color; }
+    var hex = color.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (hex) {
+      var digits = hex[1];
+      if (digits.length === 3) { digits = digits[0] + digits[0] + digits[1] + digits[1] + digits[2] + digits[2]; }
+      var value = parseInt(digits, 16);
+      return 'rgba(' + [(value >> 16) & 255, (value >> 8) & 255, value & 255].join(', ') + ', ' + alpha + ')';
+    }
+    var rgb = color.trim().match(/^rgba?\(([^)]+)\)$/i);
+    if (rgb) {
+      var parts = rgb[1].split(',');
+      if (parts.length < 3) { return color; }
+      return 'rgba(' + parts[0].trim() + ', ' + parts[1].trim() + ', ' + parts[2].trim() + ', ' + alpha + ')';
+    }
+    return color;
+  }
+
+  // Clicking a legend entry highlights that data (dims everything else) instead of Chart.js's
+  // default hide-on-click behavior - same convention as the time_analytics plugin's own Stacked
+  // chart legend (its taLegendHighlight plugin). Two variants, not one shared implementation,
+  // because the two chart shapes highlight different things:
+  //   - registerDatasetLegendHighlight: one legend item = one whole DATASET (the priority bar's
+  //     met/at_risk/breached/no_sla stacks, the trend chart's Created/Resolved lines). Registered
+  //     once per canvas id since each needs its own beforeDraw scoped to that chart only.
+  //   - registerDonutLegendHighlight: one legend item = one or more DATA-POINT indices within the
+  //     donut's single dataset ("met" highlights both its on-track and at-risk arcs together).
+  function registerDatasetLegendHighlight(canvasId) {
+    var pluginId = 'slaDatasetLegendHighlight_' + canvasId;
+    if (Chart.plugins.getAll().some(function (p) { return p.id === pluginId; })) { return; }
+
+    Chart.plugins.register({
+      id: pluginId,
+      beforeDraw: function (chart) {
+        if (chart.canvas.id !== canvasId) { return; }
+
+        var state = chart.$slaLegendHighlight;
+        if (!state || state.highlighted === null) { return; }
+
+        chart.data.datasets.forEach(function (dataset, index) {
+          var base = state.baseColors[index];
+          if (!base) { return; }
+          var color = index === state.highlighted ? base : fadeColor(base, DIMMED_ALPHA);
+          var meta = chart.getDatasetMeta(index);
+
+          // Line charts have a connecting stroke of their own (meta.dataset), separate from each
+          // point - bar/doughnut datasets don't set this, so the guard is a no-op for them.
+          if (meta.dataset && meta.dataset._model) { meta.dataset._model.borderColor = color; }
+          (meta.data || []).forEach(function (point) {
+            if (point._model) {
+              point._model.backgroundColor = color;
+              if (point._model.borderColor !== undefined) { point._model.borderColor = color; }
+            }
+          });
+        });
+      }
+    });
+  }
+
+  function registerDonutLegendHighlight() {
+    if (Chart.plugins.getAll().some(function (p) { return p.id === 'slaDonutLegendHighlight'; })) { return; }
+
+    Chart.plugins.register({
+      id: 'slaDonutLegendHighlight',
+      beforeDraw: function (chart) {
+        if (chart.canvas.id !== 'sla-donut-chart') { return; }
+
+        var state = chart.$slaLegendHighlight;
+        if (!state || !state.highlightedIndices) { return; }
+
+        var meta = chart.getDatasetMeta(0);
+        (meta.data || []).forEach(function (arc, index) {
+          var base = state.baseColors[index];
+          if (!base || !arc._model) { return; }
+          var highlighted = state.highlightedIndices.indexOf(index) !== -1;
+          arc._model.backgroundColor = highlighted ? base : fadeColor(base, DIMMED_ALPHA);
+        });
+      }
+    });
+  }
+
+  // Delegated click handling for every ERB-rendered legend row (donut + priority chart - the
+  // trend chart uses Chart.js's own native, already-clickable legend via legend.onClick instead,
+  // see initTrend). Static markup rendered once per page load, so binding directly rather than
+  // through a document-level delegate is enough - matches this file's existing init() convention.
+  function bindLegendClicks() {
+    document.querySelectorAll('[data-sla-legend-target]').forEach(function (el) {
+      if (el.slaLegendBound) { return; }
+      el.slaLegendBound = true;
+
+      el.addEventListener('click', function () {
+        var canvas = byId(el.getAttribute('data-sla-legend-target'));
+        var chart = canvas && canvas.slaChartInstance;
+        var state = chart && chart.$slaLegendHighlight;
+        if (!state) { return; }
+
+        if (el.hasAttribute('data-sla-legend-indices')) {
+          var indices = el.getAttribute('data-sla-legend-indices').split(',').map(Number);
+          var same = arraysEqual(state.highlightedIndices, indices);
+          state.highlightedIndices = same ? null : indices;
+        } else if (el.hasAttribute('data-sla-legend-dataset')) {
+          var index = Number(el.getAttribute('data-sla-legend-dataset'));
+          state.highlighted = state.highlighted === index ? null : index;
+        } else {
+          return;
+        }
+        chart.update();
+      });
+    });
+  }
+
+  function arraysEqual(a, b) {
+    if (!Array.isArray(a) || !Array.isArray(b)) { return false; }
+    return a.length === b.length && a.every(function (v, i) { return v === b[i]; });
+  }
+
   function initDonut() {
     var canvas = byId('sla-donut-chart');
     if (!canvas || canvas.slaChartInitialized || !window.Chart) { return; }
     canvas.slaChartInitialized = true;
+    registerDonutLegendHighlight();
 
     var payload = readPayload(canvas);
-    new Chart(canvas.getContext('2d'), {
+    var chart = new Chart(canvas.getContext('2d'), {
       type: 'doughnut',
       data: {
         labels: payload.labels,
@@ -50,6 +173,9 @@
         }
       }
     });
+
+    canvas.slaChartInstance = chart;
+    chart.$slaLegendHighlight = { highlightedIndices: null, baseColors: payload.colors.slice() };
   }
 
   // Two label passes on the priority chart (scoped to this one chart by id so it never draws on
@@ -115,12 +241,13 @@
     if (!canvas || canvas.slaChartInitialized || !window.Chart) { return; }
     canvas.slaChartInitialized = true;
     registerPriorityValueLabels();
+    registerDatasetLegendHighlight('sla-priority-chart');
 
     var payload = readPayload(canvas);
     // Cap bar height so a single/few priorities render as slim bars (reference design) instead of
     // stretching to fill the whole card.
     payload.datasets.forEach(function (dataset) { dataset.maxBarThickness = 26; });
-    new Chart(canvas.getContext('2d'), {
+    var chart = new Chart(canvas.getContext('2d'), {
       type: 'horizontalBar',
       data: { labels: payload.labels, datasets: payload.datasets },
       options: {
@@ -145,35 +272,81 @@
         }
       }
     });
+
+    canvas.slaChartInstance = chart;
+    chart.$slaLegendHighlight = {
+      highlighted: null,
+      baseColors: payload.datasets.map(function (dataset) { return dataset.backgroundColor; })
+    };
   }
 
   // Trend chart (Created vs Resolved). Unlike the donut/priority charts, Created and Resolved
   // have no fixed semantic meaning (they aren't a state like met/breached), so colors come from
   // chartjs-plugin-colorschemes' Tableau 10 scheme instead of a hand-picked backgroundColor array
   // - the one case CLAUDE.md calls out a Tableau-10 blue "Created" line as intentional chart data
-  // encoding, not a UI-chrome collision. The chart keeps its own native legend (display: true)
-  // since Created/Resolved aren't part of the donut/priority charts' shared met/breached/at_risk/
-  // no_sla legend.
+  // encoding, not a UI-chrome collision.
+  //
+  // Chart.js's own native legend (display: true + legend.onClick) turned out unreliable for click
+  // hit-testing in this card's layout - clicks landed on visibly-rendered legend items but never
+  // reached onClick. Rather than chase that further, this uses the exact same ERB-legend +
+  // bindLegendClicks() pattern the donut/priority charts already use reliably (display: false
+  // here), for one consistent, proven mechanism across all three charts instead of two different
+  // ones. The one thing that pattern can't do for THIS chart: the legend's dot color isn't a fixed
+  // sla_chart_color(state) in ERB - colorschemes only assigns it once the chart is constructed
+  // client-side, so populateLegendSwatches() below fills each dot in after the fact.
   function initTrend() {
     var canvas = byId('sla-trend-chart');
     if (!canvas || canvas.slaChartInitialized || !window.Chart) { return; }
     canvas.slaChartInitialized = true;
+    registerDatasetLegendHighlight('sla-trend-chart');
 
     var payload = readPayload(canvas);
-    new Chart(canvas.getContext('2d'), {
+    var chart = new Chart(canvas.getContext('2d'), {
       type: 'line',
       data: { labels: payload.labels, datasets: payload.datasets },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: { colorschemes: { scheme: 'tableau.Tableau10' } },
-        legend: { position: 'top', align: 'end' },
+        legend: { display: false }, // ERB legend below the chart drives clicks instead
         elements: { line: { tension: 0.25, fill: false }, point: { radius: 2, hoverRadius: 4 } },
         scales: {
           xAxes: [{ gridLines: { display: false, drawBorder: false } }],
           yAxes: [{ ticks: { beginAtZero: true, precision: 0 }, gridLines: { drawBorder: false } }]
         }
       }
+    });
+
+    canvas.slaChartInstance = chart;
+    // Captured once, right after colorschemes has assigned each line its color at construction -
+    // the "base" the highlight plugin fades away from, and what populateLegendSwatches paints the
+    // ERB legend's dots with.
+    //
+    // NOT read from dataset.borderColor - chartjs-plugin-colorschemes only sets that TRANSIENTLY.
+    // Its beforeUpdate assigns dataset.borderColor/backgroundColor/etc. from the scheme, but its
+    // afterUpdate (which runs as part of this same synchronous `new Chart()` call) immediately
+    // resets every one of them back to whatever they were before (undefined, here, since none are
+    // set in the ERB payload) - by design, so external code always sees the config it originally
+    // passed in, not a scheme-polluted copy. That's exactly what broke both the legend dots (set
+    // to a color read as undefined) and the highlight-on-click (its beforeDraw guard, `if (!base)
+    // return`, silently no-ops on undefined). The computed render MODEL isn't part of that
+    // cleanup, so it still has the real color Chart.js actually drew with - read that instead.
+    var baseColors = chart.data.datasets.map(function (dataset, index) {
+      var meta = chart.getDatasetMeta(index);
+      var modelColor = meta.dataset && meta.dataset._model && meta.dataset._model.borderColor;
+      return modelColor || dataset.borderColor;
+    });
+    chart.$slaLegendHighlight = { highlighted: null, baseColors: baseColors };
+    populateLegendSwatches('sla-trend-chart-legend', baseColors);
+  }
+
+  function populateLegendSwatches(legendId, colors) {
+    var legend = byId(legendId);
+    if (!legend) { return; }
+    legend.querySelectorAll('[data-sla-legend-dataset]').forEach(function (item) {
+      var index = Number(item.getAttribute('data-sla-legend-dataset'));
+      var swatch = item.querySelector('.sla-legend-swatch');
+      if (swatch && colors[index]) { swatch.style.backgroundColor = colors[index]; }
     });
   }
 
@@ -182,6 +355,7 @@
     initDonut();
     initPriorityChart();
     initTrend();
+    bindLegendClicks();
   }
 
   window.slaDashboardCharts = { init: init };
