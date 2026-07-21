@@ -59,6 +59,14 @@ class SlaDashboardController < ApplicationController
     # aggregation over the sla_results cache (Global Rule 4).
     @priority_breakdown = Sla::PriorityBreakdown.call(scope: @scope)
 
+    # Trend chart needs Created and Resolved filtered independently against date_range (see
+    # Sla::TrendSeries) rather than the already created_on-filtered @scope above, so it's built
+    # from its own project/tracker/priority-only scope with no date_range applied.
+    trend_scope = Sla::DashboardScope.call(project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
+                                            priority_ids: @filters[:priority_ids])
+    @trend_series = Sla::TrendSeries.call(scope: trend_scope, date_range: @filters[:date_range],
+                                          granularity: @filters[:granularity])
+
     # Step 6.4 — detail table.
     build_detail_table
 
@@ -90,12 +98,16 @@ class SlaDashboardController < ApplicationController
     date_preset = params[:date_preset].presence
     date_preset = 'this_week' unless DATE_PRESETS.include?(date_preset)
 
+    granularity = params[:granularity].presence
+    granularity = 'daily' unless Sla::TrendSeries::GRANULARITIES.include?(granularity)
+
     @filters = {
       project_ids: project_ids,
       tracker_ids: tracker_ids,
       priority_ids: priority_ids,
       date_preset: date_preset,
-      date_range: resolve_date_range(date_preset, params[:from], params[:to])
+      date_range: resolve_date_range(date_preset, params[:from], params[:to]),
+      granularity: granularity
     }
   end
 

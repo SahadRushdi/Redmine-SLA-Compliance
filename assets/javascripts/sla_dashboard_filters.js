@@ -103,6 +103,35 @@
     });
   }
 
+  // Granularity pills (Daily/Weekly/Monthly) for the trend chart. Same segmented-pill-over-a-
+  // hidden-<select> pattern as the Date Range pills above, but the pills live in
+  // _trend_chart.html.erb - outside #sla-filter-form's own DOM subtree (that partial renders as a
+  // sibling of _filter_bar.html.erb under sla_dashboard/index.html.erb). The hidden <select>
+  // carries `form="sla-filter-form"` so it's still submitted as part of that form (HTML5 form
+  // association), but submitting here targets #sla-filter-form by id directly rather than
+  // `closest('form')`, which would find nothing from this DOM position.
+  function selectGranularity(btn) {
+    var select = byId('sla-filter-granularity');
+    var form = byId('sla-filter-form');
+    if (!select || !form) { return; }
+
+    select.value = btn.getAttribute('data-sla-granularity-btn');
+    markActiveGranularityButton(btn);
+    (form.requestSubmit ? form.requestSubmit() : form.submit());
+  }
+
+  function markActiveGranularityButton(activeBtn) {
+    document.querySelectorAll('[data-sla-granularity-btn]').forEach(function (btn) {
+      var active = btn === activeBtn;
+      btn.classList.toggle('tw-bg-primary-600', active);
+      btn.classList.toggle('tw-text-white', active);
+      btn.classList.toggle('tw-border-primary-600', active);
+      btn.classList.toggle('tw-bg-white', !active);
+      btn.classList.toggle('tw-text-gray-700', !active);
+      btn.classList.toggle('tw-border-gray-300', !active);
+    });
+  }
+
   // Custom Range: ONE linked flowbite DateRangePicker across the From/To inputs (matching the
   // My Time page), not two independent Datepickers. The link is what makes the two popups agree —
   // it tints the days between the two dates (.range) and stops To being set before From. The
@@ -169,6 +198,33 @@
       input.addEventListener('changeDate', submitDateRangeDebounced);
       input.addEventListener('change', submitDateRangeDebounced);
     });
+
+    bindSiblingPickerClose();
+  }
+
+  // Flowbite's own `autohide` never closes the FROM popup when you click straight from FROM into
+  // TO (or vice versa): its outside-click check (onClickOutside in flowbite.min.js) bails out via
+  // `if (element !== document.activeElement) return;` before ever calling hide() - and by the time
+  // that click's listener runs, the browser has already moved focus to the OTHER input, so that
+  // guard is always true for the picker that should be closing. Both popups stay open and overlap
+  // (same bug the time_analytics plugin's own range picker works around with its own manual
+  // "hide the sibling" handler - this is that same fix, not a new pattern).
+  function bindSiblingPickerClose() {
+    var pairs = [['sla-filter-from', 'sla-filter-to'], ['sla-filter-to', 'sla-filter-from']];
+    pairs.forEach(function (pair) {
+      var input = byId(pair[0]);
+      var siblingId = pair[1];
+      if (!input) { return; }
+      // mousedown, not click/focus: it fires before the browser moves focus to this input, so the
+      // sibling's popup is gone before Flowbite's own show-on-focus opens this input's popup -
+      // closing it afterward would show it, then hide it, then show this one (a visible flicker).
+      input.addEventListener('mousedown', function () {
+        var sibling = byId(siblingId);
+        if (sibling && sibling.datepicker && sibling.datepicker.active) {
+          sibling.datepicker.hide();
+        }
+      });
+    });
   }
 
   // Only submit once BOTH ends of the range are filled — picking From always fires changeDate
@@ -190,6 +246,10 @@
     jQuery(document).on('click', '[data-sla-preset-btn]', function (e) {
       e.preventDefault();
       selectDatePreset(this);
+    });
+    jQuery(document).on('click', '[data-sla-granularity-btn]', function (e) {
+      e.preventDefault();
+      selectGranularity(this);
     });
     jQuery(document).on('change', '[data-sla-auto-apply]', submitImmediately);
     jQuery(document).on('change', '[data-sla-auto-apply-debounced]', submitDebounced);

@@ -12,3 +12,9 @@
     <%= render 'sla_dashboard/donut_chart' %>
   </div>
 </div>
+
+<%# Full-width row: a dual-line time series wants the page's full horizontal space rather than %>
+<%# sharing a half-width column with the donut/priority bar above. %>
+<div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-shadow-sm tw-p-5 tw-mb-6">
+  <%= render 'sla_dashboard/trend_chart' %>
+</div>

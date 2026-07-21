@@ -121,6 +121,19 @@ module SlaComplianceHelper
     l("label_sla_date_preset_#{preset}")
   end
 
+  # --- Step 6.3: trend chart granularity ------------------------------------------------------
+
+  # Single source of truth for the valid granularity values, shared by the controller (validating
+  # params[:granularity]) and this helper (rendering the pill group) — see
+  # Sla::TrendSeries::GRANULARITIES.
+  def sla_granularities
+    Sla::TrendSeries::GRANULARITIES
+  end
+
+  def sla_granularity_label(granularity)
+    l("label_sla_granularity_#{granularity}")
+  end
+
   # --- Step 6.4: detail table -----------------------------------------------------------------
 
   # Numeric rank for the detail table's client-side "Result" sort, derived from the SAME live

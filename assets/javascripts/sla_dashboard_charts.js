@@ -147,10 +147,41 @@
     });
   }
 
+  // Trend chart (Created vs Resolved). Unlike the donut/priority charts, Created and Resolved
+  // have no fixed semantic meaning (they aren't a state like met/breached), so colors come from
+  // chartjs-plugin-colorschemes' Tableau 10 scheme instead of a hand-picked backgroundColor array
+  // - the one case CLAUDE.md calls out a Tableau-10 blue "Created" line as intentional chart data
+  // encoding, not a UI-chrome collision. The chart keeps its own native legend (display: true)
+  // since Created/Resolved aren't part of the donut/priority charts' shared met/breached/at_risk/
+  // no_sla legend.
+  function initTrend() {
+    var canvas = byId('sla-trend-chart');
+    if (!canvas || canvas.slaChartInitialized || !window.Chart) { return; }
+    canvas.slaChartInitialized = true;
+
+    var payload = readPayload(canvas);
+    new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: { labels: payload.labels, datasets: payload.datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { colorschemes: { scheme: 'tableau.Tableau10' } },
+        legend: { position: 'top', align: 'end' },
+        elements: { line: { tension: 0.25, fill: false }, point: { radius: 2, hoverRadius: 4 } },
+        scales: {
+          xAxes: [{ gridLines: { display: false, drawBorder: false } }],
+          yAxes: [{ ticks: { beginAtZero: true, precision: 0 }, gridLines: { drawBorder: false } }]
+        }
+      }
+    });
+  }
+
   function init() {
-    if (!byId('sla-donut-chart') && !byId('sla-priority-chart')) { return; }
+    if (!byId('sla-donut-chart') && !byId('sla-priority-chart') && !byId('sla-trend-chart')) { return; }
     initDonut();
     initPriorityChart();
+    initTrend();
   }
 
   window.slaDashboardCharts = { init: init };

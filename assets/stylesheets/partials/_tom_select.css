@@ -1,0 +1,90 @@
+/*
+ * Tom Select (chip multi-selects): match the Flowbite input look, neutral at rest,
+ * primary-600 on focus — never the theme's own focus treatment.
+ */
+.ts-wrapper .ts-control {
+  background-color: #f9fafb; /* gray-50 */
+  border: 1px solid #d1d5db; /* gray-300 */
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.875rem;
+  color: #111827;
+  box-shadow: none;
+}
+
+.ts-wrapper.focus .ts-control {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px #2563eb;
+  outline: none;
+}
+
+.ts-wrapper.multi .ts-control > .item {
+  background: #dbeafe; /* primary-100 chip */
+  color: #1e40af; /* primary-800 */
+  border-radius: 0.25rem;
+  padding: 0 0.375rem;
+}
+
+.ts-dropdown {
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.ts-dropdown .active {
+  background-color: #eff6ff; /* primary-50 */
+  color: #111827;
+}
+
+/*
+ * Dashboard filter fields ONLY (Tracker/Priority/Project Tom Select controls, the custom
+ * date-range inputs) — white background + a permanent blue border, per the reference design.
+ * Scoped to #sla-filter-form (the dashboard's one filter <form>, see _filter_bar.html.erb) so the
+ * SLA Policy tab / notification settings / access-control pickers elsewhere in the plugin keep
+ * their existing neutral grey look (the shared .ts-wrapper .ts-control rule above) untouched —
+ * an ID-scoped selector outranks that rule's class/element selectors without needing !important.
+ */
+
+/*
+ * Strip the box the Tracker/Priority/Project selects' own `sla_input_classes` leak onto the
+ * TomSelect wrapper — TomSelect copies the original <select>'s classes onto `.ts-wrapper`, so
+ * `tw-bg-gray-50 tw-border tw-border-gray-300 tw-rounded-lg tw-p-2.5` render a gray padded box
+ * AROUND the real white `.ts-control` below (and its padding crowds the Export CSV button). The
+ * control provides its own border/radius/padding, so the wrapper must be a bare container.
+ * ID-scoped (`1,1,0`) so it outranks the copied `tw-*` utilities without !important.
+ */
+#sla-filter-form .ts-wrapper {
+  background-color: transparent;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+/*
+ * Neutral at rest, primary-blue only on focus/click — the fields carry a plain gray border until
+ * the user interacts (the previous permanent blue border read as "always active"). Applies to the
+ * Tracker/Priority TomSelect controls and the custom-range From/To text inputs alike.
+ */
+#sla-filter-form .ts-wrapper .ts-control {
+  background-color: #ffffff;
+  border-color: #d1d5db; /* gray-300 */
+  /* Match the Date Range pills' height (px-3 py-2.5 text-sm) so Tracker/Priority sit level. */
+  min-height: 2.625rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+#sla-filter-form .ts-wrapper.focus .ts-control {
+  border-color: #2563eb; /* primary-600 */
+  box-shadow: 0 0 0 1px #2563eb;
+}
+
+#sla-filter-form input[type='text'] {
+  background-color: #ffffff;
+  border-color: #d1d5db; /* gray-300 */
+}
+
+#sla-filter-form input[type='text']:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px #2563eb;
+}

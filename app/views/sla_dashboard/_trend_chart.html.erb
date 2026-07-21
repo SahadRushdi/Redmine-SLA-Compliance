@@ -1,0 +1,49 @@
+<%# Step 6.3 — Created vs Resolved trend (dual line, Daily/Weekly/Monthly). Colors are NOT %>
+<%# hand-picked here (unlike the donut/priority charts' fixed met/breached/at_risk/no_sla %>
+<%# palette) — Created and Resolved have no fixed semantic meaning, so chartjs-plugin-colorschemes %>
+<%# assigns them from the Tableau 10 scheme client-side (sla_dashboard_charts.js), the one case %>
+<%# CLAUDE.md calls out a Tableau-10 blue "Created" line as intentional, not a UI-chrome collision. %>
+<% trend_payload = {
+     labels: @trend_series.map(&:bucket_label),
+     datasets: [
+       { label: l(:label_sla_created), data: @trend_series.map(&:created) },
+       { label: l(:label_sla_resolved), data: @trend_series.map(&:resolved) }
+     ]
+   } %>
+<div class="tw-flex tw-flex-col">
+  <div class="tw-flex tw-items-center tw-justify-between tw-flex-wrap tw-gap-3 tw-mb-3">
+    <h3 class="tw-text-base tw-font-semibold tw-text-gray-900"><%= l(:label_sla_chart_trend) %></h3>
+
+    <%# Same segmented-pill-over-a-hidden-<select> pattern as the Date Range pills in %>
+    <%# _filter_bar.html.erb, but this partial renders outside that partial's own <form> element %>
+    <%# (it's included from _charts.html.erb, a sibling of _filter_bar.html.erb under %>
+    <%# sla_dashboard/index.html.erb) — the hidden select carries `form="sla-filter-form"` so it %>
+    <%# still participates in that form's submission, and the click handler in %>
+    <%# sla_dashboard_filters.js targets #sla-filter-form directly rather than via `closest('form')`. %>
+    <div class="tw-inline-flex tw-rounded-lg tw-shadow-sm" role="group" aria-label="<%= l(:label_sla_filter_granularity) %>">
+      <% sla_granularities.each_with_index do |granularity, i| %>
+        <% active = @filters[:granularity] == granularity %>
+        <%# tw-shadow-none: Purplemine2's global `button{}` rule sets a permanent blue 1px %>
+        <%# box-shadow line under every button — see the matching note in _filter_bar.html.erb. %>
+        <button type="button" data-sla-granularity-btn="<%= granularity %>"
+                class="tw-px-3 tw-py-1.5 tw-text-xs tw-font-medium tw-border tw-border-solid tw-shadow-none tw-transition-colors focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-inset focus:tw-ring-primary-300
+                       <%= 'tw-rounded-l-lg' if i.zero? %> <%= 'tw-rounded-r-lg' if i == sla_granularities.size - 1 %>
+                       <%= '-tw-ml-px' unless i.zero? %>
+                       <%= active ? 'tw-bg-primary-600 tw-text-white tw-border-primary-600 tw-z-10' : 'tw-bg-white tw-text-gray-700 tw-border-gray-300 hover:tw-bg-gray-50' %>">
+          <%= sla_granularity_label(granularity) %>
+        </button>
+      <% end %>
+    </div>
+    <%= select_tag 'granularity',
+          options_for_select(sla_granularities.map { |g| [sla_granularity_label(g), g] }, @filters[:granularity]),
+          id: 'sla-filter-granularity', form: 'sla-filter-form', class: 'tw-hidden' %>
+  </div>
+
+  <div class="tw-relative tw-w-full" style="height: 18rem;">
+    <% if @trend_series.empty? %>
+      <p class="tw-text-sm tw-text-gray-400 tw-py-8 tw-text-center"><%= l(:text_sla_detail_table_empty_state) %></p>
+    <% else %>
+      <canvas id="sla-trend-chart" data-chart="<%= trend_payload.to_json %>"></canvas>
+    <% end %>
+  </div>
+</div>
