@@ -10,6 +10,25 @@ class SlaPoliciesController < ApplicationController
   before_action :find_project_by_project_id
   before_action :authorize
 
+  # The tab is split into independently-savable sections (see SlaPoliciesHelper::SECTIONS, which
+  # must stay in sync with this list). A submit carries the section it came from and may only
+  # rewrite that section's slice of the policy — otherwise saving, say, General would post no
+  # status_mappings and silently wipe every milestone status configured under Measurement Rules.
+  POLICY_SECTIONS = %w[general measurement targets exclusions].freeze
+
+  # Every policy scalar the sectioned form manages, in one place: it is both the strong-params
+  # allow-list and the set copied when a section other than General creates the row
+  # (see #seed_new_policy_scalars!). The two must not drift apart.
+  POLICY_ATTRIBUTES = %i[enabled coverage_hours business_calendar_id first_response_rule
+                         at_risk_threshold pause_enabled].freeze
+
+  # Milestone roles owned by each section; roles NOT listed for the posted section are left
+  # untouched. Every role in SlaStatusMapping::ROLES must appear in exactly one entry.
+  SECTION_STATUS_ROLES = {
+    'measurement' => %w[created work_started resolved],
+    'exclusions' => %w[pause]
+  }.freeze
+
   # GET /projects/:project_id/sla_policy/edit (js only):
   #   ?tracker_id=N  -> re-render the definition rows for that tracker (from saved data)
   #   ?clone_from=ID -> re-render the whole form prefilled from the source project's policy
@@ -26,26 +45,30 @@ class SlaPoliciesController < ApplicationController
 
   def update
     @sla_policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
+    section = posted_section
 
     begin
       ActiveRecord::Base.transaction do
+        seed_new_policy_scalars! if @sla_policy.new_record?
         @sla_policy.assign_attributes(policy_params)
         @sla_policy.save!
-        replace_status_mappings!
-        apply_clone_source!
-        replace_tracker_definitions!
+        replace_status_mappings!(SECTION_STATUS_ROLES.fetch(section, []))
+        if section == 'targets'
+          apply_clone_source!
+          replace_tracker_definitions!
+        end
       end
     rescue ActiveRecord::RecordInvalid => e
       flash[:error] = e.record.errors.full_messages.join(', ')
-      return redirect_to settings_project_path(@project, tab: 'sla_policy')
+      return redirect_to settings_project_path(@project, tab: 'sla_policy', section: section)
     end
 
     flash[:notice] = l(:notice_successful_update)
-    if params[:recalculate] == '1'
+    if section == 'targets' && params[:recalculate] == '1'
       SlaPolicyRecalculationJob.perform_later(@project.id)
       flash[:notice] = "#{flash[:notice]} #{l(:notice_sla_recalculation_queued)}"
     end
-    redirect_to settings_project_path(@project, tab: 'sla_policy')
+    redirect_to settings_project_path(@project, tab: 'sla_policy', section: section)
   end
 
   # B3 — "Revert to inherited policy": deletes THIS project's own policy row (cascading to its
@@ -64,20 +87,51 @@ class SlaPoliciesController < ApplicationController
 
   private
 
+  # Which section's form was submitted. Never trusted as-is — an unrecognised (or forged) value
+  # falls back to the most restrictive section, which owns no status roles and no definitions.
+  def posted_section
+    POLICY_SECTIONS.include?(params[:section]) ? params[:section] : 'general'
+  end
+
+  # `fetch` rather than `require`: the SLA Targets section posts only definitions/clone params and
+  # no sla_policy[...] key at all, which `require` would reject outright.
   def policy_params
-    params.require(:sla_policy)
-          .permit(:enabled, :coverage_hours, :business_calendar_id, :first_response_rule,
-                  :at_risk_threshold, :pause_enabled)
+    params.fetch(:sla_policy, {}).permit(*POLICY_ATTRIBUTES)
+  end
+
+  # Give a policy row being CREATED by a section that doesn't own every scalar the values that
+  # section's form was showing, instead of the DB column defaults.
+  #
+  # Without this, `enabled` falls back to its default of FALSE whenever the row is first written
+  # from any section other than General — and a disabled policy is an explicit "SLA off" that also
+  # stops inheritance (SlaPolicy.effective_for). The damaging case is B3's Override: the user
+  # presses "Override for this project" on a project inheriting an ENABLED ancestor policy, the
+  # form renders prefilled from that ancestor with the SLA Tracking toggle ON, and then saving any
+  # section other than General first would persist enabled=false — silently switching SLA off for
+  # a project whose screen still showed it on. Seeding from the source the form was prefilled from
+  # keeps what was displayed and what gets saved in agreement.
+  #
+  # Source order mirrors what the form actually rendered: the clone/Override source when one was
+  # loaded, else the ancestor policy this project inherits today. With neither (the first policy
+  # anywhere in the tree) the DB defaults stand — there the blank form shows the toggle OFF too,
+  # so nothing diverges.
+  def seed_new_policy_scalars!
+    source = authorized_source_policy(params[:clone_source_id]) if params[:clone_source_id].present?
+    source ||= SlaPolicy.source_for(@project).last
+    return if source.nil?
+
+    @sla_policy.assign_attributes(source.attributes.slice(*POLICY_ATTRIBUTES.map(&:to_s)))
   end
 
   def project_status_ids
     @project_status_ids ||= @project.rolled_up_statuses.map(&:id)
   end
 
-  # Diff-replace the status rows per milestone role. A role absent from the params is cleared
-  # (deselecting every chip = milestone not evaluated).
-  def replace_status_mappings!
-    SlaStatusMapping::ROLES.each do |role|
+  # Diff-replace the status rows for the roles the posted section owns. A role absent from the
+  # params is cleared (deselecting every chip = milestone not evaluated) — which is exactly why
+  # roles outside +roles+ are skipped entirely rather than passed through this loop.
+  def replace_status_mappings!(roles)
+    (roles.map(&:to_s) & SlaStatusMapping::ROLES).each do |role|
       wanted = Array(params.dig(:status_mappings, role)).map(&:to_i).uniq & project_status_ids
       scope = @sla_policy.sla_status_mappings.where(role: role)
       scope.where.not(status_id: wanted).delete_all

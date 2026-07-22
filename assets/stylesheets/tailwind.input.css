@@ -12,12 +12,15 @@
  *     No separate flowbite-datepicker package/stylesheet is used anymore — this file supplies
  *     both structure (grid layout, cell sizing, popup positioning) and color, self-contained.
  *   - _tom_select.css — the Tom Select chip multi-select skin (Step 4.4/6.1).
+ *   - _settings_nav.css — the SLA Policy settings sidebar's section links (active/inactive state
+ *     as one toggled class, so the JS carries no Tailwind class strings).
  * postcss-import inlines these before Tailwind/scoping run, so they get the exact same
  * `.sla-plugin` treatment as everything else in this file.
  */
 @import 'partials/_theme_isolation.css';
 @import 'partials/_datepicker.css';
 @import 'partials/_tom_select.css';
+@import 'partials/_settings_nav.css';
 
 @tailwind base;
 @tailwind components;

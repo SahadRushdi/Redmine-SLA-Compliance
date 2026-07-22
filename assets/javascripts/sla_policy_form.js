@@ -5,9 +5,48 @@
 (function () {
   'use strict';
 
-  var state = { defsSnapshot: '', prevTracker: '', bound: false };
+  var state = { defsSnapshot: '', prevTracker: '', bound: false, section: '' };
 
   function byId(id) { return document.getElementById(id); }
+
+  // --- Sidebar section navigation ------------------------------------------------------------
+  // The sections are all in the DOM; switching only toggles visibility, so an unsaved edit in one
+  // section survives a look at another. The sidebar's links keep working without JS (they carry
+  // ?section=...), which is why the click handler has to preventDefault here.
+
+  // The server-rendered truth: which nav link came back marked active.
+  function domSection() {
+    var active = document.querySelector('[data-sla-section-link].is-active');
+    return active ? active.getAttribute('data-sla-section-link') : '';
+  }
+
+  function currentSection() {
+    return state.section || domSection();
+  }
+
+  function activateSection(key) {
+    if (!key) { return; }
+    state.section = key;
+
+    document.querySelectorAll('[data-sla-panel]').forEach(function (panel) {
+      panel.classList.toggle('hidden', panel.getAttribute('data-sla-panel') !== key);
+    });
+    document.querySelectorAll('[data-sla-section-link]').forEach(function (link) {
+      var active = link.getAttribute('data-sla-section-link') === key;
+      link.classList.toggle('is-active', active);
+      link.setAttribute('aria-current', active ? 'page' : 'false');
+    });
+
+    // Keep the address bar on the open section so a reload, a bookmark, or the redirect after a
+    // save all land back where the user was. Only `section` is written: Redmine carries the tab
+    // in the PATH (/projects/x/settings/sla_policy), so also setting a `tab` query param would
+    // just append a redundant duplicate that path params win over anyway.
+    if (window.history && window.history.replaceState) {
+      var url = new URL(window.location.href);
+      url.searchParams.set('section', key);
+      window.history.replaceState({}, '', url.toString());
+    }
+  }
 
   function formData(key) {
     var form = byId('sla-policy-form');
@@ -79,12 +118,19 @@
   }
 
   function fetchRerender(params) {
+    // The re-render rebuilds the panels server-side, so it has to be told which one to show.
+    params.section = currentSection();
     return jQuery.ajax({ url: formData('edit-url'), data: params, dataType: 'script' });
   }
 
   function bindOnce() {
     if (state.bound) { return; }
     state.bound = true;
+
+    jQuery(document).on('click', '[data-sla-section-link]', function (event) {
+      event.preventDefault();
+      activateSection(this.getAttribute('data-sla-section-link'));
+    });
 
     jQuery(document).on('change', '#sla_policy_coverage_hours', toggleCalendarField);
     jQuery(document).on('change',
@@ -126,9 +172,15 @@
   function init() {
     // The inherited-policy banner (B3) has neither form but still needs its Override button
     // wired up, so it's part of the same early-return guard as the two real forms.
-    if (!byId('sla-policy-form') && !byId('sla-notification-form') && !byId('sla-override-load')) {
+    if (!byId('sla-policy-settings') && !byId('sla-notification-form') && !byId('sla-override-load')) {
       return;
     }
+    // Re-assert the open section after an AJAX re-render replaced the nav and panels. The DOM —
+    // not the previously open section — is authoritative here: pressing Override from the
+    // inherited banner navigates you from Notifications (the only section offered there) to
+    // General, and honouring the stale value would hide every panel the response just built.
+    state.section = '';
+    activateSection(domSection());
     initChips();
     initEmailChips();
     initSingleSelects();

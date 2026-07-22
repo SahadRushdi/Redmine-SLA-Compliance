@@ -1,0 +1,8 @@
+<%# One sidebar-navigable section. LAYOUT partial — locals: key (section key), current (the key %>
+<%# that should be visible on load). Only the current panel is rendered visible; the rest are %>
+<%# `hidden` and revealed client-side by sla_policy_form.js, so switching sections costs no %>
+<%# round-trip and no in-progress edits in a sibling section are lost. %>
+<section data-sla-panel="<%= key %>" class="<%= 'hidden' unless key == current %>">
+  <%= render 'sla_policies/breadcrumb', label: sla_section_label(key) %>
+  <%= yield %>
+</section>

@@ -56,6 +56,62 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select '#sla-notification-form'
   end
 
+  # --- Sectioned settings shell ----------------------------------------------------------------
+
+  test "the sidebar lists every section and opens General by default" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    SlaPoliciesHelper::SECTIONS.each do |section|
+      assert_select "a[data-sla-section-link='#{section[:key]}']", 1,
+                    "the #{section[:key]} section must be reachable from the sidebar"
+      assert_select "[data-sla-panel='#{section[:key]}']", 1
+    end
+    assert_select "a[data-sla-section-link='general'].is-active"
+    assert_select "[data-sla-panel='general']:not(.hidden)"
+    assert_select "[data-sla-panel='targets'].hidden"
+  end
+
+  test "the requested section is the one rendered open" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'exclusions' }
+    assert_response :success
+
+    assert_select "a[data-sla-section-link='exclusions'].is-active"
+    assert_select "[data-sla-panel='exclusions']:not(.hidden)"
+    assert_select "[data-sla-panel='general'].hidden"
+  end
+
+  test "an unknown section falls back to the first permitted one" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'nope' }
+    assert_response :success
+    assert_select "a[data-sla-section-link='general'].is-active"
+  end
+
+  # Regression: the clone/Override AJAX replaces #sla-policy-tab-body wholesale. The Notifications
+  # form belongs to a different controller and its own save button, so it must sit OUTSIDE that
+  # region — otherwise loading a clone source silently discards a webhook URL or recipient list
+  # the user had typed but not yet saved.
+  test "the notifications form is outside the region the clone AJAX replaces" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select '#sla-policy-tab-body #sla-notification-form', 0,
+                  'a clone load would wipe unsaved notification input if the form were in here'
+    assert_select '#sla-policy-tab-body' # the region itself still exists
+    assert_select '#sla-notification-form'
+  end
+
+  test "a notifications-only role gets a sidebar of just that section, opened" do
+    @role.remove_permission!(:edit_sla_policy)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select 'a[data-sla-section-link]', 1
+    assert_select "a[data-sla-section-link='notifications'].is-active"
+    assert_select "[data-sla-panel='notifications']:not(.hidden)"
+  end
+
   test "the tab is absent without either permission" do
     @role.remove_permission!(:edit_sla_policy, :manage_sla_notifications)
 
@@ -87,9 +143,15 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_response :success
 
     assert_select '#sla-policy-form', 0, 'must never render the editable form for an inherited policy'
-    assert_select '#sla-policy-form-container' do
+    assert_select '#sla-policy-tab-body' do
       assert_select 'button#sla-override-load'
     end
+    # The four policy sections are not offered while the policy is inherited — there is nothing
+    # editable behind them until Override is pressed.
+    %w[general measurement targets exclusions].each do |key|
+      assert_select "a[data-sla-section-link='#{key}']", 0
+    end
+    assert_select "a[data-sla-section-link='notifications']"
   end
 
   test "a project with its own policy renders the editable form even though its parent also has one" do

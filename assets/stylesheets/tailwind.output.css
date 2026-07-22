@@ -12,6 +12,8 @@
  *     No separate flowbite-datepicker package/stylesheet is used anymore — this file supplies
  *     both structure (grid layout, cell sizing, popup positioning) and color, self-contained.
  *   - _tom_select.css — the Tom Select chip multi-select skin (Step 4.4/6.1).
+ *   - _settings_nav.css — the SLA Policy settings sidebar's section links (active/inactive state
+ *     as one toggled class, so the JS carries no Tailwind class strings).
  * postcss-import inlines these before Tailwind/scoping run, so they get the exact same
  * `.sla-plugin` treatment as everything else in this file.
  */
@@ -449,6 +451,84 @@
 .sla-plugin #sla-filter-form input[type='text']:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 1px #2563eb;
+}
+/*
+ * SLA Policy settings — sidebar section navigation.
+ *
+ * Active/inactive state is expressed as ONE class (`is-active`) that sla_policy_form.js toggles,
+ * rather than a list of Tailwind utilities the JS would have to carry as string literals and keep
+ * in sync with the ERB. Purplemine2 styles `a` globally (colour + underline on hover) and this
+ * nav's links must not inherit that, so colour/decoration are set explicitly here per CLAUDE.md's
+ * "explicitly reset rather than rely on defaults" rule.
+ *
+ * postcss-prefix-selector scopes every rule below to `.sla-plugin ...` at build time.
+ */
+/* Preflight is disabled in this build, so the browser's default ul/li bullets and indent are
+ * still in force here — reset them explicitly or the nav renders as a bulleted list. */
+.sla-plugin .sla-section-nav,
+.sla-plugin .sla-section-nav li {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sla-plugin .sla-section-nav li + li {
+  border-top: 1px solid #f3f4f6; /* gray-100 */
+}
+.sla-plugin .sla-section-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  background-color: #ffffff;
+  text-decoration: none;
+  transition: background-color 0.12s ease-in-out;
+}
+.sla-plugin .sla-section-link:hover {
+  background-color: #f9fafb; /* gray-50 */
+  text-decoration: none;
+}
+.sla-plugin .sla-section-link-icon {
+  display: flex;
+  color: #9ca3af; /* gray-400 */
+}
+.sla-plugin .sla-section-link-title {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  color: #111827; /* gray-900 */
+}
+.sla-plugin .sla-section-link-desc {
+  display: block;
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: #6b7280; /* gray-500 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Rendered always so the row's height never shifts between states; only its opacity changes. */
+.sla-plugin .sla-section-link-chevron {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  color: #2563eb; /* primary-600 */
+  opacity: 0;
+}
+/* --- Active section ------------------------------------------------------------------------- */
+/* The tint and the blue title are the only blue in this nav; both are the primary colour
+ * (#2563eb / primary-600), per Global Rule 7. */
+.sla-plugin .sla-section-link.is-active,
+.sla-plugin .sla-section-link.is-active:hover {
+  background-color: #eff6ff; /* primary-50 */
+}
+.sla-plugin .sla-section-link.is-active .sla-section-link-icon,
+.sla-plugin .sla-section-link.is-active .sla-section-link-title {
+  color: #2563eb;
+}
+.sla-plugin .sla-section-link.is-active .sla-section-link-chevron {
+  opacity: 1;
 }
 .sla-plugin *, .sla-plugin ::before, .sla-plugin ::after {
   --tw-border-spacing-x: 0;
@@ -1032,6 +1112,9 @@
 .sla-plugin .-tw-ml-px {
   margin-left: -1px;
 }
+.sla-plugin .tw-mb-0 {
+  margin-bottom: 0px;
+}
 .sla-plugin .tw-mb-1 {
   margin-bottom: 0.25rem;
 }
@@ -1101,6 +1184,9 @@
 .sla-plugin .tw-h-3 {
   height: 0.75rem;
 }
+.sla-plugin .tw-h-3\.5 {
+  height: 0.875rem;
+}
 .sla-plugin .tw-h-4 {
   height: 1rem;
 }
@@ -1130,6 +1216,9 @@
 }
 .sla-plugin .tw-w-3 {
   width: 0.75rem;
+}
+.sla-plugin .tw-w-3\.5 {
+  width: 0.875rem;
 }
 .sla-plugin .tw-w-4 {
   width: 1rem;
@@ -1165,6 +1254,9 @@
   flex: 1 1 0%;
 }
 .sla-plugin .tw-flex-shrink-0 {
+  flex-shrink: 0;
+}
+.sla-plugin .tw-shrink-0 {
   flex-shrink: 0;
 }
 .sla-plugin .-tw-translate-y-1\/2 {
@@ -1205,6 +1297,9 @@
 }
 .sla-plugin .tw-items-center {
   align-items: center;
+}
+.sla-plugin .tw-justify-end {
+  justify-content: flex-end;
 }
 .sla-plugin .tw-justify-center {
   justify-content: center;
@@ -1267,6 +1362,9 @@
 .sla-plugin .tw-divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
   --tw-divide-opacity: 1;
   border-color: rgb(243 244 246 / var(--tw-divide-opacity, 1));
+}
+.sla-plugin .tw-overflow-hidden {
+  overflow: hidden;
 }
 .sla-plugin .tw-overflow-x-auto {
   overflow-x: auto;
@@ -1461,9 +1559,16 @@
   padding-top: 0.625rem;
   padding-bottom: 0.625rem;
 }
+.sla-plugin .tw-py-4 {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
 .sla-plugin .tw-py-8 {
   padding-top: 2rem;
   padding-bottom: 2rem;
+}
+.sla-plugin .tw-pb-2 {
+  padding-bottom: 0.5rem;
 }
 .sla-plugin .tw-pl-0 {
   padding-left: 0px;
@@ -1482,6 +1587,9 @@
 }
 .sla-plugin .tw-pr-4 {
   padding-right: 1rem;
+}
+.sla-plugin .tw-pt-1 {
+  padding-top: 0.25rem;
 }
 .sla-plugin .tw-pt-3 {
   padding-top: 0.75rem;
@@ -1513,6 +1621,10 @@
 .sla-plugin .tw-text-sm {
   font-size: 0.875rem;
   line-height: 1.25rem;
+}
+.sla-plugin .tw-text-xl {
+  font-size: 1.25rem;
+  line-height: 1.75rem;
 }
 .sla-plugin .tw-text-xs {
   font-size: 0.75rem;
@@ -1818,9 +1930,6 @@
   }
 }
 @media (min-width: 768px) {
-  .sla-plugin .md\:tw-ml-auto {
-    margin-left: auto;
-  }
   .sla-plugin .md\:tw-w-1\/2 {
     width: 50%;
   }
@@ -1853,10 +1962,19 @@
   }
 }
 @media (min-width: 1024px) {
+  .sla-plugin .lg\:tw-w-72 {
+    width: 18rem;
+  }
+  .sla-plugin .lg\:tw-shrink-0 {
+    flex-shrink: 0;
+  }
   .sla-plugin .lg\:tw-grid-cols-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .sla-plugin .lg\:tw-grid-cols-5 {
     grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .sla-plugin .lg\:tw-flex-row {
+    flex-direction: row;
   }
 }

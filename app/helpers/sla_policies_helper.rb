@@ -4,6 +4,92 @@
 # ProjectsController#settings (no plugin controller runs on that GET), so everything the form
 # needs is derived here. All lists come live from Redmine configuration — never constants.
 module SlaPoliciesHelper
+  # --- Sectioned settings shell -------------------------------------------------------------
+  # The tab is split into sidebar-navigable sections instead of one long scrolling form. Section
+  # keys are the single source of truth shared by the nav, the panels, each section form's hidden
+  # `section` field and SlaPoliciesController#update (which uses them to decide WHICH slice of the
+  # policy a submit is allowed to touch) — keep them in sync with
+  # SlaPoliciesController::POLICY_SECTIONS.
+  #
+  # :permission is the permission that must be held for the section to be offered at all; the four
+  # policy sections share :edit_sla_policy, Notifications is gated separately (as it always was).
+  SECTIONS = [
+    { key: 'general',       permission: :edit_sla_policy },
+    { key: 'measurement',   permission: :edit_sla_policy },
+    { key: 'targets',       permission: :edit_sla_policy },
+    { key: 'exclusions',    permission: :edit_sla_policy },
+    { key: 'notifications', permission: :manage_sla_notifications }
+  ].freeze
+
+  # B3 — [source_project, source_policy] when this project's nearest policy belongs to an ANCESTOR
+  # (so the tab shows the read-only inherited banner instead of an editable form), else nil.
+  # `clone_from` present means Override was just pressed and we're mid AJAX re-render into the real
+  # edit form, so it takes precedence.
+  def sla_inherited_policy_source(project)
+    return nil if params[:clone_from].present?
+
+    source_project, source_policy = SlaPolicy.source_for(project)
+    return nil if source_project.nil? || source_project == project
+
+    [source_project, source_policy]
+  end
+
+  # +inherited+: an inherited policy has no editable policy sections, so only Notifications is
+  # offered until Override turns the banner into the real form.
+  def sla_visible_sections(project, inherited: false)
+    SECTIONS.select do |section|
+      next false if inherited && section[:permission] == :edit_sla_policy
+
+      User.current.allowed_to?(section[:permission], project)
+    end
+  end
+
+  # Section the page opens on: the requested one when it exists and is permitted, else the first
+  # permitted section (a notifications-only manager lands on Notifications, not a hidden General).
+  # Takes the already-computed list so the permission checks run once per request, not per caller.
+  def sla_current_section(sections)
+    keys = sections.map { |section| section[:key] }
+    requested = params[:section].presence
+    keys.include?(requested) ? requested : keys.first
+  end
+
+  def sla_section_label(key)
+    l(:"label_sla_section_#{key}")
+  end
+
+  def sla_section_description(key)
+    l(:"text_sla_section_#{key}")
+  end
+
+  # Feather-style 24×24 outline icons for the sidebar, keyed by section. Static developer-authored
+  # markup (no user data), hence html_safe; `currentColor` lets the nav's active/inactive text
+  # colour drive the icon colour with no extra classes.
+  SECTION_ICON_PATHS = {
+    'general' => '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+    'measurement' => '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+    'targets' => '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+    'exclusions' => '<circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/>',
+    'notifications' => '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>'
+  }.freeze
+
+  def sla_section_icon(key)
+    paths = SECTION_ICON_PATHS[key]
+    return ''.html_safe if paths.nil?
+
+    ('<svg class="tw-w-5 tw-h-5 tw-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' \
+     'stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' \
+     "#{paths}</svg>").html_safe
+  end
+
+  # Floppy-disk glyph shown on every section's primary save button (matches the design).
+  def sla_save_icon
+    ('<svg class="tw-w-4 tw-h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' \
+     'stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' \
+     '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>' \
+     '<polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>' \
+     '</svg>').html_safe
+  end
+
   # The policy shown in the form: a controller-provided one (validation failure / clone
   # prefill), the saved row, or a fresh record whose DB defaults give a sensible blank form.
   def sla_policy_for_form(project)
@@ -129,5 +215,12 @@ module SlaPoliciesHelper
 
   def sla_radio_classes
     'tw-w-4 tw-h-4 tw-text-primary-600 tw-border-gray-300 focus:tw-ring-primary-500'
+  end
+
+  # Primary submit button — one definition for every section's save action.
+  def sla_primary_button_classes
+    'tw-inline-flex tw-items-center tw-gap-2 tw-text-white tw-bg-primary-600 ' \
+      'hover:tw-bg-primary-700 focus:tw-ring-2 focus:tw-ring-primary-300 tw-font-medium ' \
+      'tw-rounded-lg tw-text-sm tw-px-5 tw-py-2.5 tw-cursor-pointer'
   end
 end

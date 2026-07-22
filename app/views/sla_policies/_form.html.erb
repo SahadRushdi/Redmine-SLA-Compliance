@@ -1,47 +1,56 @@
-<%# The SLA policy form (Steps 4.2–4.5, 4.7, 4.8). Locals: project, policy. %>
+<%# The four policy sections of the sectioned settings tab (Steps 4.2–4.5, 4.7, 4.8). %>
+<%# Locals: project, policy, current (active section key). %>
+<%# %>
+<%# Each section is its OWN <form> posting the same PUT with a hidden `section` field, so a save %>
+<%# only rewrites that section's slice of the policy (see SlaPoliciesController#update). Replaces %>
+<%# the previous single form whose one Save button owned every field on a page-long scroll. %>
 <%# Re-rendered wholesale by edit.js.erb when a clone source is loaded. %>
-<%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-policy-form',
-             data: { edit_url: edit_project_sla_policy_path(project),
-                     confirm_switch: l(:text_sla_unsaved_definitions_confirm),
-                     confirm_clone: l(:text_sla_clone_confirm_overwrite) } do %>
-  <%= hidden_field_tag 'tab', 'sla_policy' %>
-  <%= hidden_field_tag 'clone_source_id', params[:clone_from].presence, id: 'sla-clone-source-id' %>
 
-  <%= render 'sla_policies/general', policy: policy %>
-  <%= render 'sla_policies/measurement', project: project, policy: policy %>
-  <%= render 'sla_policies/definitions', project: project, policy: policy %>
-  <%= render 'sla_policies/pause', project: project, policy: policy %>
-  <%= render 'sla_policies/clone', project: project %>
+<%= render 'sla_policies/general', project: project, policy: policy, current: current %>
 
-  <%# Step 4.8 — forward-only save by default; optional historical recalculation. %>
-  <div class="tw-flex tw-flex-col md:tw-flex-row md:tw-items-center tw-gap-3 tw-mb-4">
-    <label class="tw-inline-flex tw-items-center tw-gap-2 tw-text-sm tw-text-gray-900">
-      <%= check_box_tag 'recalculate', '1', false,
-            class: 'tw-w-4 tw-h-4 tw-rounded tw-border-gray-300 tw-text-primary-600 focus:tw-ring-primary-500' %>
-      <%= l(:label_sla_recalculate_historical) %>
-    </label>
-    <span class="tw-text-xs tw-text-gray-500 md:tw-max-w-md"><%= l(:text_sla_forward_only_hint) %></span>
-    <%= submit_tag l(:button_sla_save_policy),
-          class: 'tw-text-white tw-bg-primary-600 hover:tw-bg-primary-700 focus:tw-ring-2 ' \
-                 'focus:tw-ring-primary-300 tw-font-medium tw-rounded-lg tw-text-sm ' \
-                 'tw-px-5 tw-py-2.5 tw-cursor-pointer md:tw-ml-auto' %>
-  </div>
+<%# Measurement Rules / SLA Targets / Exclusions still use their pre-existing card markup; only %>
+<%# the shell (panel + per-section form + save) is new here. Their internals are restyled to the %>
+<%# card design in the following steps. %>
+<%= render layout: 'sla_policies/panel', locals: { key: 'measurement', current: current } do %>
+  <%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-measurement-form' do %>
+    <%= hidden_field_tag 'tab', 'sla_policy' %>
+    <%= hidden_field_tag 'section', 'measurement' %>
+    <%= render 'sla_policies/measurement', project: project, policy: policy %>
+    <%= render 'sla_policies/save_bar', label: l(:button_sla_save_measurement) %>
+  <% end %>
 <% end %>
 
-<%# B3 — "Revert to inherited policy": only offered when this project has its OWN row AND some %>
-<%# further ancestor also has one to fall back to (otherwise there'd be nothing to revert TO). %>
-<% if policy.persisted? && project.parent.present? %>
-  <% ancestor_project, = SlaPolicy.source_for(project.parent) %>
-  <% if ancestor_project.present? %>
-    <div class="tw-mb-8">
-      <%= button_to l(:button_sla_revert_to_inherited), project_sla_policy_path(project),
-            method: :delete,
-            data: { confirm: l(:text_sla_revert_confirm, project: ancestor_project.name) },
-            class: 'tw-text-gray-700 tw-bg-white tw-border tw-border-gray-300 hover:tw-bg-gray-100 ' \
-                   'tw-font-medium tw-rounded-lg tw-text-sm tw-px-4 tw-py-2 tw-cursor-pointer' %>
-      <p class="tw-mt-1 tw-text-xs tw-text-gray-500">
-        <%= l(:text_sla_revert_hint, project: ancestor_project.name) %>
-      </p>
+<%= render layout: 'sla_policies/panel', locals: { key: 'targets', current: current } do %>
+  <%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-policy-form',
+               data: { edit_url: edit_project_sla_policy_path(project),
+                       confirm_switch: l(:text_sla_unsaved_definitions_confirm),
+                       confirm_clone: l(:text_sla_clone_confirm_overwrite) } do %>
+    <%= hidden_field_tag 'tab', 'sla_policy' %>
+    <%= hidden_field_tag 'section', 'targets' %>
+    <%= hidden_field_tag 'clone_source_id', params[:clone_from].presence, id: 'sla-clone-source-id' %>
+
+    <%= render 'sla_policies/definitions', project: project, policy: policy %>
+    <%= render 'sla_policies/clone', project: project %>
+
+    <%# Step 4.8 — forward-only save by default; optional historical recalculation. %>
+    <div class="tw-flex tw-flex-col md:tw-flex-row md:tw-items-center tw-gap-3 tw-mb-4">
+      <label class="tw-inline-flex tw-items-center tw-gap-2 tw-text-sm tw-text-gray-900">
+        <%= check_box_tag 'recalculate', '1', false,
+              class: 'tw-w-4 tw-h-4 tw-rounded tw-border-gray-300 tw-text-primary-600 focus:tw-ring-primary-500' %>
+        <%= l(:label_sla_recalculate_historical) %>
+      </label>
+      <span class="tw-text-xs tw-text-gray-500 md:tw-max-w-md"><%= l(:text_sla_forward_only_hint) %></span>
     </div>
+
+    <%= render 'sla_policies/save_bar', label: l(:button_sla_save_policy) %>
+  <% end %>
+<% end %>
+
+<%= render layout: 'sla_policies/panel', locals: { key: 'exclusions', current: current } do %>
+  <%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-exclusions-form' do %>
+    <%= hidden_field_tag 'tab', 'sla_policy' %>
+    <%= hidden_field_tag 'section', 'exclusions' %>
+    <%= render 'sla_policies/pause', project: project, policy: policy %>
+    <%= render 'sla_policies/save_bar', label: l(:button_sla_save_exclusions) %>
   <% end %>
 <% end %>

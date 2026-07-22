@@ -1,7 +1,8 @@
 <%# Flowbite toggle switch, tw- prefixed and reused by every on/off setting in the plugin. %>
-<%# Locals: name (input name), checked (boolean), label (display text). %>
+<%# Locals: name (input name), checked (boolean); label (display text) optional — omit it when %>
+<%# the switch sits in a _switch_row, which supplies its own title/description on the left. %>
 <%# Posts '0' (hidden) or '1' like a Rails checkbox pair. %>
-<label class="tw-inline-flex tw-items-center tw-cursor-pointer">
+<label class="tw-inline-flex tw-items-center tw-cursor-pointer tw-shrink-0">
   <%= hidden_field_tag name, '0', id: nil %>
   <%= check_box_tag name, '1', checked, class: 'tw-sr-only tw-peer' %>
   <div class="tw-relative tw-w-11 tw-h-6 tw-bg-gray-200 tw-rounded-full tw-peer
@@ -10,5 +11,7 @@
               after:tw-content-[''] after:tw-absolute after:tw-top-[2px] after:tw-start-[2px]
               after:tw-bg-white after:tw-border after:tw-border-gray-300 after:tw-rounded-full
               after:tw-h-5 after:tw-w-5 after:tw-transition-all"></div>
-  <span class="tw-ms-3 tw-text-sm tw-font-medium tw-text-gray-900"><%= label %></span>
+  <% if local_assigns[:label].present? %>
+    <span class="tw-ms-3 tw-text-sm tw-font-medium tw-text-gray-900"><%= label %></span>
+  <% end %>
 </label>

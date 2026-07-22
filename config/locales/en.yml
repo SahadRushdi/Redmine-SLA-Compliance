@@ -124,7 +124,30 @@ en:
 
   # --- SLA Policy tab (Phase 4) ------------------------------------------------------------
   label_sla_policy: "SLA Policy"
+
+  # Sectioned settings shell — page header, sidebar nav entries (label + sub-label).
+  label_sla_policy_settings: "SLA Policy Settings"
+  text_sla_policy_settings_intro: "Configure SLA targets, measurement rules, and notification preferences for this project."
+  label_sla_section_general: "General"
+  text_sla_section_general: "SLA status & coverage hours"
+  label_sla_section_measurement: "Measurement Rules"
+  text_sla_section_measurement: "Statuses, first response & at-risk"
+  label_sla_section_targets: "SLA Targets"
+  text_sla_section_targets: "Per-tracker priority targets"
+  label_sla_section_exclusions: "Exclusions"
+  text_sla_section_exclusions: "Pause statuses & handling"
+  label_sla_section_notifications: "Notifications"
+  text_sla_section_notifications: "Email & webhook alerts"
+
   label_sla_policy_general: "General"
+  label_sla_status_card: "SLA Status"
+  text_sla_status_card: "Enable or disable SLA tracking for this project."
+  field_sla_tracking: "SLA Tracking"
+  text_sla_tracking_hint: "When disabled, no SLA targets will be evaluated for new issues."
+  label_sla_coverage_card: "Coverage Hours"
+  text_sla_coverage_card: "Define when the SLA clock is active."
+  field_sla_coverage_schedule: "Coverage schedule"
+  text_sla_coverage_schedule_hint: "Specifies the hours during which SLA time is counted. E.g. 24×7×365 for always-on."
   field_sla_enabled: "SLA enabled"
   field_coverage_hours: "Coverage hours"
   label_coverage_24x7: "24×7×365"
@@ -171,6 +194,9 @@ en:
 
   text_sla_unsaved_definitions_confirm: "You have unsaved target changes for this tracker. Switching will discard them. Continue?"
   button_sla_save_policy: "Save Policy"
+  button_sla_save_general: "Save General Settings"
+  button_sla_save_measurement: "Save Measurement Rules"
+  button_sla_save_exclusions: "Save Exclusions"
   button_sla_save_notifications: "Save Notification Settings"
 
   # --- Inheritance banner + Override/Revert (B3) --------------------------------------------

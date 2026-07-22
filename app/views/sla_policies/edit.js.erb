@@ -1,6 +1,17 @@
 <% if params[:clone_from].present? %>
-$('#sla-policy-form-container').html('<%= escape_javascript(
-  render 'sla_policies/form', project: @project, policy: @sla_policy) %>');
+<%# Clone-source load and B3's Override both swap the nav AND the policy sections: Override %>
+<%# starts from the read-only inherited banner, whose sidebar offers Notifications only, so the %>
+<%# nav has to be rebuilt alongside the sections it now points at. %>
+<%# %>
+<%# The Notifications panel is NOT part of either region and is left untouched, so text typed %>
+<%# there (and its Tom Select instances) survives a clone load. %>
+<% sections = sla_visible_sections(@project) %>
+<% current = sla_current_section(sections) %>
+$('#sla-policy-nav-slot').replaceWith('<%= escape_javascript(
+  render 'sla_policies/nav_slot', project: @project, sections: sections, current: current) %>');
+$('#sla-policy-tab-body').html('<%= escape_javascript(
+  render 'sla_policies/policy_body',
+         project: @project, policy: @sla_policy, current: current, inherited_source: nil) %>');
 <% else %>
 <% policy = sla_policy_for_form(@project) %>
 $('#sla-definitions-rows').html('<%= escape_javascript(

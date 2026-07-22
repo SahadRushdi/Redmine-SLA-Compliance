@@ -1,33 +1,68 @@
-<%# Enable toggle, coverage hours, business calendar (shown only for Business Hours). %>
-<div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-shadow-sm tw-p-5 tw-mb-6">
-  <h3 class="tw-text-base tw-font-semibold tw-text-gray-900 tw-mb-4"><%= l(:label_sla_policy_general) %></h3>
+<%# General section — SLA on/off and coverage hours (business calendar shown only for Business %>
+<%# Hours coverage). Its own <form>: each section saves independently, and the hidden `section` %>
+<%# field tells SlaPoliciesController#update which slice of the policy this submit may touch, so %>
+<%# saving here can never clear another section's status mappings or targets. Locals: project, %>
+<%# policy, current (active section key). %>
+<%= render layout: 'sla_policies/panel', locals: { key: 'general', current: current } do %>
+  <%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-general-form' do %>
+    <%= hidden_field_tag 'tab', 'sla_policy' %>
+    <%= hidden_field_tag 'section', 'general' %>
 
-  <div class="tw-mb-4">
-    <%= render 'sla_compliance/toggle', name: 'sla_policy[enabled]',
-               checked: policy.enabled?, label: l(:field_sla_enabled) %>
-  </div>
+    <%= render layout: 'sla_policies/card',
+               locals: { title: l(:label_sla_status_card),
+                         description: l(:text_sla_status_card) } do %>
+      <%= render 'sla_policies/switch_row', name: 'sla_policy[enabled]',
+                 checked: policy.enabled?, title: l(:field_sla_tracking),
+                 description: l(:text_sla_tracking_hint) %>
+    <% end %>
 
-  <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-4">
-    <div>
-      <label for="sla_policy_coverage_hours" class="<%= sla_label_classes %>"><%= l(:field_coverage_hours) %></label>
-      <%= select_tag 'sla_policy[coverage_hours]',
-            options_for_select(SlaPolicy::COVERAGE_HOURS.map { |c| [l("label_coverage_#{c}"), c] },
-                               policy.coverage_hours),
-            id: 'sla_policy_coverage_hours', class: sla_input_classes, data: { sla_select: true } %>
-    </div>
+    <%= render layout: 'sla_policies/card',
+               locals: { title: l(:label_sla_coverage_card),
+                         description: l(:text_sla_coverage_card) } do %>
+      <div class="tw-mb-4">
+        <label for="sla_policy_coverage_hours" class="<%= sla_label_classes %>"><%= l(:field_sla_coverage_schedule) %></label>
+        <%= select_tag 'sla_policy[coverage_hours]',
+              options_for_select(SlaPolicy::COVERAGE_HOURS.map { |c| [l("label_coverage_#{c}"), c] },
+                                 policy.coverage_hours),
+              id: 'sla_policy_coverage_hours', class: sla_input_classes, data: { sla_select: true } %>
+        <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500"><%= l(:text_sla_coverage_schedule_hint) %></p>
+      </div>
 
-    <div id="sla-calendar-field" class="<%= 'hidden' unless policy.business_hours? %>">
-      <label for="sla_policy_business_calendar_id" class="<%= sla_label_classes %>"><%= l(:field_business_calendar) %></label>
-      <% calendars = SlaBusinessCalendar.order(:name).to_a %>
-      <% if calendars.any? %>
-        <%= select_tag 'sla_policy[business_calendar_id]',
-              options_for_select([['', '']] + calendars.map { |c| [c.name, c.id] },
-                                 policy.business_calendar_id),
-              id: 'sla_policy_business_calendar_id', class: sla_input_classes,
-              data: { sla_select: true } %>
-      <% else %>
-        <p class="tw-text-sm tw-text-gray-500"><%= l(:text_sla_no_business_calendars) %></p>
-      <% end %>
-    </div>
-  </div>
-</div>
+      <div id="sla-calendar-field" class="<%= 'hidden' unless policy.business_hours? %>">
+        <label for="sla_policy_business_calendar_id" class="<%= sla_label_classes %>"><%= l(:field_business_calendar) %></label>
+        <% calendars = SlaBusinessCalendar.order(:name).to_a %>
+        <% if calendars.any? %>
+          <%= select_tag 'sla_policy[business_calendar_id]',
+                options_for_select([['', '']] + calendars.map { |c| [c.name, c.id] },
+                                   policy.business_calendar_id),
+                id: 'sla_policy_business_calendar_id', class: sla_input_classes,
+                data: { sla_select: true } %>
+        <% else %>
+          <p class="tw-text-sm tw-text-gray-500"><%= l(:text_sla_no_business_calendars) %></p>
+        <% end %>
+      </div>
+    <% end %>
+
+    <%= render 'sla_policies/save_bar', label: l(:button_sla_save_general) %>
+  <% end %>
+
+  <%# B3 — "Revert to inherited policy": only offered when this project has its OWN row AND some %>
+  <%# further ancestor also has one to fall back to (otherwise there'd be nothing to revert TO). %>
+  <%# It lives here (a policy-lifecycle action, not a field) and OUTSIDE the form above, because %>
+  <%# button_to emits its own form and forms cannot nest. %>
+  <% if policy.persisted? && project.parent.present? %>
+    <% ancestor_project, = SlaPolicy.source_for(project.parent) %>
+    <% if ancestor_project.present? %>
+      <div class="tw-mt-2 tw-mb-8">
+        <%= button_to l(:button_sla_revert_to_inherited), project_sla_policy_path(project),
+              method: :delete,
+              data: { confirm: l(:text_sla_revert_confirm, project: ancestor_project.name) },
+              class: 'tw-text-gray-700 tw-bg-white tw-border tw-border-gray-300 hover:tw-bg-gray-100 ' \
+                     'tw-font-medium tw-rounded-lg tw-text-sm tw-px-4 tw-py-2 tw-cursor-pointer' %>
+        <p class="tw-mt-1 tw-text-xs tw-text-gray-500">
+          <%= l(:text_sla_revert_hint, project: ancestor_project.name) %>
+        </p>
+      </div>
+    <% end %>
+  <% end %>
+<% end %>
