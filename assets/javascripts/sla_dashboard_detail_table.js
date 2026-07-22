@@ -1,9 +1,12 @@
-/* SLA dashboard ticket-level detail table — client-side sorting + pagination (no page reload).
- * The controller renders the full filtered row set (state tab / search / main filters still
- * resubmit server-side, since they change which rows are in scope); this file sorts and paginates
- * those already-rendered rows in place. Sort direction is shown by a grey up/down arrow on the
- * active column header (never blue). Same IIFE / idempotent-init / DOMContentLoaded convention as
- * the other dashboard scripts. Plain ES5 for parity with the rest of the plugin's JS. */
+/* SLA dashboard ticket-level detail table — client-side search + sorting + pagination (no page
+ * reload). The controller renders the full filtered row set (state tab / main filters still
+ * resubmit server-side, since they change which rows are in scope); this file searches, sorts and
+ * paginates those already-rendered rows in place. Free-text search matches each row's
+ * data-sla-search attribute (ticket id, project, tracker, title, status, assignee, result -
+ * built server-side in _detail_table.html.erb) and updates on every keystroke. Sort direction is
+ * shown by a grey up/down arrow on the active column header (never blue). Same IIFE /
+ * idempotent-init / DOMContentLoaded convention as the other dashboard scripts. Plain ES5 for
+ * parity with the rest of the plugin's JS. */
 (function () {
   'use strict';
 
@@ -54,10 +57,15 @@
     this.headers = Array.prototype.slice.call(root.querySelectorAll('thead th[data-sla-sort]'));
     this.pager = root.querySelector('#sla-detail-pagination');
     this.perPage = root.querySelector('[data-sla-perpage]');
+    this.searchInput = root.querySelector('#sla-detail-search');
+    this.noMatchRow = null;
     this.pageSize = this.readPageSize();
     this.page = 1;
     this.sortKey = null;
     this.sortDir = 'asc';
+    // Pre-filled from the server (e.g. a bookmarked ?q= link) so the table is already filtered
+    // to match the search box on first render, exactly like every other keystroke after that.
+    this.searchQuery = this.searchInput ? this.searchInput.value.trim().toLowerCase() : '';
     this.labels = this.pager ? {
       showing: this.pager.getAttribute('data-l-showing') || 'Showing',
       of: this.pager.getAttribute('data-l-of') || 'of',
@@ -78,15 +86,50 @@
     return -1;
   };
 
+  // Matches against the row's pre-built data-sla-search attribute (ticket id, project, tracker,
+  // title, status, assignee, result - see _detail_table.html.erb), not just the visible columns,
+  // so the free-text box searches every field a user would reasonably expect it to.
+  Table.prototype.matchesSearch = function (row) {
+    if (!this.searchQuery) { return true; }
+    var haystack = row.getAttribute('data-sla-search') || row.textContent || '';
+    return haystack.toLowerCase().indexOf(this.searchQuery) !== -1;
+  };
+
+  Table.prototype.filteredRows = function () {
+    var self = this;
+    return this.rows.filter(function (row) { return self.matchesSearch(row); });
+  };
+
   Table.prototype.sortedRows = function () {
-    if (!this.sortKey) { return this.rows.slice(); }
+    var rows = this.filteredRows();
+    if (!this.sortKey) { return rows; }
     var index = this.columnIndex(this.sortKey);
     var header = index >= 0 ? this.headers[index] : null;
     var type = header ? header.getAttribute('data-sla-sort-type') : 'text';
     var dir = this.sortDir;
-    return this.rows.slice().sort(function (r1, r2) {
+    return rows.sort(function (r1, r2) {
       return compare(cellValue(r1, index), cellValue(r2, index), type, dir);
     });
+  };
+
+  // Shown in place of the table body when the search box has a value but nothing in the current
+  // state-tab scope matches it — distinct from the empty-state row rendered by the ERB template,
+  // which only appears when there were zero rows to begin with.
+  Table.prototype.renderNoMatchRow = function (total) {
+    if (!this.noMatchRow) {
+      var td = document.createElement('td');
+      td.colSpan = this.headers.length;
+      td.className = 'tw-py-8 tw-text-center tw-text-gray-400';
+      td.textContent = this.root.getAttribute('data-l-no-search-match') || 'No matches.';
+      var tr = document.createElement('tr');
+      tr.appendChild(td);
+      this.noMatchRow = tr;
+    }
+    if (total === 0 && this.searchQuery) {
+      this.tbody.appendChild(this.noMatchRow);
+    } else if (this.noMatchRow.parentNode) {
+      this.noMatchRow.parentNode.removeChild(this.noMatchRow);
+    }
   };
 
   Table.prototype.render = function () {
@@ -97,12 +140,16 @@
     var start = (this.page - 1) * this.pageSize;
     var end = Math.min(start + this.pageSize, total);
 
+    // Hide everything first: sorted/paginated rows below only re-show the current page, and
+    // rows filtered out by search never appear in `sorted` at all so must be hidden explicitly.
+    this.rows.forEach(function (row) { row.style.display = 'none'; });
     for (var i = 0; i < sorted.length; i++) {
       this.tbody.appendChild(sorted[i]); // moves the node into sorted order
       sorted[i].style.display = (i >= start && i < end) ? '' : 'none';
     }
 
     this.renderIcons();
+    this.renderNoMatchRow(total);
     this.renderPager(total, start, end, pages);
   };
 
@@ -175,6 +222,13 @@
     if (this.perPage) {
       this.perPage.addEventListener('change', function () {
         self.pageSize = self.readPageSize();
+        self.page = 1;
+        self.render();
+      });
+    }
+    if (this.searchInput) {
+      this.searchInput.addEventListener('input', function () {
+        self.searchQuery = self.searchInput.value.trim().toLowerCase();
         self.page = 1;
         self.render();
       });

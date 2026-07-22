@@ -74,6 +74,7 @@ en:
   label_sla_detail_showing: "Showing"
   label_sla_detail_of: "of"
   text_sla_detail_table_empty_state: "No tickets match the current filters."
+  text_sla_detail_no_search_matches: "No tickets match your search."
 
   # --- Admin lookups (target options + business calendars) --------------------------------
   label_sla_target_options: "SLA Target Options"

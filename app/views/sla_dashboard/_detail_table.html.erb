@@ -1,8 +1,9 @@
 <%# Step 6.4 — ticket-level detail. Reads the exact same @scope every other part of the %>
 <%# dashboard reads (Sla::EffectiveState - same effective-state definition as the summary cards, %>
-<%# so this table can never disagree with them). State tabs, search and the main filters resubmit %>
-<%# as plain GET links/forms (they change WHICH rows are in scope). Sorting and pagination are %>
-<%# CLIENT-SIDE (sla_dashboard_detail_table.js) over the full row set rendered here - no reload. %>
+<%# so this table can never disagree with them). State tabs and the main filters still resubmit %>
+<%# as plain GET links/forms (they change WHICH rows are in scope). Free-text search, sorting and %>
+<%# pagination are all CLIENT-SIDE (sla_dashboard_detail_table.js) over the full row set rendered %>
+<%# here - no reload for any of the three. %>
 <% detail_columns = [
      ['ticket', l(:field_sla_detail_ticket), 'number'], ['project', l(:field_sla_detail_project), 'text'],
      ['tracker', l(:field_sla_detail_tracker), 'text'], ['title', l(:field_sla_detail_title), 'text'],
@@ -13,25 +14,26 @@
 <% detail_states = [['all', l(:label_sla_detail_state_all), @counts.total]] +
      %w[met breached at_risk no_sla].map { |s| [s, sla_card_label(s.to_sym), @counts.public_send(s)] } %>
 <div id="sla-detail-table" data-sla-detail-table
+     data-l-no-search-match="<%= l(:text_sla_detail_no_search_matches) %>"
      class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-p-5 tw-shadow-sm">
   <div class="tw-flex tw-items-center tw-justify-between tw-flex-wrap tw-gap-3 tw-mb-4">
     <h3 class="tw-text-base tw-font-semibold tw-text-gray-900"><%= l(:label_sla_detail_table) %></h3>
 
     <div class="tw-flex tw-items-center tw-gap-3">
-      <%# Reconstructs every OTHER currently-active GET param as hidden fields (generic - never %>
-      <%# needs updating when a new filter param is added), so a search only ever narrows the %>
-      <%# existing view rather than resetting it. %>
-      <%= form_tag(sla_dashboard_base_path(@project), method: :get, class: 'tw-relative') do %>
-        <% request.query_parameters.except('q', 'page').each do |key, value| %>
-          <% Array(value).each { |v| hidden_field_tag(value.is_a?(Array) ? "#{key}[]" : key, v, id: nil) } %>
-        <% end %>
+      <%# Client-side instant search (sla_dashboard_detail_table.js) - filters the already-rendered %>
+      <%# rows below on every keystroke via each row's data-sla-search attribute (built server-side %>
+      <%# per row: ticket id, project, tracker, title, status, assignee and result). No round trip: %>
+      <%# state tabs and the main filters still resubmit as plain GET links (they change WHICH rows %>
+      <%# are in scope), but the free-text query never needs to - every row already in scope is %>
+      <%# already on the page for this to filter over. %>
+      <div class="tw-relative">
         <svg class="tw-w-4 tw-h-4 tw-absolute tw-left-3 tw-top-1/2 -tw-translate-y-1/2 tw-text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
         </svg>
-        <%= search_field_tag :q, @search_query, id: 'sla-detail-search', placeholder: l(:label_sla_detail_search_placeholder),
+        <%= search_field_tag :q, @search_query, id: 'sla-detail-search', placeholder: l(:label_sla_detail_search_placeholder), autocomplete: 'off',
               class: 'tw-bg-white tw-border tw-border-gray-300 tw-text-gray-900 tw-text-sm tw-rounded-lg ' \
                      'focus:tw-ring-primary-500 focus:tw-border-primary-500 tw-pl-10 tw-pr-3 tw-py-2.5 tw-w-80' %>
-      <% end %>
+      </div>
 
       <%# Client-side page size (sla_dashboard_detail_table.js) — a plain, non-typeable dropdown %>
       <%# list; changing it re-paginates the already-rendered rows without a reload. %>
@@ -113,7 +115,15 @@
       <tbody id="sla-detail-table-body">
         <% @detail_results.each do |sla_result| %>
           <% issue = sla_result.issue %>
-          <tr data-sla-row class="tw-border-b tw-border-gray-100 hover:tw-bg-gray-50" id="sla-detail-row-<%= issue.id %>">
+          <% effective_state = sla_result.effective_primary_state %>
+          <% result_label = sla_card_label(effective_state.to_sym) %>
+          <% result_label = "#{result_label} #{l(:label_sla_card_at_risk)}" if sla_result.effective_at_risk? %>
+          <%# Searchable text for the client-side instant search above - every field a user would %>
+          <%# reasonably expect to search by, not just subject/id. %>
+          <% search_terms = [issue.id, issue.project.name, issue.tracker.name, issue.subject,
+                             issue.status.name, issue.assigned_to&.name, result_label].join(' ') %>
+          <tr data-sla-row data-sla-search="<%= search_terms %>"
+              class="tw-border-b tw-border-gray-100 hover:tw-bg-gray-50" id="sla-detail-row-<%= issue.id %>">
             <td class="tw-py-2.5 tw-pr-4" data-sla-sort-value="<%= issue.id %>">
               <%= link_to "##{issue.id}", issue_path(issue), target: '_blank', rel: 'noopener',
                     class: 'tw-text-primary-600 tw-font-medium hover:tw-underline' %>
@@ -129,7 +139,6 @@
             <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap" data-sla-sort-value="<%= sla_result.response_seconds %>"><%= format_sla_duration(sla_result.response_seconds) %></td>
             <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap" data-sla-sort-value="<%= sla_result.resolution_seconds %>"><%= format_sla_duration(sla_result.resolution_seconds) %></td>
             <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap" data-sla-sort-value="<%= sla_result_sort_rank(sla_result) %>">
-              <% effective_state = sla_result.effective_primary_state %>
               <span class="tw-inline-block tw-rounded-full tw-px-2 tw-py-0.5 tw-text-xs tw-font-medium <%= sla_card_color_classes(effective_state.to_sym) %>">
                 <%= sla_card_label(effective_state.to_sym) %>
               </span>
