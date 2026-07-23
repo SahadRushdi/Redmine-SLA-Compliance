@@ -53,10 +53,30 @@
     return form ? form.getAttribute('data-' + key) : null;
   }
 
+  // Open the list UPWARDS when it wouldn't fit below the control in the viewport. The dropdown is
+  // absolutely positioned inside its card (deliberately not body-parented: our styling for it is
+  // scoped to .sla-plugin and would not follow it out), so a list on the last row of the Priority
+  // Targets table would otherwise open off the bottom of the screen. `sla-ts-drop-up` flips it in
+  // CSS; see partials/_tom_select.css. Re-measured on every open, since row position and list
+  // length both change as the user filters.
+  function bindDropUp(instance) {
+    instance.on('dropdown_open', function (dropdown) {
+      var rect = instance.control.getBoundingClientRect();
+      var needed = dropdown.offsetHeight;
+      var roomBelow = window.innerHeight - rect.bottom;
+      var flip = roomBelow < needed && rect.top > roomBelow;
+      instance.wrapper.classList.toggle('sla-ts-drop-up', flip);
+    });
+    instance.on('dropdown_close', function () {
+      instance.wrapper.classList.remove('sla-ts-drop-up');
+    });
+    return instance;
+  }
+
   function initChips() {
     document.querySelectorAll('select[data-sla-chips]').forEach(function (el) {
       if (!el.tomselect && window.TomSelect) {
-        new TomSelect(el, { plugins: ['remove_button'] });
+        bindDropUp(new TomSelect(el, { plugins: ['remove_button'] }));
       }
     });
   }
@@ -64,12 +84,12 @@
   function initEmailChips() {
     document.querySelectorAll('select[data-sla-emails]').forEach(function (el) {
       if (!el.tomselect && window.TomSelect) {
-        new TomSelect(el, {
+        bindDropUp(new TomSelect(el, {
           plugins: ['remove_button'],
           create: true,
           persist: false,
           createFilter: function (input) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(input); }
-        });
+        }));
       }
     });
   }
@@ -85,7 +105,7 @@
   function initSingleSelects() {
     document.querySelectorAll('select[data-sla-select]').forEach(function (el) {
       if (!el.tomselect && window.TomSelect) {
-        new TomSelect(el, { create: false, allowEmptyOption: true });
+        bindDropUp(new TomSelect(el, { create: false, allowEmptyOption: true }));
       }
     });
   }
@@ -106,6 +126,18 @@
     field.classList.toggle('hidden', !businessHours);
     var calendarSelect = byId('sla_policy_business_calendar_id');
     if (calendarSelect) { calendarSelect.required = businessHours; }
+  }
+
+  // A switch marked data-sla-reveals="<key>" owns the [data-sla-reveal="<key>"] block of detail
+  // fields below it: an alert card the project doesn't use stays a single line. The block is only
+  // HIDDEN, never emptied — its inputs still post, so switching an alert off and on again cannot
+  // silently drop the recipients already saved for it.
+  function syncReveals() {
+    document.querySelectorAll('[data-sla-reveals]').forEach(function (input) {
+      var key = input.getAttribute('data-sla-reveals');
+      var block = document.querySelector('[data-sla-reveal="' + key + '"]');
+      if (block) { block.classList.toggle('hidden', !input.checked); }
+    });
   }
 
   function toggleDigestInterval() {
@@ -132,6 +164,7 @@
       activateSection(this.getAttribute('data-sla-section-link'));
     });
 
+    jQuery(document).on('change', '[data-sla-reveals]', syncReveals);
     jQuery(document).on('change', '#sla_policy_coverage_hours', toggleCalendarField);
     jQuery(document).on('change',
       'input[name="sla_notification_setting[at_risk_email_frequency]"]', toggleDigestInterval);
@@ -184,6 +217,7 @@
     initChips();
     initEmailChips();
     initSingleSelects();
+    syncReveals();
     toggleCalendarField();
     toggleDigestInterval();
     state.defsSnapshot = snapshotDefs();

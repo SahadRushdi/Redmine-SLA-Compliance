@@ -83,11 +83,29 @@ module SlaPoliciesHelper
 
   # Floppy-disk glyph shown on every section's primary save button (matches the design).
   def sla_save_icon
-    ('<svg class="tw-w-4 tw-h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' \
+    sla_inline_icon('<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>' \
+                    '<polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>')
+  end
+
+  # Two-sheets glyph on the Clone Policy "Load" button.
+  def sla_copy_icon
+    sla_inline_icon('<rect x="9" y="9" width="13" height="13" rx="2"/>' \
+                    '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>')
+  end
+
+  # Circled "i" leading the amber unclassified-priority notice.
+  def sla_info_icon
+    sla_inline_icon('<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/>' \
+                    '<line x1="12" y1="8" x2="12.01" y2="8"/>')
+  end
+
+  # Shared 16×16 outline-icon wrapper. The path strings above are static developer-authored markup
+  # (no user data), which is what makes html_safe correct here; `currentColor` lets the surrounding
+  # text colour drive the stroke.
+  def sla_inline_icon(paths, size_classes = 'tw-w-4 tw-h-4 tw-shrink-0')
+    ("<svg class=\"#{size_classes}\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" " \
      'stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' \
-     '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>' \
-     '<polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>' \
-     '</svg>').html_safe
+     "#{paths}</svg>").html_safe
   end
 
   # The policy shown in the form: a controller-provided one (validation failure / clone
@@ -151,6 +169,43 @@ module SlaPoliciesHelper
   # SLA Compliance)? Always excluded from SLA Definitions — see Sla::PolicyContext#definition_for.
   def sla_unclassified_priority?(priority_id)
     priority_id.present? && priority_id == Sla::PluginSettings.unclassified_priority_id
+  end
+
+  # The configured unclassified priority itself, or nil when none is designated. Drives the amber
+  # notice above the Priority Targets table (the row it replaces).
+  def sla_unclassified_priority
+    return @sla_unclassified_priority if defined?(@sla_unclassified_priority)
+
+    id = Sla::PluginSettings.unclassified_priority_id
+    @sla_unclassified_priority = id.present? ? IssuePriority.active.detect { |p| p.id == id } : nil
+  end
+
+  # Severity-coloured pill for a priority in the Priority Targets table.
+  #
+  # The colour comes from the priority's RANK among the project's active priorities, never from its
+  # name (Global Rule 1 — nothing domain-specific hard-coded): the lowest-positioned priority takes
+  # the first stop of the ramp and the highest the last, so a site with three or seven priorities,
+  # or entirely different names, still gets a sensible low→high cool-to-hot gradient.
+  PRIORITY_BADGE_RAMP = [
+    'tw-bg-gray-100 tw-text-gray-700',
+    'tw-bg-amber-100 tw-text-amber-800',
+    'tw-bg-orange-100 tw-text-orange-800',
+    'tw-bg-red-100 tw-text-red-700'
+  ].freeze
+
+  def sla_priority_badge_classes(priority)
+    ids = sla_active_priority_ids
+    index = ids.index(priority.id)
+    return PRIORITY_BADGE_RAMP.first if index.nil? || ids.size < 2
+
+    stop = (index * (PRIORITY_BADGE_RAMP.size - 1).to_f / (ids.size - 1)).round
+    PRIORITY_BADGE_RAMP[stop]
+  end
+
+  # Active priorities in position order — the ranking the badge ramp is scaled over. Memoised
+  # because _definition_rows asks once per row.
+  def sla_active_priority_ids
+    @sla_active_priority_ids ||= IssuePriority.active.map(&:id)
   end
 
   # --- B3: read-only display for the "inherited from an ancestor" banner ---------------------
@@ -218,9 +273,22 @@ module SlaPoliciesHelper
   end
 
   # Primary submit button — one definition for every section's save action.
+  #
+  # No `focus:tw-ring-*` here: measured in the browser, Purplemine2's own `button:focus` box-shadow
+  # beat those utilities on plain buttons, so the ring they promise never actually painted. The
+  # focus ring for every button in the plugin is declared once, unambiguously, in
+  # partials/_theme_isolation.css instead — see the note there.
   def sla_primary_button_classes
     'tw-inline-flex tw-items-center tw-gap-2 tw-text-white tw-bg-primary-600 ' \
-      'hover:tw-bg-primary-700 focus:tw-ring-2 focus:tw-ring-primary-300 tw-font-medium ' \
+      'hover:tw-bg-primary-700 tw-border-0 tw-font-medium ' \
       'tw-rounded-lg tw-text-sm tw-px-5 tw-py-2.5 tw-cursor-pointer'
+  end
+
+  # Neutral outlined button (Clone "Load", "Revert to inherited policy") — deliberately never blue,
+  # so the primary colour stays reserved for the one save action per section (Global Rule 7).
+  def sla_secondary_button_classes
+    'tw-inline-flex tw-items-center tw-gap-2 tw-text-gray-900 tw-bg-white tw-border ' \
+      'tw-border-solid tw-border-gray-300 hover:tw-bg-gray-100 ' \
+      'tw-font-medium tw-rounded-lg tw-text-sm tw-px-4 tw-py-2.5 tw-cursor-pointer'
   end
 end

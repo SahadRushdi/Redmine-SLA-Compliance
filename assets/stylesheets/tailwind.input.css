@@ -14,6 +14,9 @@
  *   - _tom_select.css — the Tom Select chip multi-select skin (Step 4.4/6.1).
  *   - _settings_nav.css — the SLA Policy settings sidebar's section links (active/inactive state
  *     as one toggled class, so the JS carries no Tailwind class strings).
+ *   - _option_card.css — radio buttons presented as selectable tiles. Also CSS rather than
+ *     utilities, but for a different reason: the :checked state has to reach an ANCESTOR, which
+ *     Tailwind's sibling-based `peer-checked:` variant cannot express.
  * postcss-import inlines these before Tailwind/scoping run, so they get the exact same
  * `.sla-plugin` treatment as everything else in this file.
  */
@@ -21,6 +24,7 @@
 @import 'partials/_datepicker.css';
 @import 'partials/_tom_select.css';
 @import 'partials/_settings_nav.css';
+@import 'partials/_option_card.css';
 
 @tailwind base;
 @tailwind components;

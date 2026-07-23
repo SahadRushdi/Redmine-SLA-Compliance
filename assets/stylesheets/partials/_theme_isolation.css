@@ -25,6 +25,72 @@ textarea:focus {
 }
 
 /*
+ * Purplemine2's button "raised edge".
+ *
+ * Its base rule is `input[type=button], input[type=submit], input[type=reset], button { …
+ * background-color:#0065ff; border-color:#0065ff #0065ff #004dc2; box-shadow:0 1px 0 #004dc2 }`,
+ * with hover/focus/active variants swapping in darker blues. The colour properties are all beaten
+ * by this plugin's own `tw-bg-*` / `tw-border-*` utilities (a `.sla-plugin .tw-…` selector scores
+ * 0,2,0 against the theme's 0,0,1), but `box-shadow` is not: no button utility here sets a resting
+ * box-shadow, so the theme's 1px dark-blue underline survived on every neutral button — read as a
+ * stray blue border line under the Clone Policy "Load" button.
+ *
+ * The theme also colours the BORDER blue (`border: 1px solid` + `border-color: #0065ff #0065ff
+ * #004dc2`), which is why a button carrying no `tw-border-*` of its own still drew a blue edge.
+ *
+ * Reset both for every state, then state the focus treatment OUTRIGHT rather than leaving it to
+ * whichever stylesheet wins — CLAUDE.md rule 4. That last part is not optional here: measured in
+ * the browser, the theme's `button:focus` shadow was beating this plugin's own
+ * `focus:tw-ring-2 focus:tw-ring-gray-200` utilities on the neutral buttons (the ring never
+ * painted; only the blue line did), so simply deleting the theme's shadow would have left those
+ * buttons with NO focus indicator at all. The button helpers in SlaPoliciesHelper no longer carry
+ * ring utilities at all — this is the single definition.
+ *
+ * `:focus-visible`, not `:focus`, so the ring answers keyboard navigation without flashing on
+ * every mouse click. It is the primary colour — the one blue permitted in UI chrome, and only for
+ * a focus state. Element-level specificity (0,1,1) on the resting rule so any `tw-border-*` on the
+ * button still wins for colour.
+ *
+ * The ring is an `outline`, not a `box-shadow`: box-shadow on these buttons is contested by the
+ * theme, by Tailwind's ring variables and by the utilities, and was measured resolving to a fully
+ * transparent (invisible) value on the neutral buttons no matter which of those was expected to
+ * win. `outline` has exactly one other declaration anywhere in the plugin — the `outline: none`
+ * reset directly above, which this rule follows and so overrides on the tie — making the focus
+ * indicator deterministic instead of a cascade race.
+ */
+button,
+input[type='button'],
+input[type='submit'],
+input[type='reset'] {
+  box-shadow: none;
+  border-color: transparent;
+}
+
+button:hover,
+button:focus,
+button:active,
+input[type='button']:hover,
+input[type='button']:focus,
+input[type='button']:active,
+input[type='submit']:hover,
+input[type='submit']:focus,
+input[type='submit']:active {
+  /* box-shadow only. A `border-color` here would score 0,2,1 and beat the buttons' own
+     `tw-border-gray-300` (0,2,0), stripping the secondary button's outline on hover; the
+     element-level rule above handles the theme's border for these states too. */
+  box-shadow: none;
+}
+
+button:focus-visible,
+input[type='button']:focus-visible,
+input[type='submit']:focus-visible,
+input[type='reset']:focus-visible {
+  outline: 2px solid #2563eb; /* primary-600 */
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+/*
  * Native form-control appearance reset (select / text-like inputs / radio / checkbox).
  *
  * Root cause of two reported bugs — "dropdown text is cut off" and "unchecked radios are

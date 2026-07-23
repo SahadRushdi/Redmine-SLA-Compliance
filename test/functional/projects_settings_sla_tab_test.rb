@@ -112,6 +112,64 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select "[data-sla-panel='notifications']:not(.hidden)"
   end
 
+  # --- Section bodies ---------------------------------------------------------------------------
+
+  # The unclassified priority can never hold a target (enforced in
+  # SlaPoliciesController#replace_tracker_definitions!), so the Priority Targets card states that
+  # once in a notice rather than rendering a permanently disabled row. Rendering inputs for it
+  # would be worse than redundant — it would invite a submission the server is bound to discard.
+  test "the unclassified priority is a notice above the table, never a row with inputs" do
+    none = IssuePriority.active.first
+    Setting.plugin_redmine_sla_compliance = { 'unclassified_priority_id' => none.id.to_s }
+    classified = IssuePriority.active.detect { |p| p.id != none.id }
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+    assert_response :success
+
+    assert_select '[data-sla-panel="targets"]' do
+      assert_select "select[name^='definitions[rows][#{none.id}]']", 0,
+                    'no input may be offered for a priority whose submission is always rejected'
+      assert_select "select[name='definitions[rows][#{classified.id}][response]']", 1,
+                    'other priorities must still get their target dropdowns'
+    end
+  end
+
+  test "with no unclassified priority configured every active priority gets a row" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+    assert_response :success
+
+    IssuePriority.active.each do |priority|
+      assert_select "select[name='definitions[rows][#{priority.id}][response]']", 1
+    end
+  end
+
+  # A disabled alert card collapses to just its switch, but its fields stay in the DOM and keep
+  # posting — otherwise turning an alert off and on again would silently drop the recipients the
+  # project had already saved.
+  test "a disabled alert card hides its detail fields without dropping them from the form" do
+    SlaNotificationSetting.create!(project_id: @project.id, at_risk_email_enabled: false,
+                                   at_risk_email_recipients: ['ops@example.com'])
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'notifications' }
+    assert_response :success
+
+    assert_select '[data-sla-reveal="at-risk-email"].hidden'
+    assert_select '#sla-notification-form select#sla-at-risk-recipients' do
+      assert_select "option[selected][value='ops@example.com']"
+    end
+  end
+
+  test "an enabled alert card renders its detail fields open" do
+    SlaNotificationSetting.create!(project_id: @project.id, at_risk_email_enabled: true)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'notifications' }
+    assert_response :success
+
+    assert_select '[data-sla-reveal="at-risk-email"]:not(.hidden)'
+    # The switch has to name the block it owns, or the JS has nothing to bind the two together by.
+    assert_select 'input[data-sla-reveals="at-risk-email"][type=checkbox]'
+  end
+
   test "the tab is absent without either permission" do
     @role.remove_permission!(:edit_sla_policy, :manage_sla_notifications)
 

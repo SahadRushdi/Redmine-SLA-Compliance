@@ -14,6 +14,9 @@
  *   - _tom_select.css — the Tom Select chip multi-select skin (Step 4.4/6.1).
  *   - _settings_nav.css — the SLA Policy settings sidebar's section links (active/inactive state
  *     as one toggled class, so the JS carries no Tailwind class strings).
+ *   - _option_card.css — radio buttons presented as selectable tiles. Also CSS rather than
+ *     utilities, but for a different reason: the :checked state has to reach an ANCESTOR, which
+ *     Tailwind's sibling-based `peer-checked:` variant cannot express.
  * postcss-import inlines these before Tailwind/scoping run, so they get the exact same
  * `.sla-plugin` treatment as everything else in this file.
  */
@@ -37,6 +40,69 @@
 .sla-plugin select:focus,
 .sla-plugin textarea:focus {
   border-color: #2563eb; /* primary-600 — the only intentional blue in UI chrome */
+  box-shadow: none;
+}
+/*
+ * Purplemine2's button "raised edge".
+ *
+ * Its base rule is `input[type=button], input[type=submit], input[type=reset], button { …
+ * background-color:#0065ff; border-color:#0065ff #0065ff #004dc2; box-shadow:0 1px 0 #004dc2 }`,
+ * with hover/focus/active variants swapping in darker blues. The colour properties are all beaten
+ * by this plugin's own `tw-bg-*` / `tw-border-*` utilities (a `.sla-plugin .tw-…` selector scores
+ * 0,2,0 against the theme's 0,0,1), but `box-shadow` is not: no button utility here sets a resting
+ * box-shadow, so the theme's 1px dark-blue underline survived on every neutral button — read as a
+ * stray blue border line under the Clone Policy "Load" button.
+ *
+ * The theme also colours the BORDER blue (`border: 1px solid` + `border-color: #0065ff #0065ff
+ * #004dc2`), which is why a button carrying no `tw-border-*` of its own still drew a blue edge.
+ *
+ * Reset both for every state, then state the focus treatment OUTRIGHT rather than leaving it to
+ * whichever stylesheet wins — CLAUDE.md rule 4. That last part is not optional here: measured in
+ * the browser, the theme's `button:focus` shadow was beating this plugin's own
+ * `focus:tw-ring-2 focus:tw-ring-gray-200` utilities on the neutral buttons (the ring never
+ * painted; only the blue line did), so simply deleting the theme's shadow would have left those
+ * buttons with NO focus indicator at all. The button helpers in SlaPoliciesHelper no longer carry
+ * ring utilities at all — this is the single definition.
+ *
+ * `:focus-visible`, not `:focus`, so the ring answers keyboard navigation without flashing on
+ * every mouse click. It is the primary colour — the one blue permitted in UI chrome, and only for
+ * a focus state. Element-level specificity (0,1,1) on the resting rule so any `tw-border-*` on the
+ * button still wins for colour.
+ *
+ * The ring is an `outline`, not a `box-shadow`: box-shadow on these buttons is contested by the
+ * theme, by Tailwind's ring variables and by the utilities, and was measured resolving to a fully
+ * transparent (invisible) value on the neutral buttons no matter which of those was expected to
+ * win. `outline` has exactly one other declaration anywhere in the plugin — the `outline: none`
+ * reset directly above, which this rule follows and so overrides on the tie — making the focus
+ * indicator deterministic instead of a cascade race.
+ */
+.sla-plugin button,
+.sla-plugin input[type='button'],
+.sla-plugin input[type='submit'],
+.sla-plugin input[type='reset'] {
+  box-shadow: none;
+  border-color: transparent;
+}
+.sla-plugin button:hover,
+.sla-plugin button:focus,
+.sla-plugin button:active,
+.sla-plugin input[type='button']:hover,
+.sla-plugin input[type='button']:focus,
+.sla-plugin input[type='button']:active,
+.sla-plugin input[type='submit']:hover,
+.sla-plugin input[type='submit']:focus,
+.sla-plugin input[type='submit']:active {
+  /* box-shadow only. A `border-color` here would score 0,2,1 and beat the buttons' own
+     `tw-border-gray-300` (0,2,0), stripping the secondary button's outline on hover; the
+     element-level rule above handles the theme's border for these states too. */
+  box-shadow: none;
+}
+.sla-plugin button:focus-visible,
+.sla-plugin input[type='button']:focus-visible,
+.sla-plugin input[type='submit']:focus-visible,
+.sla-plugin input[type='reset']:focus-visible {
+  outline: 2px solid #2563eb; /* primary-600 */
+  outline-offset: 2px;
   box-shadow: none;
 }
 /*
@@ -376,6 +442,27 @@
  * Tom Select (chip multi-selects): match the Flowbite input look, neutral at rest,
  * primary-600 on focus — never the theme's own focus treatment.
  */
+/*
+ * Strip the box the original <select>'s own `sla_input_classes` leak onto the wrapper.
+ *
+ * Tom Select copies the <select>'s class list onto `.ts-wrapper`, so `tw-bg-gray-50 tw-border
+ * tw-border-gray-300 tw-rounded-lg tw-p-2.5` paint a second, larger grey rounded box AROUND the
+ * real `.ts-control` — the "light grey border outside the border" visible on every priority target
+ * dropdown. The control below supplies its own background/border/radius/padding, so the wrapper
+ * must be a bare container everywhere in the plugin, not just on the dashboard filter bar (where
+ * this was originally fixed for the same reason, ID-scoped).
+ *
+ * Written pre-scoped with the class doubled: the copied utilities are emitted AFTER this partial
+ * (Tailwind's @utilities layer comes later in the build), so an equal-specificity `.sla-plugin
+ * .ts-wrapper` would lose on source order. `.ts-wrapper.ts-wrapper` scores 0,3,0 and wins outright
+ * without !important.
+ */
+.sla-plugin .ts-wrapper.ts-wrapper {
+  background-color: transparent;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}
 .sla-plugin .ts-wrapper .ts-control {
   background-color: #f9fafb; /* gray-50 */
   border: 1px solid #d1d5db; /* gray-300 */
@@ -400,10 +487,41 @@
   border: 1px solid #d1d5db;
   border-radius: 0.5rem;
   font-size: 0.875rem;
+  /* Paint over whatever follows in the card (and over the next card): the dropdown is allowed to
+   * overflow its card now rather than being clipped into an inner scroll area — see the
+   * overflow note in sla_policies/_card.html.erb. Tom Select's own base CSS only asks for 10. */
+  z-index: 40;
 }
 .sla-plugin .ts-dropdown .active {
   background-color: #eff6ff; /* primary-50 */
   color: #111827;
+}
+/*
+ * Drop UP instead of down. sla_policy_form.js adds this class while a dropdown is open whose list
+ * would not fit below the control in the viewport — without it, a dropdown on the last row of the
+ * Priority Targets table opens off the bottom of the screen and has to be scrolled to. Tom Select
+ * has no flip of its own; its base CSS pins the list to `top: 100%`, which is what this overrides.
+ */
+.sla-plugin .ts-wrapper.sla-ts-drop-up .ts-dropdown {
+  top: auto;
+  bottom: 100%;
+  margin: 0 0 0.25rem;
+}
+/*
+ * Keep a single-select's width constant between rest and focus.
+ *
+ * Tom Select's control holds a live <input> for type-ahead; on focus it stops being zero-width, so
+ * the control's INTRINSIC width grows. In an `auto`-layout table that re-flows every column the
+ * moment a target dropdown is clicked (the Response column visibly jumping wider). The table is
+ * `table-fixed` now, which fixes the columns themselves; this keeps the control from trying to
+ * push past its cell in any other layout too.
+ */
+.sla-plugin .ts-wrapper.single .ts-control {
+  width: 100%;
+}
+.sla-plugin .ts-wrapper.single .ts-control > input {
+  min-width: 0;
+  flex: 1 1 0%;
 }
 /*
  * Dashboard filter fields ONLY (Tracker/Priority/Project Tom Select controls, the custom
@@ -413,20 +531,8 @@
  * their existing neutral grey look (the shared .ts-wrapper .ts-control rule above) untouched —
  * an ID-scoped selector outranks that rule's class/element selectors without needing !important.
  */
-/*
- * Strip the box the Tracker/Priority/Project selects' own `sla_input_classes` leak onto the
- * TomSelect wrapper — TomSelect copies the original <select>'s classes onto `.ts-wrapper`, so
- * `tw-bg-gray-50 tw-border tw-border-gray-300 tw-rounded-lg tw-p-2.5` render a gray padded box
- * AROUND the real white `.ts-control` below (and its padding crowds the Export CSV button). The
- * control provides its own border/radius/padding, so the wrapper must be a bare container.
- * ID-scoped (`1,1,0`) so it outranks the copied `tw-*` utilities without !important.
- */
-.sla-plugin #sla-filter-form .ts-wrapper {
-  background-color: transparent;
-  border: 0;
-  padding: 0;
-  box-shadow: none;
-}
+/* The wrapper-stripping this bar used to do on its own is now plugin-wide — see the
+ * `.ts-wrapper.ts-wrapper` rule at the top of this file. */
 /*
  * Neutral at rest, primary-blue only on focus/click — the fields carry a plain gray border until
  * the user interacts (the previous permanent blue border read as "always active"). Applies to the
@@ -529,6 +635,45 @@
 }
 .sla-plugin .sla-section-link.is-active .sla-section-link-chevron {
   opacity: 1;
+}
+/*
+ * Selectable option card — a radio button presented as a full-width tile (SLA Policy → Measurement
+ * Rules → First Response Rule).
+ *
+ * Written as CSS rather than Tailwind utilities because the selected state has to travel from the
+ * <input> to its ANCESTOR tile and to a sibling's descendant. Tailwind's `peer-checked:` variant
+ * compiles to a following-sibling selector (`.peer:checked ~ .peer-checked\:…`), so it can style
+ * neither a parent nor a nested element — using it here would silently render nothing.
+ *
+ * The radio itself stays a real, visible input: _theme_isolation.css already resets it to a
+ * correctly-rendering custom control, so this file only styles the tile around it.
+ *
+ * postcss-prefix-selector scopes every rule below to `.sla-plugin ...` at build time.
+ */
+.sla-plugin .sla-option-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #d1d5db; /* gray-300 */
+  border-radius: 0.5rem;
+  background-color: #ffffff;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #111827; /* gray-900 */
+  cursor: pointer;
+  transition: background-color 0.12s ease-in-out, border-color 0.12s ease-in-out;
+}
+.sla-plugin .sla-option-card:hover {
+  background-color: #f9fafb; /* gray-50 */
+}
+/* The tint and border are the primary colour (#2563eb), the only blue allowed in UI chrome. */
+.sla-plugin .sla-option-card:has(input:checked) {
+  border-color: #2563eb;
+  background-color: #eff6ff; /* primary-50 */
+}
+.sla-plugin .sla-option-card:has(input:focus-visible) {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
 }
 .sla-plugin *, .sla-plugin ::before, .sla-plugin ::after {
   --tw-border-spacing-x: 0;
@@ -1105,6 +1250,10 @@
   margin-left: -0.25rem;
   margin-right: -0.25rem;
 }
+.sla-plugin .tw-mx-1 {
+  margin-left: 0.25rem;
+  margin-right: 0.25rem;
+}
 .sla-plugin .tw-mx-auto {
   margin-left: auto;
   margin-right: auto;
@@ -1114,9 +1263,6 @@
 }
 .sla-plugin .tw-mb-0 {
   margin-bottom: 0px;
-}
-.sla-plugin .tw-mb-1 {
-  margin-bottom: 0.25rem;
 }
 .sla-plugin .tw-mb-2 {
   margin-bottom: 0.5rem;
@@ -1136,11 +1282,14 @@
 .sla-plugin .tw-mb-8 {
   margin-bottom: 2rem;
 }
-.sla-plugin .tw-ml-2 {
-  margin-left: 0.5rem;
-}
 .sla-plugin .tw-ms-3 {
   margin-inline-start: 0.75rem;
+}
+.sla-plugin .tw-mt-0 {
+  margin-top: 0px;
+}
+.sla-plugin .tw-mt-0\.5 {
+  margin-top: 0.125rem;
 }
 .sla-plugin .tw-mt-1 {
   margin-top: 0.25rem;
@@ -1153,6 +1302,9 @@
 }
 .sla-plugin .tw-mt-4 {
   margin-top: 1rem;
+}
+.sla-plugin .tw-mt-5 {
+  margin-top: 1.25rem;
 }
 .sla-plugin .tw-block {
   display: block;
@@ -1220,8 +1372,14 @@
 .sla-plugin .tw-w-3\.5 {
   width: 0.875rem;
 }
+.sla-plugin .tw-w-32 {
+  width: 8rem;
+}
 .sla-plugin .tw-w-4 {
   width: 1rem;
+}
+.sla-plugin .tw-w-40 {
+  width: 10rem;
 }
 .sla-plugin .tw-w-44 {
   width: 11rem;
@@ -1259,6 +1417,9 @@
 .sla-plugin .tw-shrink-0 {
   flex-shrink: 0;
 }
+.sla-plugin .tw-table-fixed {
+  table-layout: fixed;
+}
 .sla-plugin .-tw-translate-y-1\/2 {
   --tw-translate-y: -50%;
   transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
@@ -1285,6 +1446,9 @@
 }
 .sla-plugin .tw-grid-cols-1 {
   grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+.sla-plugin .tw-grid-cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .sla-plugin .tw-flex-col {
   flex-direction: column;
@@ -1397,6 +1561,10 @@
   border-top-right-radius: 0.5rem;
   border-bottom-right-radius: 0.5rem;
 }
+.sla-plugin .tw-rounded-t-lg {
+  border-top-left-radius: 0.5rem;
+  border-top-right-radius: 0.5rem;
+}
 .sla-plugin .tw-border {
   border-width: 1px;
 }
@@ -1411,6 +1579,10 @@
 }
 .sla-plugin .tw-border-solid {
   border-style: solid;
+}
+.sla-plugin .tw-border-amber-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(253 230 138 / var(--tw-border-opacity, 1));
 }
 .sla-plugin .tw-border-amber-300 {
   --tw-border-opacity: 1;
@@ -1480,6 +1652,10 @@
   --tw-bg-opacity: 1;
   background-color: rgb(240 253 244 / var(--tw-bg-opacity, 1));
 }
+.sla-plugin .tw-bg-orange-100 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(255 237 213 / var(--tw-bg-opacity, 1));
+}
 .sla-plugin .tw-bg-primary-100 {
   --tw-bg-opacity: 1;
   background-color: rgb(219 234 254 / var(--tw-bg-opacity, 1));
@@ -1510,6 +1686,9 @@
 .sla-plugin .tw-p-2\.5 {
   padding: 0.625rem;
 }
+.sla-plugin .tw-p-3 {
+  padding: 0.75rem;
+}
 .sla-plugin .tw-p-4 {
   padding: 1rem;
 }
@@ -1526,6 +1705,10 @@
 .sla-plugin .tw-px-2 {
   padding-left: 0.5rem;
   padding-right: 0.5rem;
+}
+.sla-plugin .tw-px-2\.5 {
+  padding-left: 0.625rem;
+  padding-right: 0.625rem;
 }
 .sla-plugin .tw-px-3 {
   padding-left: 0.75rem;
@@ -1597,6 +1780,9 @@
 .sla-plugin .tw-pt-4 {
   padding-top: 1rem;
 }
+.sla-plugin .tw-pt-5 {
+  padding-top: 1.25rem;
+}
 .sla-plugin .tw-text-left {
   text-align: left;
 }
@@ -1650,9 +1836,17 @@
   --tw-slashed-zero: slashed-zero;
   font-variant-numeric: var(--tw-ordinal) var(--tw-slashed-zero) var(--tw-numeric-figure) var(--tw-numeric-spacing) var(--tw-numeric-fraction);
 }
+.sla-plugin .tw-text-amber-500 {
+  --tw-text-opacity: 1;
+  color: rgb(245 158 11 / var(--tw-text-opacity, 1));
+}
 .sla-plugin .tw-text-amber-700 {
   --tw-text-opacity: 1;
   color: rgb(180 83 9 / var(--tw-text-opacity, 1));
+}
+.sla-plugin .tw-text-amber-800 {
+  --tw-text-opacity: 1;
+  color: rgb(146 64 14 / var(--tw-text-opacity, 1));
 }
 .sla-plugin .tw-text-blue-900 {
   --tw-text-opacity: 1;
@@ -1690,6 +1884,10 @@
   --tw-text-opacity: 1;
   color: rgb(21 128 61 / var(--tw-text-opacity, 1));
 }
+.sla-plugin .tw-text-orange-800 {
+  --tw-text-opacity: 1;
+  color: rgb(154 52 18 / var(--tw-text-opacity, 1));
+}
 .sla-plugin .tw-text-primary-600 {
   --tw-text-opacity: 1;
   color: rgb(37 99 235 / var(--tw-text-opacity, 1));
@@ -1709,6 +1907,9 @@
 .sla-plugin .tw-text-white {
   --tw-text-opacity: 1;
   color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+}
+.sla-plugin .tw-underline {
+  text-decoration-line: underline;
 }
 .sla-plugin .tw-opacity-70 {
   opacity: 0.7;
@@ -1879,10 +2080,6 @@
 .sla-plugin .focus\:tw-ring-inset:focus {
   --tw-ring-inset: inset;
 }
-.sla-plugin .focus\:tw-ring-gray-200:focus {
-  --tw-ring-opacity: 1;
-  --tw-ring-color: rgb(229 231 235 / var(--tw-ring-opacity, 1));
-}
 .sla-plugin .focus\:tw-ring-primary-100:focus {
   --tw-ring-opacity: 1;
   --tw-ring-color: rgb(219 234 254 / var(--tw-ring-opacity, 1));
@@ -1930,17 +2127,14 @@
   }
 }
 @media (min-width: 768px) {
-  .sla-plugin .md\:tw-w-1\/2 {
-    width: 50%;
-  }
   .sla-plugin .md\:tw-w-56 {
     width: 14rem;
   }
   .sla-plugin .md\:tw-w-64 {
     width: 16rem;
   }
-  .sla-plugin .md\:tw-max-w-md {
-    max-width: 28rem;
+  .sla-plugin .md\:tw-max-w-xl {
+    max-width: 36rem;
   }
   .sla-plugin .md\:tw-grid-cols-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1951,14 +2145,14 @@
   .sla-plugin .md\:tw-flex-row {
     flex-direction: row;
   }
+  .sla-plugin .md\:tw-items-start {
+    align-items: flex-start;
+  }
   .sla-plugin .md\:tw-items-end {
     align-items: flex-end;
   }
-  .sla-plugin .md\:tw-items-center {
-    align-items: center;
-  }
-  .sla-plugin .md\:tw-gap-6 {
-    gap: 1.5rem;
+  .sla-plugin .md\:tw-justify-between {
+    justify-content: space-between;
   }
 }
 @media (min-width: 1024px) {

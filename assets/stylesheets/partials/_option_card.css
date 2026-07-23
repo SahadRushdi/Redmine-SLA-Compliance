@@ -1,0 +1,43 @@
+/*
+ * Selectable option card — a radio button presented as a full-width tile (SLA Policy → Measurement
+ * Rules → First Response Rule).
+ *
+ * Written as CSS rather than Tailwind utilities because the selected state has to travel from the
+ * <input> to its ANCESTOR tile and to a sibling's descendant. Tailwind's `peer-checked:` variant
+ * compiles to a following-sibling selector (`.peer:checked ~ .peer-checked\:…`), so it can style
+ * neither a parent nor a nested element — using it here would silently render nothing.
+ *
+ * The radio itself stays a real, visible input: _theme_isolation.css already resets it to a
+ * correctly-rendering custom control, so this file only styles the tile around it.
+ *
+ * postcss-prefix-selector scopes every rule below to `.sla-plugin ...` at build time.
+ */
+
+.sla-option-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #d1d5db; /* gray-300 */
+  border-radius: 0.5rem;
+  background-color: #ffffff;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: #111827; /* gray-900 */
+  cursor: pointer;
+  transition: background-color 0.12s ease-in-out, border-color 0.12s ease-in-out;
+}
+
+.sla-option-card:hover {
+  background-color: #f9fafb; /* gray-50 */
+}
+
+/* The tint and border are the primary colour (#2563eb), the only blue allowed in UI chrome. */
+.sla-option-card:has(input:checked) {
+  border-color: #2563eb;
+  background-color: #eff6ff; /* primary-50 */
+}
+
+.sla-option-card:has(input:focus-visible) {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}

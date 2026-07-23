@@ -2,10 +2,14 @@
 <%# LAYOUT partial so every section builds its cards the same way and none re-types the chrome — %>
 <%# render it with `render layout: "sla_policies/card", locals: { title:, description: }` and a %>
 <%# block holding the card body. `description` is optional. %>
-<div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-shadow-sm tw-mb-5 tw-overflow-hidden">
+<%# Deliberately NOT tw-overflow-hidden: a Tom Select dropdown is absolutely positioned inside the %>
+<%# card body, so clipping the card turned every dropdown near the bottom into an inner scroll %>
+<%# area instead of letting the list open over the card. The header rounds its own top corners %>
+<%# instead, which is all the clipping was ever doing. %>
+<div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-shadow-sm tw-mb-5">
   <%# tw-m-0 / tw-mb-0: Preflight is disabled, so Purplemine2's own h3 and p margins are still in %>
   <%# force and would otherwise pad the header out of proportion. %>
-  <div class="tw-bg-gray-50 tw-border-b tw-border-gray-200 tw-px-5 tw-py-4">
+  <div class="tw-bg-gray-50 tw-border-b tw-border-gray-200 tw-rounded-t-lg tw-px-5 tw-py-4">
     <h3 class="tw-m-0 tw-text-base tw-font-semibold tw-text-gray-900"><%= title %></h3>
     <% if local_assigns[:description].present? %>
       <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500"><%= description %></p>

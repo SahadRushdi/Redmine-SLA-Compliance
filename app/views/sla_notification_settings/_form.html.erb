@@ -1,77 +1,92 @@
-<%# Per-project notification settings. Own form + save, gated separately from the %>
-<%# policy form by :manage_sla_notifications. Locals: project. %>
+<%# Per-project notification settings, as three cards matching the other sections. Own form + save, %>
+<%# gated separately from the policy form by :manage_sla_notifications. Locals: project. %>
+<%# %>
+<%# Each alert card leads with a switch row; its detail fields sit in a `data-sla-reveal` block %>
+<%# that sla_policy_form.js shows only while that switch is on, so a card the project doesn't use %>
+<%# stays a single line. The fields are HIDDEN, never removed — they still post, so toggling the %>
+<%# switch off and on again never silently drops a recipient list the user had already saved. %>
 <% setting = sla_notification_setting_for_form(project) %>
 <%= form_tag project_sla_notification_setting_path(project), method: :put, id: 'sla-notification-form' do %>
   <%= hidden_field_tag 'tab', 'sla_policy' %>
 
-  <div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-shadow-sm tw-p-5 tw-mb-6">
-    <h3 class="tw-text-base tw-font-semibold tw-text-gray-900 tw-mb-4"><%= l(:label_sla_notifications_section) %></h3>
+  <%= render layout: 'sla_policies/card',
+             locals: { title: l(:label_sla_google_chat_card),
+                       description: l(:text_sla_google_chat_card) } do %>
+    <label for="sla_notification_google_chat_webhook" class="<%= sla_label_classes %>"><%= l(:field_sla_webhook_url) %></label>
+    <%= url_field_tag 'sla_notification_setting[google_chat_webhook]', setting.google_chat_webhook,
+          id: 'sla_notification_google_chat_webhook', class: sla_input_classes,
+          placeholder: l(:text_sla_webhook_placeholder) %>
+    <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500"><%= l(:text_sla_webhook_hint) %></p>
+  <% end %>
 
-    <div class="tw-mb-5">
-      <label for="sla_notification_google_chat_webhook" class="<%= sla_label_classes %>"><%= l(:field_google_chat_webhook) %></label>
-      <%= url_field_tag 'sla_notification_setting[google_chat_webhook]', setting.google_chat_webhook,
-            id: 'sla_notification_google_chat_webhook', class: sla_input_classes %>
-      <p class="tw-mt-1 tw-text-xs tw-text-gray-500"><%= l(:text_sla_webhook_hint) %></p>
+  <%= render layout: 'sla_policies/card',
+             locals: { title: l(:label_sla_at_risk_email_card),
+                       description: l(:text_sla_at_risk_email_card) } do %>
+    <%= render 'sla_policies/switch_row',
+               name: 'sla_notification_setting[at_risk_email_enabled]',
+               checked: setting.at_risk_email_enabled?, title: l(:field_sla_at_risk_alerts),
+               description: l(:text_sla_at_risk_alerts_hint),
+               reveals: 'at-risk-email' %>
+
+    <div data-sla-reveal="at-risk-email"
+         class="tw-mt-5 tw-pt-5 tw-border-t tw-border-gray-200 tw-grid tw-grid-cols-1
+                md:tw-grid-cols-2 tw-gap-4 <%= 'hidden' unless setting.at_risk_email_enabled? %>">
+      <div>
+        <label for="sla-at-risk-recipients" class="<%= sla_label_classes %>"><%= l(:field_at_risk_email_recipients) %></label>
+        <% recipients = setting.at_risk_email_recipients.to_a %>
+        <%= hidden_field_tag 'sla_notification_setting[at_risk_email_recipients][]', '', id: nil %>
+        <%= select_tag 'sla_notification_setting[at_risk_email_recipients][]',
+              options_for_select(recipients.map { |e| [e, e] }, recipients),
+              multiple: true, id: 'sla-at-risk-recipients', data: { sla_emails: true } %>
+        <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500"><%= l(:text_sla_recipients_hint) %></p>
+      </div>
+      <div>
+        <span class="<%= sla_label_classes %>"><%= l(:field_at_risk_email_frequency) %></span>
+        <div class="tw-grid tw-grid-cols-2 tw-gap-3">
+          <% SlaNotificationSetting::AT_RISK_FREQUENCIES.each do |frequency| %>
+            <label class="sla-option-card">
+              <%= radio_button_tag 'sla_notification_setting[at_risk_email_frequency]', frequency,
+                    setting.at_risk_email_frequency == frequency, class: sla_radio_classes %>
+              <%= l("label_sla_frequency_#{frequency}") %>
+            </label>
+          <% end %>
+        </div>
+        <div id="sla-digest-interval-field" class="tw-mt-4 md:tw-w-56 <%= 'hidden' unless setting.at_risk_email_frequency == 'digest' %>">
+          <label for="sla_notification_digest_interval" class="<%= sla_label_classes %>"><%= l(:field_at_risk_digest_interval_minutes) %></label>
+          <%= number_field_tag 'sla_notification_setting[at_risk_digest_interval_minutes]',
+                setting.at_risk_digest_interval_minutes, min: 1,
+                id: 'sla_notification_digest_interval', class: sla_input_classes %>
+          <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500">
+            <%= l(:text_sla_digest_interval_hint, sweep_minutes: Sla::PluginSettings.sweep_interval_minutes) %>
+          </p>
+        </div>
+      </div>
     </div>
+  <% end %>
 
-    <%# At-risk email alerts %>
-    <div class="tw-border-t tw-border-gray-200 tw-pt-4 tw-mb-5">
-      <h4 class="tw-text-sm tw-font-semibold tw-text-gray-900 tw-mb-3"><%= l(:label_sla_at_risk_email) %></h4>
-      <div class="tw-mb-3">
-        <%= render 'sla_compliance/toggle', name: 'sla_notification_setting[at_risk_email_enabled]',
-                   checked: setting.at_risk_email_enabled?, label: l(:field_at_risk_email_enabled) %>
-      </div>
-      <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-4">
-        <div>
-          <label for="sla-at-risk-recipients" class="<%= sla_label_classes %>"><%= l(:field_at_risk_email_recipients) %></label>
-          <% recipients = setting.at_risk_email_recipients.to_a %>
-          <%= hidden_field_tag 'sla_notification_setting[at_risk_email_recipients][]', '', id: nil %>
-          <%= select_tag 'sla_notification_setting[at_risk_email_recipients][]',
-                options_for_select(recipients.map { |e| [e, e] }, recipients),
-                multiple: true, id: 'sla-at-risk-recipients', data: { sla_emails: true } %>
-          <p class="tw-mt-1 tw-text-xs tw-text-gray-500"><%= l(:text_sla_recipients_hint) %></p>
-        </div>
-        <div>
-          <span class="<%= sla_label_classes %>"><%= l(:field_at_risk_email_frequency) %></span>
-          <div class="tw-flex tw-gap-6 tw-mb-3">
-            <% SlaNotificationSetting::AT_RISK_FREQUENCIES.each do |frequency| %>
-              <label class="tw-inline-flex tw-items-center tw-gap-2 tw-text-sm tw-text-gray-900">
-                <%= radio_button_tag 'sla_notification_setting[at_risk_email_frequency]', frequency,
-                      setting.at_risk_email_frequency == frequency, class: sla_radio_classes %>
-                <%= l("label_sla_frequency_#{frequency}") %>
-              </label>
-            <% end %>
-          </div>
-          <div id="sla-digest-interval-field" class="md:tw-w-56 <%= 'hidden' unless setting.at_risk_email_frequency == 'digest' %>">
-            <label for="sla_notification_digest_interval" class="<%= sla_label_classes %>"><%= l(:field_at_risk_digest_interval_minutes) %></label>
-            <%= number_field_tag 'sla_notification_setting[at_risk_digest_interval_minutes]',
-                  setting.at_risk_digest_interval_minutes, min: 1,
-                  id: 'sla_notification_digest_interval', class: sla_input_classes %>
-            <p class="tw-mt-1 tw-text-xs tw-text-gray-500">
-              <%= l(:text_sla_digest_interval_hint, sweep_minutes: Sla::PluginSettings.sweep_interval_minutes) %>
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+  <%= render layout: 'sla_policies/card',
+             locals: { title: l(:label_sla_stale_email_card),
+                       description: l(:text_sla_stale_email_card) } do %>
+    <%= render 'sla_policies/switch_row',
+               name: 'sla_notification_setting[stale_email_enabled]',
+               checked: setting.stale_email_enabled?, title: l(:field_sla_stale_digest),
+               description: l(:text_sla_stale_digest_hint),
+               reveals: 'stale-email' %>
 
-    <%# Stale-ticket email digest %>
-    <div class="tw-border-t tw-border-gray-200 tw-pt-4 tw-mb-5">
-      <h4 class="tw-text-sm tw-font-semibold tw-text-gray-900 tw-mb-3"><%= l(:label_sla_stale_email) %></h4>
-      <div class="tw-mb-3">
-        <%= render 'sla_compliance/toggle', name: 'sla_notification_setting[stale_email_enabled]',
-                   checked: setting.stale_email_enabled?, label: l(:field_stale_email_enabled) %>
+    <div data-sla-reveal="stale-email"
+         class="tw-mt-5 tw-pt-5 tw-border-t tw-border-gray-200 tw-grid tw-grid-cols-1
+                md:tw-grid-cols-2 tw-gap-4 <%= 'hidden' unless setting.stale_email_enabled? %>">
+      <div>
+        <label for="sla-stale-recipients" class="<%= sla_label_classes %>"><%= l(:field_stale_email_recipients) %></label>
+        <% stale_recipients = setting.stale_email_recipients.to_a %>
+        <%= hidden_field_tag 'sla_notification_setting[stale_email_recipients][]', '', id: nil %>
+        <%= select_tag 'sla_notification_setting[stale_email_recipients][]',
+              options_for_select(stale_recipients.map { |e| [e, e] }, stale_recipients),
+              multiple: true, id: 'sla-stale-recipients', data: { sla_emails: true } %>
+        <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500"><%= l(:text_sla_recipients_hint) %></p>
       </div>
-      <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-4">
-        <div>
-          <label for="sla-stale-recipients" class="<%= sla_label_classes %>"><%= l(:field_stale_email_recipients) %></label>
-          <% stale_recipients = setting.stale_email_recipients.to_a %>
-          <%= hidden_field_tag 'sla_notification_setting[stale_email_recipients][]', '', id: nil %>
-          <%= select_tag 'sla_notification_setting[stale_email_recipients][]',
-                options_for_select(stale_recipients.map { |e| [e, e] }, stale_recipients),
-                multiple: true, id: 'sla-stale-recipients', data: { sla_emails: true } %>
-        </div>
-        <div class="md:tw-w-56">
+      <div>
+        <div class="tw-mb-4">
           <label for="sla_notification_stale_frequency" class="<%= sla_label_classes %>"><%= l(:field_stale_email_frequency) %></label>
           <%= select_tag 'sla_notification_setting[stale_email_frequency]',
                 options_for_select(SlaNotificationSetting::STALE_FREQUENCIES.map { |f| [l("label_sla_frequency_#{f}"), f] },
@@ -79,19 +94,16 @@
                 id: 'sla_notification_stale_frequency', class: sla_input_classes,
                 data: { sla_select: true } %>
         </div>
-        <div class="md:tw-w-56">
+        <div>
           <label for="sla_notification_stale_threshold_days" class="<%= sla_label_classes %>"><%= l(:field_stale_threshold_days) %></label>
           <%= number_field_tag 'sla_notification_setting[stale_threshold_days]',
                 setting.stale_threshold_days, min: 1,
                 id: 'sla_notification_stale_threshold_days', class: sla_input_classes %>
-          <p class="tw-mt-1 tw-text-xs tw-text-gray-500"><%= l(:text_sla_stale_threshold_hint) %></p>
+          <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500"><%= l(:text_sla_stale_threshold_hint) %></p>
         </div>
       </div>
     </div>
+  <% end %>
 
-    <%= submit_tag l(:button_sla_save_notifications),
-          class: 'tw-text-white tw-bg-primary-600 hover:tw-bg-primary-700 focus:tw-ring-2 ' \
-                 'focus:tw-ring-primary-300 tw-font-medium tw-rounded-lg tw-text-sm ' \
-                 'tw-px-5 tw-py-2.5 tw-cursor-pointer' %>
-  </div>
+  <%= render 'sla_policies/save_bar', label: l(:button_sla_save_notifications) %>
 <% end %>

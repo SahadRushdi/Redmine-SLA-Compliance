@@ -8,9 +8,6 @@
 
 <%= render 'sla_policies/general', project: project, policy: policy, current: current %>
 
-<%# Measurement Rules / SLA Targets / Exclusions still use their pre-existing card markup; only %>
-<%# the shell (panel + per-section form + save) is new here. Their internals are restyled to the %>
-<%# card design in the following steps. %>
 <%= render layout: 'sla_policies/panel', locals: { key: 'measurement', current: current } do %>
   <%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-measurement-form' do %>
     <%= hidden_field_tag 'tab', 'sla_policy' %>
@@ -32,17 +29,23 @@
     <%= render 'sla_policies/definitions', project: project, policy: policy %>
     <%= render 'sla_policies/clone', project: project %>
 
-    <%# Step 4.8 — forward-only save by default; optional historical recalculation. %>
-    <div class="tw-flex tw-flex-col md:tw-flex-row md:tw-items-center tw-gap-3 tw-mb-4">
-      <label class="tw-inline-flex tw-items-center tw-gap-2 tw-text-sm tw-text-gray-900">
-        <%= check_box_tag 'recalculate', '1', false,
-              class: 'tw-w-4 tw-h-4 tw-rounded tw-border-gray-300 tw-text-primary-600 focus:tw-ring-primary-500' %>
-        <%= l(:label_sla_recalculate_historical) %>
-      </label>
-      <span class="tw-text-xs tw-text-gray-500 md:tw-max-w-md"><%= l(:text_sla_forward_only_hint) %></span>
+    <%# Step 4.8 — forward-only save by default; optional historical recalculation. It shares a row %>
+    <%# with this section's save button (rather than using the shared _save_bar) because the tick %>
+    <%# only means anything as a modifier of that very save. %>
+    <div class="tw-flex tw-flex-col md:tw-flex-row md:tw-items-start md:tw-justify-between
+                tw-gap-4 tw-pt-1 tw-pb-2">
+      <div class="tw-min-w-0 md:tw-max-w-xl">
+        <label class="tw-inline-flex tw-items-center tw-gap-2 tw-text-sm tw-font-medium tw-text-gray-900">
+          <%= check_box_tag 'recalculate', '1', false,
+                class: 'tw-w-4 tw-h-4 tw-rounded tw-border-gray-300 tw-text-primary-600 focus:tw-ring-primary-500' %>
+          <%= l(:label_sla_recalculate_historical) %>
+        </label>
+        <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500"><%= l(:text_sla_forward_only_hint) %></p>
+      </div>
+      <button type="submit" class="<%= sla_primary_button_classes %> tw-shrink-0">
+        <%= sla_save_icon %><span><%= l(:button_sla_save_policy) %></span>
+      </button>
     </div>
-
-    <%= render 'sla_policies/save_bar', label: l(:button_sla_save_policy) %>
   <% end %>
 <% end %>
 

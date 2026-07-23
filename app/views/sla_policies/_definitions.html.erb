@@ -1,39 +1,75 @@
-<%# Step 4.4 — SLA targets per tracker × priority. Trackers come from the project; priorities %>
-<%# and target durations are looked up live (Global Rules 1–3 — nothing hard-coded). %>
-<div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-shadow-sm tw-p-5 tw-mb-6">
-  <h3 class="tw-text-base tw-font-semibold tw-text-gray-900 tw-mb-1"><%= l(:label_sla_definitions_section) %></h3>
-  <p class="tw-text-xs tw-text-gray-500 tw-mb-4"><%= l(:text_sla_definitions_hint) %></p>
+<%# Step 4.4 — SLA targets per tracker × priority, as two cards: the tracker picker, then that %>
+<%# tracker's priority rows. Trackers come from the project; priorities and target durations are %>
+<%# looked up live (Global Rules 1–3 — nothing hard-coded). Locals: project, policy. %>
+<% trackers = project.trackers.to_a %>
+<% if trackers.empty? %>
+  <%= render layout: 'sla_policies/card',
+             locals: { title: l(:label_sla_tracker_card) } do %>
+    <p class="tw-m-0 tw-text-sm tw-text-gray-500"><%= l(:text_sla_no_trackers) %></p>
+  <% end %>
+<% else %>
+  <% tracker = sla_selected_tracker(project, policy) %>
 
-  <% trackers = project.trackers.to_a %>
-  <% if trackers.empty? %>
-    <p class="tw-text-sm tw-text-gray-500"><%= l(:text_sla_no_trackers) %></p>
-  <% else %>
-    <% tracker = sla_selected_tracker(project, policy) %>
-    <div class="md:tw-w-64 tw-mb-4">
+  <%= render layout: 'sla_policies/card',
+             locals: { title: l(:label_sla_tracker_card),
+                       description: l(:text_sla_tracker_card) } do %>
+    <div class="md:tw-w-64">
       <label for="sla-definitions-tracker" class="<%= sla_label_classes %>"><%= l(:field_sla_tracker) %></label>
       <%= select_tag 'definitions[tracker_id]',
             options_from_collection_for_select(trackers, :id, :name, tracker&.id),
             id: 'sla-definitions-tracker', class: sla_input_classes, data: { sla_select: true } %>
     </div>
+  <% end %>
 
+  <%= render layout: 'sla_policies/card',
+             locals: { title: l(:label_sla_priority_targets_card),
+                       description: l(:text_sla_priority_targets_card, tracker: tracker&.name) } do %>
     <% if sla_target_options_by_type.empty? %>
-      <p class="tw-text-sm tw-text-amber-700 tw-mb-3"><%= l(:text_sla_no_target_options) %></p>
+      <p class="tw-mt-0 tw-mb-4 tw-text-sm tw-text-amber-700"><%= l(:text_sla_no_target_options) %></p>
     <% end %>
 
-    <div class="tw-overflow-x-auto">
-      <table class="tw-w-full tw-text-sm tw-text-left tw-text-gray-700">
-        <thead class="tw-bg-gray-50 tw-text-gray-700">
-          <tr>
-            <th class="tw-px-4 tw-py-2 tw-font-medium"><%= l(:label_sla_priority) %></th>
-            <th class="tw-px-4 tw-py-2 tw-font-medium"><%= l(:label_sla_target_response) %></th>
-            <th class="tw-px-4 tw-py-2 tw-font-medium"><%= l(:label_sla_target_workaround) %></th>
-            <th class="tw-px-4 tw-py-2 tw-font-medium"><%= l(:label_sla_target_resolution) %></th>
-          </tr>
-        </thead>
-        <tbody id="sla-definitions-rows">
-          <%= render 'sla_policies/definition_rows', policy: policy, tracker: tracker %>
-        </tbody>
-      </table>
-    </div>
+    <%# The admin-designated unclassified priority gets this notice INSTEAD of a table row: it can %>
+    <%# never hold a target, so a disabled row was only ever dead space. It sits here rather than %>
+    <%# in _definition_rows because it doesn't change when the tracker does, and _definition_rows %>
+    <%# is what the tracker-switch AJAX replaces. %>
+    <% if sla_unclassified_priority.present? %>
+      <div class="tw-flex tw-items-start tw-gap-3 tw-mb-4 tw-p-3 tw-rounded-lg tw-border
+                  tw-border-amber-200 tw-bg-amber-50 tw-text-sm tw-text-amber-800">
+        <span class="tw-mt-0.5 tw-text-amber-500"><%= sla_info_icon %></span>
+        <p class="tw-m-0">
+          <span class="tw-font-semibold"><%= h sla_unclassified_priority.name %></span>
+          <span class="tw-mx-1 tw-inline-block tw-px-2 tw-py-0.5 tw-text-xs tw-font-medium
+                       tw-text-amber-800 tw-bg-amber-100 tw-rounded">
+            <%= l(:label_sla_unclassified_badge) %>
+          </span>
+          <%# Linked only for admins — Administration → Plugins is the one place this setting lives, %>
+          <%# and anyone else following the link would just be bounced with a 403. %>
+          <% target = l(:label_sla_admin_settings_link) %>
+          <% target = link_to(target, plugin_settings_path('redmine_sla_compliance'),
+                              class: 'tw-font-medium tw-underline') if User.current.admin? %>
+          <%= l(:text_sla_unclassified_notice, link: target).html_safe %>
+        </p>
+      </div>
+    <% end %>
+
+    <%# tw-table-fixed: the target cells hold Tom Select controls whose intrinsic width grows the %>
+    <%# moment one is focused (its type-ahead input stops being zero-width). Under the default %>
+    <%# auto layout that re-flowed every column mid-click; fixed layout makes the columns depend %>
+    <%# only on the header widths, so clicking a dropdown moves nothing. It also means the table %>
+    <%# always fits its card — no horizontal scrollbar, and so no scroll container to clip the %>
+    <%# dropdowns. %>
+    <table class="tw-w-full tw-table-fixed tw-text-sm tw-text-left tw-text-gray-700">
+      <thead class="tw-bg-gray-50 tw-text-gray-700">
+        <tr>
+          <th class="tw-w-40 tw-px-4 tw-py-2 tw-font-medium"><%= l(:label_sla_priority) %></th>
+          <th class="tw-px-4 tw-py-2 tw-font-medium"><%= l(:label_sla_target_response) %></th>
+          <th class="tw-px-4 tw-py-2 tw-font-medium"><%= l(:label_sla_target_workaround) %></th>
+          <th class="tw-px-4 tw-py-2 tw-font-medium"><%= l(:label_sla_target_resolution) %></th>
+        </tr>
+      </thead>
+      <tbody id="sla-definitions-rows">
+        <%= render 'sla_policies/definition_rows', policy: policy, tracker: tracker %>
+      </tbody>
+    </table>
   <% end %>
-</div>
+<% end %>
