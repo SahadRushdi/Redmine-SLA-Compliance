@@ -1,0 +1,60 @@
+/*
+ * Dashboard chart legends — clickable rows that highlight one series and dim the rest.
+ *
+ * Clicking already re-drew the CHART (sla_dashboard_charts.js), but the legend itself gave no sign
+ * of which entry was driving it, so the highlight looked like it had come from nowhere. The active
+ * entry now reads as a filled pill, matching the time_analytics plugin's Stacked-chart legend —
+ * the behaviour these legends were modelled on in the first place.
+ *
+ * Active/inactive is expressed as ONE class (`is-active`) that the JS toggles, exactly as
+ * _settings_nav.css does for the settings sidebar, so no Tailwind class strings live in the JS and
+ * the three legends (donut, priority bars, trend lines) can't drift apart.
+ *
+ * postcss-prefix-selector scopes every rule below to `.sla-plugin ...` at build time.
+ */
+
+.sla-legend-item {
+  cursor: pointer;
+  border-radius: 0.375rem;
+  /* Transparent, not absent: the active state adds a visible border, and reserving the width here
+   * means the row doesn't shift by a pixel when it lights up. */
+  border: 1px solid transparent;
+  padding: 0.125rem 0.5rem;
+  transition: background-color 0.12s ease-in-out, border-color 0.12s ease-in-out,
+    color 0.12s ease-in-out;
+}
+
+.sla-legend-item:hover {
+  background-color: #f9fafb; /* gray-50 */
+}
+
+/* The donut's rows span the full width of their column, so the pill's padding is pulled back out
+ * again — otherwise adding it would have indented every label away from the card edge it used to
+ * line up with. The inline legends (priority bars, trend lines) keep the padding as real spacing,
+ * since there is nothing for them to align to. */
+#sla-chart-legend .sla-legend-item {
+  margin-left: -0.5rem;
+  margin-right: -0.5rem;
+}
+
+/* The tint, border and text are all the primary colour (#2563eb) — the same active treatment the
+ * settings sidebar uses, and the only blue permitted in UI chrome (Global Rule 7). The swatch is
+ * deliberately left alone: it identifies the series and must keep the series' own colour. */
+.sla-legend-item.is-active,
+.sla-legend-item.is-active:hover {
+  background-color: #eff6ff; /* primary-50 */
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+/* The donut legend puts the count and percentage in their own spans with their own grey utility
+ * classes; those out-specify the inherited colour above, so restate them for the active row or the
+ * numbers stay grey while only the label turns blue. */
+.sla-legend-item.is-active .sla-legend-value,
+.sla-legend-item.is-active .sla-legend-label {
+  color: #2563eb;
+}
+
+.sla-legend-item.is-active .sla-legend-muted {
+  color: #60a5fa; /* primary-400 — still recedes, but reads as part of the active row */
+}
