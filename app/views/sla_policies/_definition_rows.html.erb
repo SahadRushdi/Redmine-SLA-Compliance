@@ -12,14 +12,11 @@
   <% next if sla_unclassified_priority?(priority.id) %>
   <% definition = definitions[priority.id] %>
   <tr class="tw-border-b tw-border-gray-200">
-    <td class="tw-px-4 tw-py-2">
-      <%# Colour is derived from the priority's rank, never its name — see %>
-      <%# SlaPoliciesHelper#sla_priority_badge_classes. %>
-      <span class="tw-inline-block tw-px-2.5 tw-py-0.5 tw-text-xs tw-font-medium tw-rounded-full
-                   <%= sla_priority_badge_classes(priority) %>">
-        <%= h priority.name %>
-      </span>
-    </td>
+    <%# Priority is rendered as its plain name. It deliberately carries NO severity colouring: any %>
+    <%# such scale would be a severity encoding baked into the plugin, which Global Rule 1 forbids %>
+    <%# ("no ... severity labels as constants or enums") — the priority's meaning and ordering %>
+    <%# belong to the site's Redmine configuration, not to this code. %>
+    <td class="tw-px-4 tw-py-2 tw-font-medium tw-text-gray-900"><%= h priority.name %></td>
     <% { response: [definition&.response_seconds, definition&.best_effort?(:response)],
          workaround: [definition&.workaround_seconds, definition&.best_effort?(:workaround)],
          resolution: [definition&.resolution_seconds, definition&.best_effort?(:resolution)]

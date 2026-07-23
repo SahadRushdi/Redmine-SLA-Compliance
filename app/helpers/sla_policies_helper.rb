@@ -180,34 +180,6 @@ module SlaPoliciesHelper
     @sla_unclassified_priority = id.present? ? IssuePriority.active.detect { |p| p.id == id } : nil
   end
 
-  # Severity-coloured pill for a priority in the Priority Targets table.
-  #
-  # The colour comes from the priority's RANK among the project's active priorities, never from its
-  # name (Global Rule 1 — nothing domain-specific hard-coded): the lowest-positioned priority takes
-  # the first stop of the ramp and the highest the last, so a site with three or seven priorities,
-  # or entirely different names, still gets a sensible low→high cool-to-hot gradient.
-  PRIORITY_BADGE_RAMP = [
-    'tw-bg-gray-100 tw-text-gray-700',
-    'tw-bg-amber-100 tw-text-amber-800',
-    'tw-bg-orange-100 tw-text-orange-800',
-    'tw-bg-red-100 tw-text-red-700'
-  ].freeze
-
-  def sla_priority_badge_classes(priority)
-    ids = sla_active_priority_ids
-    index = ids.index(priority.id)
-    return PRIORITY_BADGE_RAMP.first if index.nil? || ids.size < 2
-
-    stop = (index * (PRIORITY_BADGE_RAMP.size - 1).to_f / (ids.size - 1)).round
-    PRIORITY_BADGE_RAMP[stop]
-  end
-
-  # Active priorities in position order — the ranking the badge ramp is scaled over. Memoised
-  # because _definition_rows asks once per row.
-  def sla_active_priority_ids
-    @sla_active_priority_ids ||= IssuePriority.active.map(&:id)
-  end
-
   # --- B3: read-only display for the "inherited from an ancestor" banner ---------------------
   # Plain text, not form pre-population — see _inherited_banner.html.erb for why this is
   # deliberately NOT the same interactive form partial used for an owned policy.

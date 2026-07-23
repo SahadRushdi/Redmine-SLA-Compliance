@@ -1704,10 +1704,6 @@
   --tw-bg-opacity: 1;
   background-color: rgb(240 253 244 / var(--tw-bg-opacity, 1));
 }
-.sla-plugin .tw-bg-orange-100 {
-  --tw-bg-opacity: 1;
-  background-color: rgb(255 237 213 / var(--tw-bg-opacity, 1));
-}
 .sla-plugin .tw-bg-primary-100 {
   --tw-bg-opacity: 1;
   background-color: rgb(219 234 254 / var(--tw-bg-opacity, 1));
@@ -1753,10 +1749,6 @@
 .sla-plugin .tw-px-2 {
   padding-left: 0.5rem;
   padding-right: 0.5rem;
-}
-.sla-plugin .tw-px-2\.5 {
-  padding-left: 0.625rem;
-  padding-right: 0.625rem;
 }
 .sla-plugin .tw-px-3 {
   padding-left: 0.75rem;
@@ -1931,10 +1923,6 @@
 .sla-plugin .tw-text-green-700 {
   --tw-text-opacity: 1;
   color: rgb(21 128 61 / var(--tw-text-opacity, 1));
-}
-.sla-plugin .tw-text-orange-800 {
-  --tw-text-opacity: 1;
-  color: rgb(154 52 18 / var(--tw-text-opacity, 1));
 }
 .sla-plugin .tw-text-primary-600 {
   --tw-text-opacity: 1;
