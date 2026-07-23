@@ -17,6 +17,8 @@
  *   - _option_card.css — radio buttons presented as selectable tiles. Also CSS rather than
  *     utilities, but for a different reason: the :checked state has to reach an ANCESTOR, which
  *     Tailwind's sibling-based `peer-checked:` variant cannot express.
+ *   - _chart_legend.css — the dashboard chart legends' clickable rows and their active pill, again
+ *     as one JS-toggled class so the three legends can't drift apart.
  * postcss-import inlines these before Tailwind/scoping run, so they get the exact same
  * `.sla-plugin` treatment as everything else in this file.
  */
@@ -675,6 +677,60 @@
 .sla-plugin .sla-option-card:has(input:focus-visible) {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
 }
+/*
+ * Dashboard chart legends — clickable rows that highlight one series and dim the rest.
+ *
+ * Clicking already re-drew the CHART (sla_dashboard_charts.js), but the legend itself gave no sign
+ * of which entry was driving it, so the highlight looked like it had come from nowhere. The active
+ * entry now reads as a filled pill, matching the time_analytics plugin's Stacked-chart legend —
+ * the behaviour these legends were modelled on in the first place.
+ *
+ * Active/inactive is expressed as ONE class (`is-active`) that the JS toggles, exactly as
+ * _settings_nav.css does for the settings sidebar, so no Tailwind class strings live in the JS and
+ * the three legends (donut, priority bars, trend lines) can't drift apart.
+ *
+ * postcss-prefix-selector scopes every rule below to `.sla-plugin ...` at build time.
+ */
+.sla-plugin .sla-legend-item {
+  cursor: pointer;
+  border-radius: 0.375rem;
+  /* Transparent, not absent: the active state adds a visible border, and reserving the width here
+   * means the row doesn't shift by a pixel when it lights up. */
+  border: 1px solid transparent;
+  padding: 0.125rem 0.5rem;
+  transition: background-color 0.12s ease-in-out, border-color 0.12s ease-in-out,
+    color 0.12s ease-in-out;
+}
+.sla-plugin .sla-legend-item:hover {
+  background-color: #f9fafb; /* gray-50 */
+}
+/* The donut's rows span the full width of their column, so the pill's padding is pulled back out
+ * again — otherwise adding it would have indented every label away from the card edge it used to
+ * line up with. The inline legends (priority bars, trend lines) keep the padding as real spacing,
+ * since there is nothing for them to align to. */
+.sla-plugin #sla-chart-legend .sla-legend-item {
+  margin-left: -0.5rem;
+  margin-right: -0.5rem;
+}
+/* The tint, border and text are all the primary colour (#2563eb) — the same active treatment the
+ * settings sidebar uses, and the only blue permitted in UI chrome (Global Rule 7). The swatch is
+ * deliberately left alone: it identifies the series and must keep the series' own colour. */
+.sla-plugin .sla-legend-item.is-active,
+.sla-plugin .sla-legend-item.is-active:hover {
+  background-color: #eff6ff; /* primary-50 */
+  border-color: #2563eb;
+  color: #2563eb;
+}
+/* The donut legend puts the count and percentage in their own spans with their own grey utility
+ * classes; those out-specify the inherited colour above, so restate them for the active row or the
+ * numbers stay grey while only the label turns blue. */
+.sla-plugin .sla-legend-item.is-active .sla-legend-value,
+.sla-plugin .sla-legend-item.is-active .sla-legend-label {
+  color: #2563eb;
+}
+.sla-plugin .sla-legend-item.is-active .sla-legend-muted {
+  color: #60a5fa; /* primary-400 — still recedes, but reads as part of the active row */
+}
 .sla-plugin *, .sla-plugin ::before, .sla-plugin ::after {
   --tw-border-spacing-x: 0;
   --tw-border-spacing-y: 0;
@@ -1246,10 +1302,6 @@
 .sla-plugin .tw-m-0 {
   margin: 0px;
 }
-.sla-plugin .-tw-mx-1 {
-  margin-left: -0.25rem;
-  margin-right: -0.25rem;
-}
 .sla-plugin .tw-mx-1 {
   margin-left: 0.25rem;
   margin-right: 0.25rem;
@@ -1697,10 +1749,6 @@
 }
 .sla-plugin .tw-p-6 {
   padding: 1.5rem;
-}
-.sla-plugin .tw-px-1 {
-  padding-left: 0.25rem;
-  padding-right: 0.25rem;
 }
 .sla-plugin .tw-px-2 {
   padding-left: 0.5rem;

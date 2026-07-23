@@ -25,7 +25,7 @@
       <% unless @trend_series.empty? %>
         <div id="sla-trend-chart-legend" class="tw-flex tw-items-center tw-gap-x-4 tw-text-xs tw-text-gray-600">
           <% [[l(:label_sla_created), 0], [l(:label_sla_resolved), 1]].each do |label, index| %>
-            <span class="tw-inline-flex tw-items-center tw-gap-1.5 tw-cursor-pointer tw-rounded tw-px-1 -tw-mx-1 hover:tw-bg-gray-50"
+            <span class="sla-legend-item tw-inline-flex tw-items-center tw-gap-1.5"
                   data-sla-legend-target="sla-trend-chart" data-sla-legend-dataset="<%= index %>">
               <span class="sla-legend-swatch tw-w-2.5 tw-h-2.5 tw-rounded-full tw-inline-block"></span>
               <%= label %>

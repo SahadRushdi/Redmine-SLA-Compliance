@@ -33,15 +33,18 @@
     <% donut_legend_indices = { met: '0,1', breached: '2', no_sla: '3' } %>
     <div id="sla-chart-legend" class="tw-flex-1 tw-min-w-[12rem] tw-space-y-2.5">
       <% %i[met breached no_sla].each do |state| %>
-        <div class="tw-flex tw-items-center tw-justify-between tw-gap-3 tw-text-sm tw-cursor-pointer tw-rounded tw-px-1 -tw-mx-1 hover:tw-bg-gray-50"
+        <%# sla-legend-item carries the click affordance AND the active pill the JS toggles; the %>
+        <%# -label/-value/-muted hooks let that pill recolour the count and percentage too, which %>
+        <%# carry grey utilities of their own — see partials/_chart_legend.css. %>
+        <div class="sla-legend-item tw-flex tw-items-center tw-justify-between tw-gap-3 tw-text-sm"
              data-sla-legend-target="sla-donut-chart" data-sla-legend-indices="<%= donut_legend_indices[state] %>">
-          <span class="tw-inline-flex tw-items-center tw-gap-2 tw-text-gray-700">
+          <span class="sla-legend-label tw-inline-flex tw-items-center tw-gap-2 tw-text-gray-700">
             <span class="tw-w-2.5 tw-h-2.5 tw-rounded-full tw-inline-block tw-flex-shrink-0" style="background-color: <%= sla_chart_color(state) %>"></span>
             <%= sla_card_label(state) %>
           </span>
           <span class="tw-whitespace-nowrap">
-            <span class="tw-font-semibold tw-text-gray-900"><%= @counts.public_send(state) %></span>
-            <span class="tw-text-gray-400 tw-text-xs">(<%= sla_percentage(@counts.public_send(state), @counts.total) %>%)</span>
+            <span class="sla-legend-value tw-font-semibold tw-text-gray-900"><%= @counts.public_send(state) %></span>
+            <span class="sla-legend-muted tw-text-gray-400 tw-text-xs">(<%= sla_percentage(@counts.public_send(state), @counts.total) %>%)</span>
           </span>
         </div>
       <% end %>
@@ -50,16 +53,16 @@
       <%# regular legend row — same layout/size/weight as met/breached/no_sla above — rather than a %>
       <%# dashed callout, so the legend reads as one consistent list. Highlights only its own arc %>
       <%# (index 1), not the whole "met" pair the row above does. %>
-      <div class="tw-flex tw-items-center tw-justify-between tw-gap-3 tw-text-sm tw-cursor-pointer tw-rounded tw-px-1 -tw-mx-1 hover:tw-bg-gray-50"
+      <div class="sla-legend-item tw-flex tw-items-center tw-justify-between tw-gap-3 tw-text-sm"
            data-sla-legend-target="sla-donut-chart" data-sla-legend-indices="1">
-        <span class="tw-inline-flex tw-items-center tw-gap-2 tw-text-gray-700">
+        <span class="sla-legend-label tw-inline-flex tw-items-center tw-gap-2 tw-text-gray-700">
           <span class="tw-w-2.5 tw-h-2.5 tw-rounded-full tw-inline-block tw-flex-shrink-0" style="background-color: <%= sla_chart_color(:at_risk) %>"></span>
           <%= l(:label_sla_card_at_risk) %>
-          <span class="tw-text-gray-400 tw-text-xs">(<%= l(:label_sla_chart_met_at_risk_hint) %>)</span>
+          <span class="sla-legend-muted tw-text-gray-400 tw-text-xs">(<%= l(:label_sla_chart_met_at_risk_hint) %>)</span>
         </span>
         <span class="tw-whitespace-nowrap">
-          <span class="tw-font-semibold tw-text-gray-900"><%= @counts.at_risk %></span>
-          <span class="tw-text-gray-400 tw-text-xs">(<%= sla_percentage(@counts.at_risk, @counts.total) %>%)</span>
+          <span class="sla-legend-value tw-font-semibold tw-text-gray-900"><%= @counts.at_risk %></span>
+          <span class="sla-legend-muted tw-text-gray-400 tw-text-xs">(<%= sla_percentage(@counts.at_risk, @counts.total) %>%)</span>
         </span>
       </div>
     </div>

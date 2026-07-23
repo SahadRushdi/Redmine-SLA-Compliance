@@ -130,7 +130,30 @@
           return;
         }
         chart.update();
+        syncLegendActive(canvas.id, state);
       });
+    });
+  }
+
+  // Mark which legend entry is driving the highlight. Without this the chart dimmed but the legend
+  // looked untouched, so the highlight appeared to come from nowhere — the whole point of the
+  // active pill (see partials/_chart_legend.css).
+  //
+  // The whole GROUP is re-synced from the chart's state rather than just toggling the row that was
+  // clicked: highlighting is single-select, so activating one entry has to clear whichever other
+  // one was active, and reading back from the state means the class can never disagree with what
+  // the chart is actually drawing.
+  function syncLegendActive(canvasId, state) {
+    var selector = '[data-sla-legend-target="' + canvasId + '"]';
+    document.querySelectorAll(selector).forEach(function (el) {
+      var active;
+      if (el.hasAttribute('data-sla-legend-indices')) {
+        var indices = el.getAttribute('data-sla-legend-indices').split(',').map(Number);
+        active = arraysEqual(state.highlightedIndices, indices);
+      } else {
+        active = state.highlighted === Number(el.getAttribute('data-sla-legend-dataset'));
+      }
+      el.classList.toggle('is-active', active);
     });
   }
 
