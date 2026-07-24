@@ -15,6 +15,12 @@
   // compact card.
   var MODAL_OPEN_KEY = 'slaDetailModalOpen';
 
+  // Rows per page for the compact in-card table. It is deliberately NOT one of the per-page
+  // dropdown options (10/25/50/100) — that dropdown only governs the expanded modal; the compact
+  // card always paginates 6-at-a-time so it stays the same height as the donut/priority cards
+  // beside it. Opening the modal switches to the dropdown's size; closing it returns to 6.
+  var COMPACT_PAGE_SIZE = 6;
+
   function byId(id) { return document.getElementById(id); }
 
   // Grey arrows only (no brand colour): neutral = both chevrons on an unsorted column, a single
@@ -64,7 +70,7 @@
     this.perPage = root.querySelector('[data-sla-perpage]');
     this.searchInput = root.querySelector('#sla-detail-search');
     this.noMatchRow = null;
-    this.pageSize = this.readPageSize();
+    this.pageSize = COMPACT_PAGE_SIZE; // compact default; modal open() switches to the dropdown size
     this.page = 1;
     this.sortKey = null;
     this.sortDir = 'asc';
@@ -283,13 +289,14 @@
     var expandBtn = document.querySelector('[data-sla-detail-expand]');
     if (!tableNode || !home || !modal || !body || !expandBtn) { return; }
 
-    function resetPageSize() {
+    // Point the (hidden) real <select> and its visible trigger label at `value` WITHOUT firing a
+    // change event — the caller sets table.pageSize itself, so a dispatched change would just
+    // double-apply. Used to park the control back on its default (10) whenever the modal closes.
+    function syncPerPageControl(value) {
       var select = byId('sla-detail-per-page');
-      if (!select) { return; }
-      select.value = '10';
-      select.dispatchEvent(new Event('change', { bubbles: true }));
+      if (select) { select.value = String(value); }
       var label = document.querySelector('#sla-detail-perpage-trigger [data-sla-perpage-label]');
-      if (label) { label.textContent = '10'; }
+      if (label) { label.textContent = String(value); }
     }
 
     function open() {
@@ -297,7 +304,11 @@
       tableNode.classList.add('sla-detail-expanded');
       modal.classList.remove('hidden');
       document.body.style.overflow = 'hidden';
-      if (table) { table.render(); }
+      if (table) {
+        table.pageSize = table.readPageSize(); // modal follows the per-page dropdown (default 10)
+        table.page = 1;
+        table.render();
+      }
     }
 
     function close() {
@@ -306,8 +317,12 @@
       modal.classList.add('hidden');
       document.body.style.overflow = '';
       try { sessionStorage.removeItem(MODAL_OPEN_KEY); } catch (e) { /* private mode */ }
-      resetPageSize();
-      if (table) { table.render(); }
+      syncPerPageControl(10); // next modal open starts at 10 again
+      if (table) {
+        table.pageSize = COMPACT_PAGE_SIZE; // back to the compact 6-per-page in-card view
+        table.page = 1;
+        table.render();
+      }
     }
 
     expandBtn.addEventListener('click', open);

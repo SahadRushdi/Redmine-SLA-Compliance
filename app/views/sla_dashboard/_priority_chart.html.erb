@@ -18,7 +18,10 @@
   <h3 class="tw-text-base tw-font-semibold tw-text-gray-900 tw-mb-3"><%= l(:label_sla_chart_priority_breakdown) %></h3>
   <%# Height tracks the number of priority rows (slim bars capped at 26px in JS) so a single %>
   <%# priority no longer stretches to fill the whole card - ~72px for one row, ~176px for three. %>
-  <div class="tw-relative tw-w-full tw-flex-1" style="height: <%= [@priority_breakdown.size * 52 + 20, 96].max %>px;">
+  <%# Deliberately NOT tw-flex-1: when this card is stretched to match the taller detail/donut cards %>
+  <%# in the shared-height row, the bars keep their intended height and the extra space falls below %>
+  <%# the legend rather than inflating the chart into sparse, over-tall bars. %>
+  <div class="tw-relative tw-w-full" style="height: <%= [@priority_breakdown.size * 52 + 20, 96].max %>px;">
     <% if @priority_breakdown.empty? %>
       <p class="tw-text-sm tw-text-gray-400 tw-py-8 tw-text-center"><%= l(:text_sla_detail_table_empty_state) %></p>
     <% else %>
