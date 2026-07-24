@@ -21,7 +21,8 @@
   <div class="tw-bg-gray-50 tw-p-6">
     <%= render 'sla_dashboard/filter_bar' %>
     <%= render 'sla_dashboard/summary_cards' %>
+    <%# 'charts' now renders the three-across analytics row (priority, donut, detail table + its %>
+    <%# expand modal) followed by the full-width trend chart. %>
     <%= render 'sla_dashboard/charts' %>
-    <%= render 'sla_dashboard/detail_table' %>
   </div>
 </div>

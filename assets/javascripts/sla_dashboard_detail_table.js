@@ -10,6 +10,11 @@
 (function () {
   'use strict';
 
+  // sessionStorage flag used to re-open the expand modal after a state-pill server reload (see
+  // initExpandModal), so filtering from inside the modal doesn't visibly drop the user back to the
+  // compact card.
+  var MODAL_OPEN_KEY = 'slaDetailModalOpen';
+
   function byId(id) { return document.getElementById(id); }
 
   // Grey arrows only (no brand colour): neutral = both chevrons on an unsorted column, a single
@@ -74,9 +79,12 @@
     } : {};
   }
 
+  // 10 is the default page size for the compact in-card table (the hidden <select> renders
+  // pre-selected on 10); the modal's per-page dropdown can raise it and closing the modal resets
+  // it back to 10 (see initExpandModal).
   Table.prototype.readPageSize = function () {
-    var value = this.perPage ? parseInt(this.perPage.value, 10) : 25;
-    return (value && value > 0) ? value : 25;
+    var value = this.perPage ? parseInt(this.perPage.value, 10) : 10;
+    return (value && value > 0) ? value : 10;
   };
 
   Table.prototype.columnIndex = function (key) {
@@ -262,6 +270,72 @@
     });
   }
 
+  // Expand/collapse the detail table into a modal. The ONE #sla-detail-table node is physically
+  // moved from its in-card home into the modal body on expand (so rows are never duplicated) and
+  // returned on close. Adding `.sla-detail-expanded` is what reveals the extra columns + the
+  // search/per-page controls (partials/_detail_table.css); closing resets the page size back to
+  // the compact default of 10 so the narrow in-card table never renders 50/100 rows.
+  function initExpandModal(table) {
+    var tableNode = byId('sla-detail-table');
+    var home = byId('sla-detail-table-home');
+    var modal = byId('sla-detail-modal');
+    var body = byId('sla-detail-modal-body');
+    var expandBtn = document.querySelector('[data-sla-detail-expand]');
+    if (!tableNode || !home || !modal || !body || !expandBtn) { return; }
+
+    function resetPageSize() {
+      var select = byId('sla-detail-per-page');
+      if (!select) { return; }
+      select.value = '10';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      var label = document.querySelector('#sla-detail-perpage-trigger [data-sla-perpage-label]');
+      if (label) { label.textContent = '10'; }
+    }
+
+    function open() {
+      body.appendChild(tableNode);
+      tableNode.classList.add('sla-detail-expanded');
+      modal.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+      if (table) { table.render(); }
+    }
+
+    function close() {
+      home.appendChild(tableNode);
+      tableNode.classList.remove('sla-detail-expanded');
+      modal.classList.add('hidden');
+      document.body.style.overflow = '';
+      try { sessionStorage.removeItem(MODAL_OPEN_KEY); } catch (e) { /* private mode */ }
+      resetPageSize();
+      if (table) { table.render(); }
+    }
+
+    expandBtn.addEventListener('click', open);
+    modal.querySelectorAll('[data-sla-detail-close]').forEach(function (el) {
+      el.addEventListener('click', close);
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !modal.classList.contains('hidden')) { close(); }
+    });
+
+    // The modal's own state pills are plain server links (same scope change as the compact card's):
+    // clicking one reloads the whole page. Flag the modal as open first so init() re-opens it after
+    // the reload, so filtering from inside the modal feels like it never left. The compact card's
+    // pills deliberately carry no such flag, so they never spring the modal open.
+    var modalTabs = modal.querySelector('[data-sla-modal-tabs]');
+    if (modalTabs) {
+      modalTabs.querySelectorAll('a').forEach(function (link) {
+        link.addEventListener('click', function () {
+          try { sessionStorage.setItem(MODAL_OPEN_KEY, '1'); } catch (e) { /* private mode */ }
+        });
+      });
+    }
+
+    var reopen = false;
+    try { reopen = sessionStorage.getItem(MODAL_OPEN_KEY) === '1'; } catch (e) { /* private mode */ }
+    if (reopen) { open(); }
+  }
+
   function init() {
     var root = byId('sla-detail-table');
     if (!root || root.slaDetailInitialized) { return; }
@@ -269,9 +343,12 @@
 
     var table = new Table(root);
     initPerPageDropdown();
-    if (!table.rows.length) { return; } // empty-state row only — nothing to sort/paginate
-    table.bind();
-    table.render();
+    var hasRows = table.rows.length > 0;
+    if (hasRows) { // empty-state row only — nothing to sort/paginate, but expand still works
+      table.bind();
+      table.render();
+    }
+    initExpandModal(hasRows ? table : null);
   }
 
   window.slaDashboardDetailTable = { init: init };

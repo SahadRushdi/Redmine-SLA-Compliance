@@ -19,6 +19,9 @@
  *     Tailwind's sibling-based `peer-checked:` variant cannot express.
  *   - _chart_legend.css — the dashboard chart legends' clickable rows and their active pill, again
  *     as one JS-toggled class so the three legends can't drift apart.
+ *   - _detail_table.css — the ticket-level detail table's compact (in-card) vs expanded (modal)
+ *     column/control visibility, toggled by a single `.sla-detail-expanded` class on the one
+ *     table node that gets moved into the modal on expand.
  * postcss-import inlines these before Tailwind/scoping run, so they get the exact same
  * `.sla-plugin` treatment as everything else in this file.
  */
@@ -28,6 +31,7 @@
 @import 'partials/_settings_nav.css';
 @import 'partials/_option_card.css';
 @import 'partials/_chart_legend.css';
+@import 'partials/_detail_table.css';
 
 @tailwind base;
 @tailwind components;

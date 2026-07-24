@@ -71,6 +71,8 @@ en:
   field_sla_detail_deviation: "Deviation"
   label_sla_detail_search_placeholder: "Search tickets..."
   label_sla_detail_per_page: "Per page:"
+  label_sla_detail_expand: "Expand"
+  label_sla_detail_expand_title: "Open the full ticket detail table, with every column and search, in a larger view."
   label_sla_detail_showing: "Showing"
   label_sla_detail_of: "of"
   text_sla_detail_table_empty_state: "No tickets match the current filters."
