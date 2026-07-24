@@ -18,9 +18,3 @@
   <%# Renders its own lg:tw-col-span-5 card plus the expand-to-modal shell. %>
   <%= render 'sla_dashboard/detail_table' %>
 </div>
-
-<%# Full-width row: a dual-line time series wants the page's full horizontal space rather than %>
-<%# sharing a one-third column with the row above. %>
-<div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-shadow-sm tw-p-5 tw-mb-6">
-  <%= render 'sla_dashboard/trend_chart' %>
-</div>

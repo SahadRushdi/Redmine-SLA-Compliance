@@ -10,8 +10,13 @@
 
   function byId(id) { return document.getElementById(id); }
 
+  // Prefer HTML5 form association (el.form) over closest('form'): the custom-range From/To inputs
+  // now live on the SLA Trend tab, OUTSIDE #sla-filter-form's DOM subtree, and reach it via a
+  // form="sla-filter-form" attribute — closest('form') would find nothing from that position, but
+  // el.form resolves the associated form directly. Falls back to closest('form') for controls that
+  // are still nested inside the form (Project/Tracker/Priority in the header).
   function submitFormFor(el) {
-    var form = el.closest ? el.closest('form') : el.form;
+    var form = el.form || (el.closest ? el.closest('form') : null);
     if (!form) { return; }
     (form.requestSubmit ? form.requestSubmit() : form.submit());
   }
@@ -86,7 +91,10 @@
     markActivePresetButton(btn);
 
     if (value !== 'custom') {
-      var form = select.closest('form');
+      // The pills now live on the SLA Trend tab, outside #sla-filter-form — target the form by id
+      // directly (same as the granularity pills) rather than closest('form'), which finds nothing
+      // from here.
+      var form = byId('sla-filter-form');
       if (form) { (form.requestSubmit ? form.requestSubmit() : form.submit()); }
     }
   }

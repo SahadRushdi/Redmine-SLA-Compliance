@@ -51,23 +51,36 @@ class SlaDashboardController < ApplicationController
 
   def render_dashboard
     resolve_filters
-    @scope  = Sla::DashboardScope.call(project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
-                                        priority_ids: @filters[:priority_ids], date_range: @filters[:date_range])
-    @counts = Sla::ResultSummary.call(scope: @scope)
 
-    # Step 6.3 — charts. Reads the same filtered @scope; no live SLA computation, only
+    # The Open Tickets tab shows the CURRENT live state (Global Rule 4 reads over the sla_results
+    # cache), so its scope is project/tracker/priority-only with NO date_range — the date range
+    # only scopes the SLA Trend tab. Everything on the Open Tickets tab (summary cards, Stale card,
+    # priority/donut charts, detail table) reads this same @scope.
+    @scope  = Sla::DashboardScope.call(project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
+                                        priority_ids: @filters[:priority_ids])
+    @counts = Sla::ResultSummary.call(scope: @scope)
+    @stale_count = Sla::StaleSummary.call(scope: @scope)
+
+    # Step 6.3 — charts. Reads the same current-state @scope; no live SLA computation, only
     # aggregation over the sla_results cache (Global Rule 4).
     @priority_breakdown = Sla::PriorityBreakdown.call(scope: @scope)
 
+    # SLA Trend tab. The SLA Met card there is date-scoped: counts over tickets whose created_on
+    # falls in the selected window, kept separate from @counts so the always-current Open Tickets
+    # numbers are never affected by the date range.
+    window_scope = Sla::DashboardScope.call(project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
+                                            priority_ids: @filters[:priority_ids], date_range: @filters[:date_range])
+    @window_counts = Sla::ResultSummary.call(scope: window_scope)
+
     # Trend chart needs Created and Resolved filtered independently against date_range (see
-    # Sla::TrendSeries) rather than the already created_on-filtered @scope above, so it's built
-    # from its own project/tracker/priority-only scope with no date_range applied.
+    # Sla::TrendSeries) rather than a created_on-filtered scope, so it's built from its own
+    # project/tracker/priority-only scope with no date_range applied.
     trend_scope = Sla::DashboardScope.call(project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
                                             priority_ids: @filters[:priority_ids])
     @trend_series = Sla::TrendSeries.call(scope: trend_scope, date_range: @filters[:date_range],
                                           granularity: @filters[:granularity])
 
-    # Step 6.4 — detail table.
+    # Step 6.4 — detail table (current state, same @scope as the cards/charts).
     build_detail_table
 
     respond_to do |format|

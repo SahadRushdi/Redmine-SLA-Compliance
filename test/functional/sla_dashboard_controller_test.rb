@@ -240,7 +240,10 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
     assert_response :success
     assert_select '#sla-card-total-value', text: '3'
-    assert_select '#sla-card-met-value', text: '1'
+    # SLA Met is no longer a summary card (it moved to the SLA Trend tab); the current-state row now
+    # carries Stale in its place. These three freshly-generated issues have a just-now updated_on, so
+    # none are stale under the default 7-day threshold.
+    assert_select '#sla-card-stale-value', text: '0'
     assert_select '#sla-card-breached-value', text: '1'
     assert_select '#sla-card-no-sla-value', text: '1'
     assert_select '#sla-card-not-tracked-value', text: '1'

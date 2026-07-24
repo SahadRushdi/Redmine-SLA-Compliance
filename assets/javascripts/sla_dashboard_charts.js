@@ -303,20 +303,17 @@
     };
   }
 
-  // Trend chart (Created vs Resolved). Unlike the donut/priority charts, Created and Resolved
-  // have no fixed semantic meaning (they aren't a state like met/breached), so colors come from
-  // chartjs-plugin-colorschemes' Tableau 10 scheme instead of a hand-picked backgroundColor array
-  // - the one case CLAUDE.md calls out a Tableau-10 blue "Created" line as intentional chart data
-  // encoding, not a UI-chrome collision.
+  // Trend chart (Created vs Resolved). Colors are now hand-picked per dataset in the ERB payload
+  // (red Created / green Resolved — reusing the plugin's breached/met palette) instead of
+  // chartjs-plugin-colorschemes, so each line's meaning reads at a glance and the base colors are
+  // known up front (no scheme-cleanup dance needed). Points are drawn large with a white ring so
+  // every data point is clearly visible (per the reference design).
   //
   // Chart.js's own native legend (display: true + legend.onClick) turned out unreliable for click
   // hit-testing in this card's layout - clicks landed on visibly-rendered legend items but never
   // reached onClick. Rather than chase that further, this uses the exact same ERB-legend +
   // bindLegendClicks() pattern the donut/priority charts already use reliably (display: false
-  // here), for one consistent, proven mechanism across all three charts instead of two different
-  // ones. The one thing that pattern can't do for THIS chart: the legend's dot color isn't a fixed
-  // sla_chart_color(state) in ERB - colorschemes only assigns it once the chart is constructed
-  // client-side, so populateLegendSwatches() below fills each dot in after the fact.
+  // here), for one consistent, proven mechanism across all three charts.
   function initTrend() {
     var canvas = byId('sla-trend-chart');
     if (!canvas || canvas.slaChartInitialized || !window.Chart) { return; }
@@ -330,9 +327,12 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { colorschemes: { scheme: 'tableau.Tableau10' } },
         legend: { display: false }, // ERB legend below the chart drives clicks instead
-        elements: { line: { tension: 0.25, fill: false }, point: { radius: 2, hoverRadius: 4 } },
+        // Bigger points (radius 5, white 2px ring) so each Created/Resolved data point stands out.
+        elements: {
+          line: { tension: 0.25, fill: false, borderWidth: 3 },
+          point: { radius: 5, hoverRadius: 7, borderWidth: 2, borderColor: '#ffffff' }
+        },
         scales: {
           xAxes: [{ gridLines: { display: false, drawBorder: false } }],
           yAxes: [{ ticks: { beginAtZero: true, precision: 0 }, gridLines: { drawBorder: false } }]
@@ -341,24 +341,9 @@
     });
 
     canvas.slaChartInstance = chart;
-    // Captured once, right after colorschemes has assigned each line its color at construction -
-    // the "base" the highlight plugin fades away from, and what populateLegendSwatches paints the
-    // ERB legend's dots with.
-    //
-    // NOT read from dataset.borderColor - chartjs-plugin-colorschemes only sets that TRANSIENTLY.
-    // Its beforeUpdate assigns dataset.borderColor/backgroundColor/etc. from the scheme, but its
-    // afterUpdate (which runs as part of this same synchronous `new Chart()` call) immediately
-    // resets every one of them back to whatever they were before (undefined, here, since none are
-    // set in the ERB payload) - by design, so external code always sees the config it originally
-    // passed in, not a scheme-polluted copy. That's exactly what broke both the legend dots (set
-    // to a color read as undefined) and the highlight-on-click (its beforeDraw guard, `if (!base)
-    // return`, silently no-ops on undefined). The computed render MODEL isn't part of that
-    // cleanup, so it still has the real color Chart.js actually drew with - read that instead.
-    var baseColors = chart.data.datasets.map(function (dataset, index) {
-      var meta = chart.getDatasetMeta(index);
-      var modelColor = meta.dataset && meta.dataset._model && meta.dataset._model.borderColor;
-      return modelColor || dataset.borderColor;
-    });
+    // Base colors come straight from the payload now (fixed per dataset) — the "base" the highlight
+    // plugin fades away from, and what populateLegendSwatches paints the ERB legend's dots with.
+    var baseColors = payload.datasets.map(function (dataset) { return dataset.borderColor; });
     chart.$slaLegendHighlight = { highlighted: null, baseColors: baseColors };
     populateLegendSwatches('sla-trend-chart-legend', baseColors);
   }

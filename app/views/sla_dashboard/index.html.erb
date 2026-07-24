@@ -1,6 +1,7 @@
 <% html_title(@project ? "#{l(:label_sla_compliance)} — #{@project.name}" : l(:label_sla_dashboard_all)) %>
 <%= render 'sla_compliance/assets' %>
 <% content_for :header_tags do %>
+  <%= javascript_include_tag 'sla_dashboard_tabs.js', plugin: 'redmine_sla_compliance' %>
   <%= javascript_include_tag 'sla_dashboard_filters.js', plugin: 'redmine_sla_compliance' %>
   <%= javascript_include_tag 'sla_dashboard_charts.js', plugin: 'redmine_sla_compliance' %>
   <%= javascript_include_tag 'sla_dashboard_detail_table.js', plugin: 'redmine_sla_compliance' %>
@@ -19,10 +20,21 @@
   <%# (`.sla-plugin .tw-bg-gray-50`, not `.sla-plugin.tw-bg-gray-50`), so a tw- utility placed on %>
   <%# .sla-plugin itself can never match its own compiled selector - it has to sit on a child. %>
   <div class="tw-bg-gray-50 tw-p-6">
+    <%# Header: title/subtitle + the tracker/priority/project filters that scope BOTH tabs. %>
     <%= render 'sla_dashboard/filter_bar' %>
-    <%= render 'sla_dashboard/summary_cards' %>
-    <%# 'charts' now renders the three-across analytics row (priority, donut, detail table + its %>
-    <%# expand modal) followed by the full-width trend chart. %>
-    <%= render 'sla_dashboard/charts' %>
+    <%= render 'sla_dashboard/tabs' %>
+
+    <%# Tab 1 — Open Tickets (current live state): summary cards (with Stale in place of SLA Met) %>
+    <%# and the three-across analytics row (priority, donut, detail table + its expand modal). %>
+    <div data-sla-tab-panel="open">
+      <%= render 'sla_dashboard/summary_cards' %>
+      <%= render 'sla_dashboard/charts' %>
+    </div>
+
+    <%# Tab 2 — SLA Trend (date-scoped): date-range controls + the SLA Met card and the %>
+    <%# Created vs Resolved chart. Hidden until selected (client-side, sla_dashboard_tabs.js). %>
+    <div data-sla-tab-panel="trend" class="hidden">
+      <%= render 'sla_dashboard/trend_panel' %>
+    </div>
   </div>
 </div>

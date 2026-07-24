@@ -14,18 +14,15 @@
     </div>
   </div>
 
-  <div class="tw-rounded-xl tw-border tw-p-4 tw-flex tw-items-start tw-gap-3 tw-shadow-sm tw-transition-shadow hover:tw-shadow-md <%= sla_card_color_classes(:met) %>">
-    <span class="tw-inline-flex tw-items-center tw-justify-center tw-w-10 tw-h-10 tw-rounded-full tw-flex-shrink-0 <%= sla_card_icon_classes(:met) %>"><%= sla_card_icon(:met) %></span>
+  <%# Stale replaces the SLA Met card on this current-state row (SLA Met now lives on the SLA Trend %>
+  <%# tab). Count comes from Sla::StaleSummary: open tickets with no updates past their project's %>
+  <%# inactivity threshold. %>
+  <div class="tw-rounded-xl tw-border tw-p-4 tw-flex tw-items-start tw-gap-3 tw-shadow-sm tw-transition-shadow hover:tw-shadow-md <%= sla_card_color_classes(:stale) %>">
+    <span class="tw-inline-flex tw-items-center tw-justify-center tw-w-10 tw-h-10 tw-rounded-full tw-flex-shrink-0 <%= sla_card_icon_classes(:stale) %>"><%= sla_card_icon(:stale) %></span>
     <div class="tw-min-w-0">
-      <p class="tw-text-sm tw-font-medium"><%= sla_card_label(:met) %></p>
-      <p class="tw-text-3xl tw-font-bold tw-mt-1">
-        <span id="sla-card-met-percentage"><%= sla_percentage(@counts.met, @counts.total) %></span>%
-        <span class="tw-text-base tw-font-normal tw-opacity-70">(<span id="sla-card-met-value"><%= @counts.met %></span>)</span>
-      </p>
-      <p class="tw-text-xs tw-opacity-70 tw-mt-1"><%= l(:text_sla_card_met_hint) %></p>
-      <p class="tw-text-xs tw-font-medium tw-mt-2">
-        <%= l(:label_sla_card_at_risk) %>: <span id="sla-card-met-at-risk-value"><%= @counts.at_risk %></span>
-      </p>
+      <p class="tw-text-sm tw-font-medium"><%= sla_card_label(:stale) %></p>
+      <p class="tw-text-3xl tw-font-bold tw-mt-1" id="sla-card-stale-value"><%= @stale_count %></p>
+      <p class="tw-text-xs tw-opacity-70 tw-mt-1"><%= l(:text_sla_card_stale_hint) %></p>
     </div>
   </div>
 

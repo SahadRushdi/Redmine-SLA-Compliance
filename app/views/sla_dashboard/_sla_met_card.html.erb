@@ -1,0 +1,13 @@
+<%# SLA Met card for the SLA Trend tab. Date-scoped: @window_counts is computed over tickets whose %>
+<%# created_on falls in the selected window (kept separate from the always-current @counts so the %>
+<%# Open Tickets tab is never affected by the date range). Percentage green like the summary card's %>
+<%# met semantics, but rendered as a standalone white card matching the reference design. %>
+<div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-shadow-sm tw-p-5 tw-h-full tw-flex tw-flex-col tw-justify-center">
+  <p class="tw-text-sm tw-font-semibold tw-text-gray-500"><%= sla_card_label(:met) %></p>
+  <p class="tw-text-4xl tw-font-bold tw-text-green-600 tw-mt-2">
+    <span id="sla-met-window-percentage"><%= sla_percentage(@window_counts.met, @window_counts.total) %></span>%
+  </p>
+  <p class="tw-text-sm tw-text-gray-500 tw-mt-2">
+    <%= l(:text_sla_met_in_target, met: @window_counts.met, total: @window_counts.total) %>
+  </p>
+</div>

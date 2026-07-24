@@ -41,10 +41,21 @@ en:
   label_sla_card_breached: "SLA Breached"
   label_sla_card_at_risk: "At Risk"
   label_sla_card_no_sla: "No SLA"
+  label_sla_card_stale: "Stale"
   label_sla_card_not_configured: "Not Configured"
   label_sla_card_not_tracked: "Not Tracked"
   text_sla_card_met_hint: "Includes open tickets still within target, not only resolved ones."
+  text_sla_card_stale_hint: "Open tickets with no updates past their inactivity threshold."
   text_sla_card_reconciliation_hint: "= SLA Met + SLA Breached + No SLA"
+
+  # --- Dashboard tabs + SLA Trend (Phase 6) -------------------------------------------------
+  label_sla_dashboard_subtitle: "Open Tickets shows the current live state · SLA Trend is scoped to a chosen date range."
+  label_sla_tab_open_tickets: "Open Tickets"
+  label_sla_tab_sla_trend: "SLA Trend"
+  label_sla_tab_badge_live: "Live"
+  label_sla_tab_badge_scoped: "Date-scoped"
+  text_sla_trend_window_hint: "Tickets within the selected window — the only view this date range affects."
+  text_sla_met_in_target: "%{met} of %{total} met in target"
 
   # --- Dashboard charts (Phase 6, Step 6.3) -------------------------------------------------
   label_sla_chart_compliance_split: "Compliance Split"

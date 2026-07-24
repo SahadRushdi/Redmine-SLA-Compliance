@@ -1,13 +1,18 @@
-<%# Step 6.3 — Created vs Resolved trend (dual line, Daily/Weekly/Monthly). Colors are NOT %>
-<%# hand-picked here (unlike the donut/priority charts' fixed met/breached/at_risk/no_sla %>
-<%# palette) — Created and Resolved have no fixed semantic meaning, so chartjs-plugin-colorschemes %>
-<%# assigns them from the Tableau 10 scheme client-side (sla_dashboard_charts.js), the one case %>
-<%# CLAUDE.md calls out a Tableau-10 blue "Created" line as intentional, not a UI-chrome collision. %>
+<%# Step 6.3 — Created vs Resolved trend (dual line, Daily/Weekly/Monthly). Colors are now %>
+<%# hand-picked (red Created / green Resolved) rather than left to chartjs-plugin-colorschemes: %>
+<%# Created reuses the breached red (incoming/backlog) and Resolved the met green (cleared), so the %>
+<%# two lines read at a glance and stay visually consistent with the rest of the plugin's palette. %>
+<%# sla_dashboard_charts.js reads these per-dataset colors (no colorschemes for this chart) and %>
+<%# draws larger points so each data point is clearly visible. %>
 <% trend_payload = {
      labels: @trend_series.map(&:bucket_label),
      datasets: [
-       { label: l(:label_sla_created), data: @trend_series.map(&:created) },
-       { label: l(:label_sla_resolved), data: @trend_series.map(&:resolved) }
+       { label: l(:label_sla_created), data: @trend_series.map(&:created),
+         borderColor: sla_chart_color(:breached), backgroundColor: sla_chart_color(:breached),
+         pointBackgroundColor: sla_chart_color(:breached) },
+       { label: l(:label_sla_resolved), data: @trend_series.map(&:resolved),
+         borderColor: sla_chart_color(:met), backgroundColor: sla_chart_color(:met),
+         pointBackgroundColor: sla_chart_color(:met) }
      ]
    } %>
 <div class="tw-flex tw-flex-col">
