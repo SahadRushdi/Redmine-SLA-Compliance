@@ -15,14 +15,13 @@
   normally and every existing functional-test assertion on it (option[selected], clamped values,
   etc.) keeps working unmodified.
 
-  The <form> uses `tw-contents` (display: contents) so its children lay out as direct flex items
-  of the surrounding header row - lets the title sit on the left and Date Range/Tracker/Priority/
-  Export CSV sit on the right of the SAME row (opposite the heading), while Project still submits
-  as part of the one real <form> underneath.
+  Every control lives on the single header row: the title sits on the left, and Project/Tracker/
+  Priority/Export CSV sit on the right of that SAME row, opposite the heading. The row's own
+  tw-flex handles that, so the <form> needs no `tw-contents` — it has exactly one child.
 %>
 <div class="tw-mb-6">
-  <%= form_tag(sla_dashboard_base_path(@project), method: :get, id: 'sla-filter-form', class: 'tw-contents') do %>
-    <div class="tw-flex tw-items-start tw-justify-between tw-flex-wrap tw-gap-4 tw-mb-4">
+  <%= form_tag(sla_dashboard_base_path(@project), method: :get, id: 'sla-filter-form') do %>
+    <div class="tw-flex tw-items-start tw-justify-between tw-flex-wrap tw-gap-4">
       <div>
         <h1 class="tw-text-2xl tw-font-bold tw-text-gray-900">
           <%= @project ? "#{l(:label_sla_compliance)} — #{@project.name}" : l(:label_sla_dashboard_all) %>
@@ -35,7 +34,22 @@
       <%# preserved for screen readers via aria-label on each control/group. %>
       <div class="tw-flex tw-flex-wrap tw-items-center tw-gap-3">
         <%# Date Range controls moved to the SLA Trend tab (_trend_panel.html.erb) — they scope only %>
-        <%# that tab. Tracker/Priority (and Project below) scope BOTH tabs, so they stay here. %>
+        <%# that tab. Project/Tracker/Priority scope BOTH tabs, so they stay here. %>
+
+        <%# Project sits inline with Tracker/Priority rather than in its own card row below: with a %>
+        <%# single permitted project (the common project-level case) that card was an almost-empty %>
+        <%# full-width band. Same chip control family as the other two, so it reads as one filter %>
+        <%# group. The locked-project explanation moves from a caption to the wrapper's title %>
+        <%# tooltip — there is no room for a caption on a single-line header. %>
+        <div class="tw-min-w-[12rem]"
+             <% if @locked_project %>title="<%= l(:text_sla_filter_locked_project_hint) %>"<% end %>>
+          <%= select_tag 'project_ids[]',
+                options_for_select(@permitted_projects.map { |p| [p.name, p.id] }, @filters[:project_ids]),
+                id: 'sla-filter-projects', multiple: true, disabled: @locked_project,
+                class: sla_input_classes, placeholder: l(:label_sla_filter_all_projects),
+                'aria-label': l(:label_sla_filter_project),
+                data: { 'sla-chips': true, 'sla-auto-apply-debounced': true } %>
+        </div>
 
         <%# Tracker is a multi-select (chips), same control family as Priority — an empty selection %>
         <%# means "all trackers". Priority stays disabled until at least one tracker is chosen, since %>
@@ -66,17 +80,6 @@
           <%= l(:button_sla_export_csv) %>
         <% end %>
       </div>
-    </div>
-
-    <div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-p-5 tw-shadow-sm">
-      <label class="<%= sla_label_classes %>" for="sla-filter-projects"><%= l(:label_sla_filter_project) %></label>
-      <%= select_tag 'project_ids[]',
-            options_for_select(@permitted_projects.map { |p| [p.name, p.id] }, @filters[:project_ids]),
-            id: 'sla-filter-projects', multiple: true, disabled: @locked_project,
-            class: "#{sla_input_classes} tw-max-w-xl", data: { 'sla-chips': true, 'sla-auto-apply-debounced': true } %>
-      <% if @locked_project %>
-        <p class="tw-text-xs tw-text-gray-400 tw-mt-1"><%= l(:text_sla_filter_locked_project_hint) %></p>
-      <% end %>
     </div>
   <% end %>
 </div>

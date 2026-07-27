@@ -18,6 +18,7 @@ en:
   label_sla_filter_date_range: "Date Range"
   label_sla_filter_tracker: "Tracker"
   label_sla_filter_priority: "Priority"
+  label_sla_filter_all_projects: "All projects"
   label_sla_filter_all_trackers: "All trackers"
   label_sla_filter_all_priorities: "All priorities"
   label_sla_filter_granularity: "Granularity"

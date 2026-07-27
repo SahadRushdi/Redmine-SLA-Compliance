@@ -41,11 +41,11 @@
     <%# same treatment as every other button in this plugin. %>
     <button type="button" data-sla-detail-expand
             title="<%= l(:label_sla_detail_expand_title) %>" aria-label="<%= l(:label_sla_detail_expand) %>"
-            class="tw-flex-shrink-0 tw-inline-flex tw-items-center tw-justify-center tw-w-8 tw-h-8 tw-bg-white tw-text-gray-500 tw-border tw-border-gray-300 tw-rounded-lg tw-shadow-none hover:tw-bg-gray-50 hover:tw-text-gray-700 focus:tw-outline-none focus:tw-ring-4 focus:tw-ring-primary-100">
+            class="tw-flex-shrink-0 tw-inline-flex tw-items-center tw-justify-center tw-w-10 tw-h-10 tw-bg-white tw-text-gray-500 tw-border tw-border-gray-300 tw-rounded-lg tw-shadow-none hover:tw-bg-gray-50 hover:tw-text-gray-700 focus:tw-outline-none focus:tw-ring-4 focus:tw-ring-primary-100">
       <%# Feather "maximize-2" diagonal double-arrow — the same expand affordance the Time Analytics %>
-      <%# breakdown table uses, and unambiguous at 16px (the old four-corner-arrows path rendered as %>
-      <%# an illegible cluster of dots at this size). %>
-      <svg class="tw-w-4 tw-h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+      <%# breakdown table uses. Drawn at 20px in a 40px button: at the previous 16px/32px it read as %>
+      <%# a faint hairline glyph next to the state pills and users missed it as the expand control. %>
+      <svg class="tw-w-5 tw-h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
         <polyline points="15 3 21 3 21 9"></polyline>
         <polyline points="9 21 3 21 3 15"></polyline>
         <line x1="21" y1="3" x2="14" y2="10"></line>
