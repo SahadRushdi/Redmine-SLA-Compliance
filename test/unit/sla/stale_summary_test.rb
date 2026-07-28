@@ -4,23 +4,26 @@ require_relative '../../test_helper'
 
 # Sla::StaleSummary — the dashboard "Stale" card count: OPEN sla_results-scoped tickets with no
 # updates (issues.updated_on) past their project's inactivity threshold. Like DashboardScope, every
-# assertion has to prove the count reaches through the `issues` join (updated_on/closed_on live on
-# issues, not sla_results). Runs inside Redmine's transactional tests — nothing persists.
+# assertion has to prove the count reaches through the `issues` join (updated_on lives on issues,
+# not sla_results). Runs inside Redmine's transactional tests — nothing persists.
 class Sla::StaleSummaryTest < ActiveSupport::TestCase
   fixtures :projects, :trackers, :projects_trackers, :issue_statuses, :enumerations, :users,
            :email_addresses, :roles, :members, :member_roles
 
   NOW = Time.zone.local(2026, 7, 15, 12, 0, 0)
 
-  def make_issue(project_id: 1, updated_on: NOW, closed_on: nil)
+  def make_issue(project_id: 1, updated_on: NOW)
     issue = Issue.generate!(project: Project.find(project_id), tracker_id: 1, priority_id: 4)
-    issue.update_columns(updated_on: updated_on, closed_on: closed_on)
+    issue.update_columns(updated_on: updated_on)
     issue
   end
 
-  def make_result(issue)
+  # `resolved_at` is what makes a cached row open or not — the engine's own resolved-role
+  # milestone, not issues.closed_on (see Sla::ResultClassifier#closed_at).
+  def make_result(issue, resolved_at: nil)
     SlaResult.create!(issue_id: issue.id, project_id: issue.project_id,
-                      primary_state: 'no_sla', no_sla_reason: 'not_tracked')
+                      primary_state: 'no_sla', no_sla_reason: 'not_tracked',
+                      resolved_at: resolved_at)
   end
 
   def count_for(*issues)
@@ -36,11 +39,11 @@ class Sla::StaleSummaryTest < ActiveSupport::TestCase
     assert_equal 1, count_for(stale, fresh)
   end
 
-  test 'a closed ticket is never stale, however long it has sat untouched' do
-    closed = make_issue(updated_on: NOW - 30.days, closed_on: NOW - 20.days)
-    make_result(closed)
+  test 'a resolved ticket is never stale, however long it has sat untouched' do
+    resolved = make_issue(updated_on: NOW - 30.days)
+    make_result(resolved, resolved_at: NOW - 20.days)
 
-    assert_equal 0, count_for(closed)
+    assert_equal 0, count_for(resolved)
   end
 
   test 'the boundary is inclusive of the threshold: exactly 7 days idle counts as stale' do

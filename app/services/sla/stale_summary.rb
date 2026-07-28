@@ -14,8 +14,11 @@ module Sla
   # rather than one global cutoff — projects with no notification setting fall back to the same
   # default the column carries.
   #
-  # "Open" is closed_on IS NULL: a resolved/closed ticket that simply hasn't been touched since is
-  # not "stale", it's done. This mirrors the sweep, which only ever treats OPEN tickets as stale.
+  # "Open" is `sla_results.resolved_at IS NULL` — the plugin's own definition (not in a configured
+  # `resolved`-role status), the same one Sla::DashboardScope#open_only applies, so the Stale card
+  # and the Total Open Tickets card always describe the same population. A resolved ticket that
+  # simply hasn't been touched since is not "stale", it's done. Kept here rather than relying on
+  # the caller's scope because the notification path also calls this with an unfiltered relation.
   class StaleSummary
     DEFAULT_THRESHOLD_DAYS = 7 # mirrors the sla_notification_settings.stale_threshold_days column default
 
@@ -29,7 +32,8 @@ module Sla
     end
 
     def call
-      base = @scope.reorder(nil).unscope(:includes).joins(:issue).where(issues: { closed_on: nil })
+      base = @scope.reorder(nil).unscope(:includes).joins(:issue)
+                   .where(sla_results: { resolved_at: nil })
 
       project_ids = base.distinct.pluck(:project_id)
       return 0 if project_ids.empty?

@@ -16,6 +16,14 @@ class SlaPoliciesController < ApplicationController
   # status_mappings and silently wipe every milestone status configured under Measurement Rules.
   POLICY_SECTIONS = %w[general measurement targets exclusions].freeze
 
+  # The tri-state SLA on/off control offered to a project that inherits its configuration. It is
+  # NOT one of POLICY_SECTIONS: those all write policy fields through #policy_params, whereas this
+  # one writes nothing but `enabled` (+ the `inherits_config` marker) and can also DELETE the row.
+  # Keeping it out of that list is what stops a forged `section=enablement` submit from reaching
+  # the field-writing path at all.
+  ENABLEMENT_SECTION = 'enablement'
+  ENABLEMENT_CHOICES = %w[inherit enabled disabled].freeze
+
   # Every policy scalar the sectioned form manages, in one place: it is both the strong-params
   # allow-list and the set copied when a section other than General creates the row
   # (see #seed_new_policy_scalars!). The two must not drift apart.
@@ -44,6 +52,8 @@ class SlaPoliciesController < ApplicationController
   end
 
   def update
+    return update_enablement if params[:section] == ENABLEMENT_SECTION
+
     @sla_policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
     section = posted_section
 
@@ -51,6 +61,10 @@ class SlaPoliciesController < ApplicationController
       ActiveRecord::Base.transaction do
         seed_new_policy_scalars! if @sla_policy.new_record?
         @sla_policy.assign_attributes(policy_params)
+        # Saving any policy section writes configuration onto this row, which by definition makes
+        # it self-defining — the case that matters is a project that first used the tri-state
+        # control (leaving a lightweight row) and then pressed "Override for this project".
+        @sla_policy.inherits_config = false
         @sla_policy.save!
         replace_status_mappings!(SECTION_STATUS_ROLES.fetch(section, []))
         if section == 'targets'
@@ -87,6 +101,64 @@ class SlaPoliciesController < ApplicationController
 
   private
 
+  # Tri-state SLA on/off for a project that inherits its configuration (Global Rule 5). Writes a
+  # LIGHTWEIGHT policy row — `inherits_config: true`, carrying only the enabled decision — so the
+  # project keeps following its ancestor's coverage/targets/status mappings. That is the whole
+  # difference from "Override for this project", which forks the configuration outright.
+  #
+  # Deliberately does NOT go through #policy_params / #seed_new_policy_scalars!: seeding would copy
+  # the ancestor's scalars onto the row, and a row holding its own scalars is no longer lightweight
+  # — the next parent change would silently stop reaching this project.
+  def update_enablement
+    return render_403 unless enablement_offered?
+
+    case posted_enablement
+    when 'inherit'  then revert_to_inherited_enablement
+    when 'enabled'  then write_lightweight_policy(true)
+    when 'disabled' then write_lightweight_policy(false)
+    end
+
+    redirect_to settings_project_path(@project, tab: 'sla_policy')
+  end
+
+  # The control only exists for a project whose configuration comes from an ancestor. A project
+  # with a SELF-DEFINING row of its own uses General -> SLA Tracking instead, and must never be
+  # able to reach this path — it would strip the row's `inherits_config = false` and orphan its
+  # definitions and status mappings.
+  def enablement_offered?
+    own_policy = SlaPolicy.find_by(project_id: @project.id)
+    return false if own_policy && !own_policy.inherits_config?
+
+    # A lightweight row of our own stays revertible even if the ancestor that configured it has
+    # since been deleted — otherwise the project would be stuck holding a row it cannot clear.
+    own_policy.present? || SlaPolicy.config_source_for(@project).first.present?
+  end
+
+  def posted_enablement
+    value = params.fetch(:sla_policy, {})[:enablement].to_s
+    ENABLEMENT_CHOICES.include?(value) ? value : 'inherit'
+  end
+
+  def write_lightweight_policy(enabled)
+    policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
+    policy.assign_attributes(enabled: enabled, inherits_config: true)
+    policy.save!
+    SlaPolicyRecalculationJob.perform_later(@project.id)
+    flash[:notice] = l(:notice_successful_update)
+  end
+
+  # Drops back to "whatever the ancestor decides". Only ever deletes a lightweight row — a full
+  # override is reverted through #destroy's "Revert to inherited policy" button, which carries its
+  # own confirmation because it discards a whole configuration.
+  def revert_to_inherited_enablement
+    policy = SlaPolicy.find_by(project_id: @project.id)
+    return flash[:notice] = l(:notice_successful_update) if policy.nil?
+
+    policy.destroy!
+    SlaPolicyRecalculationJob.perform_later(@project.id)
+    flash[:notice] = l(:notice_sla_reverted_to_inherited)
+  end
+
   # Which section's form was submitted. Never trusted as-is — an unrecognised (or forged) value
   # falls back to the most restrictive section, which owns no status roles and no definitions.
   def posted_section
@@ -117,7 +189,7 @@ class SlaPoliciesController < ApplicationController
   # so nothing diverges.
   def seed_new_policy_scalars!
     source = authorized_source_policy(params[:clone_source_id]) if params[:clone_source_id].present?
-    source ||= SlaPolicy.source_for(@project).last
+    source ||= SlaPolicy.config_source_for(@project).last
     return if source.nil?
 
     @sla_policy.assign_attributes(source.attributes.slice(*POLICY_ATTRIBUTES.map(&:to_s)))

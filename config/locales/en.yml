@@ -37,20 +37,24 @@ en:
   button_sla_export_csv: "Export CSV"
   text_sla_filter_locked_project_hint: "This project has no sub-projects, so the Project filter is locked to it."
 
-  label_sla_card_total: "Total Tickets"
+  label_sla_card_total: "Total Open Tickets"
+  # The Open Tickets tab counts only OPEN tickets, so its "met" state means "still inside its
+  # target" — it is not the compliance figure. The genuine % SLA met lives on the SLA Trend tab
+  # over RESOLVED tickets and uses label_sla_card_met_window below. Keeping the two apart is what
+  # stops the same words meaning two different things on one page.
   label_sla_card_met: "SLA Met"
+  label_sla_card_met_window: "SLA Met"
   label_sla_card_breached: "SLA Breached"
   label_sla_card_at_risk: "At Risk"
   label_sla_card_no_sla: "No SLA"
   label_sla_card_stale: "Stale"
   label_sla_card_not_configured: "Not Configured"
   label_sla_card_not_tracked: "Not Tracked"
-  text_sla_card_met_hint: "Includes open tickets still within target, not only resolved ones."
   text_sla_card_stale_hint: "Open tickets with no updates past their inactivity threshold."
   text_sla_card_reconciliation_hint: "= SLA Met + SLA Breached + No SLA"
 
   # --- Dashboard tabs + SLA Trend (Phase 6) -------------------------------------------------
-  label_sla_dashboard_subtitle: "Open Tickets shows the current live state · SLA Trend is scoped to a chosen date range."
+  label_sla_dashboard_subtitle: "Open Tickets shows every unresolved ticket, at all times · SLA Trend is scoped to a chosen date range."
   label_sla_tab_open_tickets: "Open Tickets"
   label_sla_tab_sla_trend: "SLA Trend"
   label_sla_tab_badge_live: "Live"
@@ -242,6 +246,17 @@ en:
   text_sla_revert_hint: "Removes this project's own policy so it inherits from %{project} again. Cached SLA results are recalculated, not deleted."
   notice_sla_reverted_to_inherited: "Reverted to the inherited SLA policy."
   text_sla_no_policy_anywhere_hint: "No SLA policy is configured for this project or any parent project yet. Fill in the form below to create one."
+
+  # --- Tri-state SLA on/off for an inheriting subproject -------------------------------------
+  label_sla_enablement_card: "SLA for This Project"
+  text_sla_enablement_card: "Turn SLA tracking on or off for this project without changing the inherited policy."
+  label_sla_enablement_inherit: "Inherit from %{project}"
+  label_sla_enablement_enabled: "Enabled"
+  label_sla_enablement_disabled: "Disabled"
+  label_sla_enablement_currently_on: "currently on"
+  label_sla_enablement_currently_off: "currently off"
+  text_sla_enablement_hint: "Enabled and Disabled apply to this project only. Coverage, targets and statuses still follow the inherited policy, so later changes to it keep reaching this project."
+  button_sla_save_enablement: "Save SLA Status"
   label_sla_recalculate_historical: "Recalculate historical tickets"
   text_sla_forward_only_hint: "By default, saving applies to new activity only. Tick to re-evaluate all existing tickets against the new policy in the background."
   notice_sla_recalculation_queued: "Historical recalculation has been queued."

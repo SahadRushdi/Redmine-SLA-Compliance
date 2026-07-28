@@ -52,12 +52,13 @@ class SlaDashboardController < ApplicationController
   def render_dashboard
     resolve_filters
 
-    # The Open Tickets tab shows the CURRENT live state (Global Rule 4 reads over the sla_results
-    # cache), so its scope is project/tracker/priority-only with NO date_range — the date range
-    # only scopes the SLA Trend tab. Everything on the Open Tickets tab (summary cards, Stale card,
+    # The Open Tickets tab counts OPEN tickets — not resolved, per the policy's own `resolved`-role
+    # statuses — at all times, ignoring the selected date range entirely. A ticket breaching its
+    # SLA is a live problem whether it was raised this week or last quarter, so hiding it behind a
+    # date filter would understate the backlog. Everything on that tab (summary cards, Stale card,
     # priority/donut charts, detail table) reads this same @scope.
     @scope  = Sla::DashboardScope.call(project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
-                                        priority_ids: @filters[:priority_ids])
+                                        priority_ids: @filters[:priority_ids], open_only: true)
     @counts = Sla::ResultSummary.call(scope: @scope)
     @stale_count = Sla::StaleSummary.call(scope: @scope)
 
@@ -65,11 +66,12 @@ class SlaDashboardController < ApplicationController
     # aggregation over the sla_results cache (Global Rule 4).
     @priority_breakdown = Sla::PriorityBreakdown.call(scope: @scope)
 
-    # SLA Trend tab. The SLA Met card there is date-scoped: counts over tickets whose created_on
-    # falls in the selected window, kept separate from @counts so the always-current Open Tickets
-    # numbers are never affected by the date range.
+    # SLA Trend tab. The SLA Met card is the one date-scoped figure on the dashboard, and it is
+    # the mirror image of the above: closed-loop compliance over tickets RESOLVED inside the
+    # selected window. Open tickets never appear in it — an open ticket has not yet met anything.
     window_scope = Sla::DashboardScope.call(project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
-                                            priority_ids: @filters[:priority_ids], date_range: @filters[:date_range])
+                                            priority_ids: @filters[:priority_ids],
+                                            resolved_range: @filters[:date_range])
     @window_counts = Sla::ResultSummary.call(scope: window_scope)
 
     # Trend chart needs Created and Resolved filtered independently against date_range (see

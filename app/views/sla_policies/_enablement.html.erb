@@ -1,0 +1,44 @@
+<%# Tri-state SLA on/off for a project that inherits its configuration (Global Rule 5). %>
+<%# %>
+<%# This is deliberately NOT the same thing as "Override for this project" below it: choosing %>
+<%# Enabled/Disabled here writes a LIGHTWEIGHT policy row (SlaPolicy#inherits_config?) that carries %>
+<%# only the on/off decision, so coverage, targets and status mappings keep following the ancestor. %>
+<%# Override forks the whole configuration and stops tracking the parent entirely. %>
+<%# %>
+<%# Its own <form> posting section=enablement, which SlaPoliciesController#update routes to %>
+<%# #update_enablement — a path that writes no policy fields at all. Locals: project, %>
+<%# source_project, state (:inherit/:enabled/:disabled), inherited_on (boolean). %>
+<%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-enablement-form' do %>
+  <%= hidden_field_tag 'tab', 'sla_policy' %>
+  <%= hidden_field_tag 'section', 'enablement' %>
+
+  <%= render layout: 'sla_policies/card',
+             locals: { title: l(:label_sla_enablement_card),
+                       description: l(:text_sla_enablement_card) } do %>
+    <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-3 tw-gap-3">
+      <label class="sla-option-card">
+        <%= radio_button_tag 'sla_policy[enablement]', 'inherit', state == :inherit,
+              class: sla_radio_classes %>
+        <span>
+          <%= l(:label_sla_enablement_inherit, project: source_project.name) %>
+          <span class="tw-text-gray-500">
+            — <%= inherited_on ? l(:label_sla_enablement_currently_on) : l(:label_sla_enablement_currently_off) %>
+          </span>
+        </span>
+      </label>
+      <label class="sla-option-card">
+        <%= radio_button_tag 'sla_policy[enablement]', 'enabled', state == :enabled,
+              class: sla_radio_classes %>
+        <%= l(:label_sla_enablement_enabled) %>
+      </label>
+      <label class="sla-option-card">
+        <%= radio_button_tag 'sla_policy[enablement]', 'disabled', state == :disabled,
+              class: sla_radio_classes %>
+        <%= l(:label_sla_enablement_disabled) %>
+      </label>
+    </div>
+    <p class="tw-mt-3 tw-mb-0 tw-text-xs tw-text-gray-500"><%= l(:text_sla_enablement_hint) %></p>
+  <% end %>
+
+  <%= render 'sla_policies/save_bar', label: l(:button_sla_save_enablement) %>
+<% end %>

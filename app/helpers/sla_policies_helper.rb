@@ -21,17 +21,33 @@ module SlaPoliciesHelper
     { key: 'notifications', permission: :manage_sla_notifications }
   ].freeze
 
-  # B3 — [source_project, source_policy] when this project's nearest policy belongs to an ANCESTOR
+  # B3 — [source_project, source_policy] when this project's CONFIGURATION comes from an ANCESTOR
   # (so the tab shows the read-only inherited banner instead of an editable form), else nil.
   # `clone_from` present means Override was just pressed and we're mid AJAX re-render into the real
   # edit form, so it takes precedence.
+  #
+  # Deliberately `config_source_for`, not `source_for`: a project holding a LIGHTWEIGHT row (its
+  # own SLA on/off decision, everything else inherited — see SlaPolicy#inherits_config?) still has
+  # no configuration to edit, so it must keep showing the ancestor's banner.
   def sla_inherited_policy_source(project)
     return nil if params[:clone_from].present?
 
-    source_project, source_policy = SlaPolicy.source_for(project)
+    source_project, source_policy = SlaPolicy.config_source_for(project)
     return nil if source_project.nil? || source_project == project
 
     [source_project, source_policy]
+  end
+
+  # Tri-state SLA on/off shown on the inherited banner: :inherit / :enabled / :disabled for this
+  # project, plus whether SLA actually ends up on — so "Inherit" can say WHICH state it inherits.
+  def sla_enablement_state(project)
+    SlaPolicy.enablement_for(project)
+  end
+
+  # What "Inherit" resolves to right now, i.e. the nearest ANCESTOR's decision — computed by
+  # asking the parent, so a lightweight row on this project doesn't answer its own question.
+  def sla_inherited_enablement_on?(project)
+    SlaPolicy.effective_for(project.parent).present?
   end
 
   # +inherited+: an inherited policy has no editable policy sections, so only Notifications is

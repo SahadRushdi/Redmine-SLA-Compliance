@@ -27,12 +27,25 @@
   </div>
 </div>
 
+<%# Tri-state SLA on/off. Only the on/off decision is editable here — the configuration below stays %>
+<%# read-only, since it belongs to source_project. Gated on :edit_sla_policy: the banner itself is %>
+<%# also reachable by a notifications-only manager, who must not be able to switch SLA off. %>
+<% if User.current.allowed_to?(:edit_sla_policy, project) %>
+  <%= render 'sla_policies/enablement', project: project, source_project: source_project,
+             state: sla_enablement_state(project),
+             inherited_on: sla_inherited_enablement_on?(project) %>
+<% end %>
+
 <div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-shadow-sm tw-p-5 tw-mb-6">
   <h3 class="tw-text-base tw-font-semibold tw-text-gray-900 tw-mb-4"><%= l(:label_sla_inherited_summary) %></h3>
   <dl class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-4 tw-text-sm">
     <div>
+      <%# The EFFECTIVE state for THIS project, not source_policy.enabled? — a lightweight row here %>
+      <%# can have switched SLA on or off independently of the ancestor whose config is shown below. %>
       <dt class="tw-font-medium tw-text-gray-500"><%= l(:field_sla_enabled) %></dt>
-      <dd class="tw-text-gray-900"><%= source_policy.enabled? ? l(:general_text_Yes) : l(:general_text_No) %></dd>
+      <dd class="tw-text-gray-900">
+        <%= SlaPolicy.effective_for(project).present? ? l(:general_text_Yes) : l(:general_text_No) %>
+      </dd>
     </div>
     <div>
       <dt class="tw-font-medium tw-text-gray-500"><%= l(:field_coverage_hours) %></dt>

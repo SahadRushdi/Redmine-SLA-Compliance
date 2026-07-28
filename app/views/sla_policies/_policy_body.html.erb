@@ -9,7 +9,7 @@
   <%= render 'sla_policies/inherited_banner',
              project: project, source_project: source_project, source_policy: source_policy %>
 <% elsif User.current.allowed_to?(:edit_sla_policy, project) %>
-  <% if SlaPolicy.source_for(project).first.nil? %>
+  <% if SlaPolicy.config_source_for(project).first.nil? %>
     <p class="tw-text-sm tw-text-gray-500 tw-mb-4"><%= l(:text_sla_no_policy_anywhere_hint) %></p>
   <% end %>
   <%= render 'sla_policies/form', project: project, policy: policy, current: current %>

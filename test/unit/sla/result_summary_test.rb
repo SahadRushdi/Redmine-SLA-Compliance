@@ -202,4 +202,36 @@ class Sla::ResultSummaryTest < ActiveSupport::TestCase
     assert_equal 0, counts.not_configured
     assert_equal 0, counts.not_tracked
   end
+
+  # --- Counts#evaluated: the denominator for "% SLA met" ------------------------------------
+
+  test 'evaluated counts only the tickets that actually had an SLA, excluding no_sla' do
+    make_result(issue_id: 1, primary_state: 'met')
+    make_result(issue_id: 2, primary_state: 'met')
+    make_result(issue_id: 3, primary_state: 'breached')
+    make_result(issue_id: 4, primary_state: 'no_sla', no_sla_reason: 'not_tracked')
+
+    counts = Sla::ResultSummary.call(scope: SlaResult.where(issue_id: [1, 2, 3, 4]), now: NOW)
+
+    assert_equal 4, counts.total
+    assert_equal 3, counts.evaluated, 'a No-SLA ticket was never evaluated and must not dilute the %'
+  end
+
+  test 'evaluated follows the same live reclassification the met/breached counts do' do
+    # A stale `met` row whose projected breach_at has passed reads as breached — but it is still
+    # an evaluated ticket, so the denominator must not move.
+    make_result(issue_id: 1, primary_state: 'met', breach_at: NOW - 1.hour)
+
+    counts = Sla::ResultSummary.call(scope: SlaResult.where(issue_id: 1), now: NOW)
+
+    assert_equal 0, counts.met
+    assert_equal 1, counts.breached
+    assert_equal 1, counts.evaluated
+  end
+
+  test 'evaluated is zero on an empty scope, so a percentage over it cannot divide by nil' do
+    counts = Sla::ResultSummary.call(scope: SlaResult.where(issue_id: -1), now: NOW)
+
+    assert_equal 0, counts.evaluated
+  end
 end

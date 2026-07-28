@@ -1,13 +1,16 @@
-<%# SLA Met card for the SLA Trend tab. Date-scoped: @window_counts is computed over tickets whose %>
-<%# created_on falls in the selected window (kept separate from the always-current @counts so the %>
-<%# Open Tickets tab is never affected by the date range). Percentage green like the summary card's %>
-<%# met semantics, but rendered as a standalone white card matching the reference design. %>
+<%# SLA Met card for the SLA Trend tab — the one date-scoped figure on the dashboard. @window_counts %>
+<%# is computed over tickets RESOLVED inside the selected window (Sla::DashboardScope resolved_range), %>
+<%# kept separate from the always-current @counts so the Open Tickets tab is never affected by the %>
+<%# date range. Closed-loop compliance: open tickets never appear here, because an open ticket has %>
+<%# not yet met anything. %>
+<%# Denominator is Counts#evaluated (met + breached), NOT total — a No-SLA ticket resolved in the %>
+<%# window was never evaluated and must not drag the percentage down. %>
 <div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-shadow-sm tw-p-5 tw-h-full tw-flex tw-flex-col tw-justify-center">
-  <p class="tw-text-sm tw-font-semibold tw-text-gray-500"><%= sla_card_label(:met) %></p>
+  <p class="tw-text-sm tw-font-semibold tw-text-gray-500"><%= sla_card_label(:met_window) %></p>
   <p class="tw-text-4xl tw-font-bold tw-text-green-600 tw-mt-2">
-    <span id="sla-met-window-percentage"><%= sla_percentage(@window_counts.met, @window_counts.total) %></span>%
+    <span id="sla-met-window-percentage"><%= sla_percentage(@window_counts.met, @window_counts.evaluated) %></span>%
   </p>
   <p class="tw-text-sm tw-text-gray-500 tw-mt-2">
-    <%= l(:text_sla_met_in_target, met: @window_counts.met, total: @window_counts.total) %>
+    <%= l(:text_sla_met_in_target, met: @window_counts.met, total: @window_counts.evaluated) %>
   </p>
 </div>

@@ -212,6 +212,52 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select "a[data-sla-section-link='notifications']"
   end
 
+  # --- Tri-state SLA on/off on the inherited banner -------------------------------------------
+
+  test "the inherited banner offers the tri-state control, defaulted to Inherit" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select 'form#sla-enablement-form' do
+      assert_select "input[name='sla_policy[enablement]'][value='inherit'][checked]"
+      assert_select "input[name='sla_policy[enablement]'][value='enabled']:not([checked])"
+      assert_select "input[name='sla_policy[enablement]'][value='disabled']:not([checked])"
+      assert_select "input[name='section'][value='enablement']", 1
+    end
+  end
+
+  test "a lightweight row keeps the banner, preselects its own decision, and reports the effective state" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    SlaPolicy.create!(project_id: child.id, enabled: false, inherits_config: true)
+
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select '#sla-policy-form', 0, 'a lightweight row still has no configuration to edit'
+    assert_select "input[name='sla_policy[enablement]'][value='disabled'][checked]"
+    # The summary must report SLA as off for THIS project, not echo the ancestor's enabled flag.
+    assert_select 'dd', text: I18n.t(:general_text_No)
+  end
+
+  test "the tri-state control is not offered to a project that defines its own policy" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    SlaPolicy.create!(project_id: child.id, enabled: true)
+
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select 'form#sla-enablement-form', 0
+    assert_select '#sla-policy-form'
+  end
+
   test "a project with its own policy renders the editable form even though its parent also has one" do
     child = Project.find(5)
     grant_child_access(child)

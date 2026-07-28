@@ -16,6 +16,7 @@ class Sla::SweepTest < ActiveSupport::TestCase
   TRACKER  = 1
   PRIORITY = 6 # High
   NEW      = 1
+  RESOLVED = 3 # NOT is_closed in Redmine's fixtures — which is exactly why it's interesting here
   CLOSED   = 5
 
   class FakeNotifier
@@ -196,6 +197,38 @@ class Sla::SweepTest < ActiveSupport::TestCase
     assert_nil SlaResult.find_by(issue_id: closed.id), 'closed issues must not be swept'
     refute_includes n.calls, closed.id
     assert_equal 0, at_risk_logs(closed)
+  end
+
+  # --- "open" is the policy's own resolved-role mapping, not Redmine's is_closed --------------
+  # The dashboard counts open tickets as "not resolved" per the policy. The sweep has to agree, or
+  # a ticket the dashboard still shows as open would stop being re-evaluated and its at-risk flag
+  # and breach_at would freeze at whatever the last event left behind.
+
+  test "a ticket in a resolved-role status is not swept, even though Redmine calls it open" do
+    SlaStatusMapping.create!(sla_policy: @policy, role: 'resolved', status_id: RESOLVED)
+    resolved = make_issue(status_id: RESOLVED)
+    assert Issue.open.exists?(resolved.id), 'guard: Redmine itself treats Resolved as open'
+    SlaResult.delete_all
+
+    _, n = sweep(now: at(50.0 / 60)) # would be at-risk if its clock were still running
+
+    assert_nil SlaResult.find_by(issue_id: resolved.id)
+    assert_empty n.calls
+  end
+
+  test "a Redmine-closed ticket the policy never mapped to `resolved` is still swept" do
+    SlaStatusMapping.create!(sla_policy: @policy, role: 'resolved', status_id: RESOLVED)
+    # CLOSED is is_closed in Redmine but is NOT one of this policy's resolved statuses, so the
+    # SLA clock is still running on it and the sweep must keep re-evaluating it.
+    closed_but_unresolved = make_issue(status_id: CLOSED)
+    SlaResult.delete_all
+
+    _, n = sweep(now: at(50.0 / 60))
+
+    row = SlaResult.find_by(issue_id: closed_but_unresolved.id)
+    assert_not_nil row, 'Issue.open would have skipped this ticket entirely'
+    assert row.at_risk, 'its clock is still running, so it can still cross the at-risk threshold'
+    assert_equal [closed_but_unresolved.id], n.calls
   end
 
   test "projects without the SLA module enabled are not swept" do

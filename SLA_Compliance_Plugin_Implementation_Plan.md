@@ -25,7 +25,7 @@ Each Redmine project represents one customer; SLA terms differ per customer, so 
 2. **Reuse Redmine's existing objects.** Store references (tracker IDs, priority IDs, status IDs), never label strings. The Priority field is the severity indicator; do not create a new custom field.
 3. **Support existing trackers.** The admin selects a tracker that already exists in the project; the plugin discovers that tracker's configured priorities and the project's statuses at runtime.
 4. **Do not break or slow Redmine.** No core file edits — use hooks and the plugin API. SLA math is precomputed and cached, never computed on page load. Google Chat and email calls run asynchronously and must never block issue saving.
-5. **Per-project, with parent→child inheritance.** A child project with no policy inherits its parent's effective policy.
+5. **Per-project, with parent→child inheritance.** A child project with no policy inherits its parent's effective policy — including whether SLA is switched on. A child may override **only that on/off decision** (a tri-state: Inherit / Enabled / Disabled) while still following the parent's configuration, so later changes to the parent's coverage, targets and statuses keep reaching it. Overriding the *configuration* is a separate, heavier action that forks the policy.
 6. **Configurable visibility.** Config and dashboard pages are gated by role; default Admin-only; an admin screen grants access to other roles.
 7. **UI uses Tailwind + Flowbite**, compiled to a scoped stylesheet so it cannot leak into or break Redmine's existing styling. Charts use Chart.js with the Tableau 10 palette. Primary UI colour is blue.
 8. **Test the engine.** The calculation engine (Phase 2) must have unit tests over hand-crafted journal histories before any UI or notification depends on it.
@@ -47,7 +47,15 @@ Every SLA-tracked ticket resolves to one **primary state** plus an optional **at
 
 **Reconciliation:** `Total = SLA met + SLA breached + No SLA`. At-risk is a subset of SLA met, reported alongside it — not added to the total.
 
-**Labelling:** because open, un-breached tickets count as "met," the "% SLA met" figure includes tickets not yet resolved. The dashboard must label this clearly so it is not read as "% resolved successfully."
+**Open vs resolved.** A ticket is **open** until it enters one of the policy's configured `resolved`-role statuses — the same milestone that stops the SLA clock. This is deliberately *not* Redmine's `is_closed` flag: a "Resolved" status is commonly not `is_closed`, and a status Redmine calls closed may never have been mapped to the `resolved` role. The engine persists the resolution instant on every result (`sla_results.resolved_at`, nil ⇒ open, set for No-SLA tickets too) and that column is the single definition every reader uses — the dashboard's open-ticket population, the Stale card, and the sweep's "which tickets still need re-evaluating". Where no policy exists at all, and only there, Redmine's own `closed_on` is the fallback.
+
+**Labelling.** The two questions the dashboard asks are not the same figure and must never share a word:
+- Over the **open** population, "met" means *still inside its target* — it is a snapshot of the backlog, not an achievement. It is labelled **Within Target**.
+- **% SLA met** is closed-loop: of the tickets **resolved** in a chosen period, how many met their target. Its denominator is the evaluated tickets only (met + breached); a resolved No-SLA ticket was never evaluated and must not dilute it.
+
+**Two engine rules that qualify the table above:**
+- **Live reclassification.** A cached `met` row whose projected `breach_at` has already passed is *reported* as breached by every reader (`Sla::EffectiveState`), without rewriting the cache. This keeps counts truthful between sweeps; the persisted state catches up on the next engine pass. At-risk gets no equivalent treatment — there is no precomputed instant to compare against — so it refreshes only on a full pass.
+- **Best Effort.** A milestone marked Best Effort (Step 4A.1) is evaluated and its elapsed time reported, but it never breaches and is therefore never at-risk.
 
 ---
 
@@ -122,6 +130,11 @@ Concrete choices so the engine is unambiguous. Where a value is configurable, th
 - **Goal:** Given a project, return its effective policy, inheriting from the parent when none is set.
 - **Build:** A resolver that walks up the project tree; a child with no policy uses the nearest ancestor's. Disabled policy = excluded.
 - **Done when:** Unit tests cover own policy, inherited from parent, inherited from grandparent, none anywhere, disabled.
+
+### Step 1.2a — Decision vs configuration (tri-state subproject enablement)
+- **Goal:** Let a subproject switch SLA on or off for itself without forking the inherited policy (Global Rule 5).
+- **Build:** A policy row carries two separable things, and inheritance resolves them independently. `sla_policies.inherits_config` (migration 005) marks a **lightweight row** that holds only the `enabled` decision. Resolution: the nearest row on the branch makes the decision; disabled still stops inheritance; an enabled self-defining row *is* the policy; an enabled lightweight row keeps its decision but takes its configuration from the nearest **self-defining** ancestor, whose own enabled flag is ignored because the descendant has explicitly overridden it. A lightweight row with no self-defining ancestor has nothing to measure against and resolves to nil. `config_source_for` (nearest self-defining row) is what the settings tab's inherited banner renders; `enablement_for` is the tri-state control's current selection. Saving any policy section clears `inherits_config`, since writing configuration is what makes a row self-defining.
+- **Done when:** Unit tests cover a lightweight ENABLED row under a disabled ancestor, a lightweight DISABLED row under an enabled ancestor, a lightweight row inheriting configuration past an intermediate lightweight row, a lightweight row with no self-defining ancestor, and a self-defining row left unaffected.
 
 ---
 
@@ -322,20 +335,73 @@ minute — no app restart, no dynamic Rufus job rescheduling.
 > One dashboard with two access contexts: top-level (cross-project) and project-level. Reads only from the `sla_results` cache.
 
 ### Step 6.1 — Dashboard page + filters
-- **Build:** Filters — Project (single/multi; defaults to SLA-enabled projects the user can access; project-level pre-selects and locks the current project when it has no sub-projects); Date Range (presets This Week, Last Week, This Month, Last Month, Last 3 Months, Custom; by created date); Tracker (SLA-configured trackers only); Priority (selected tracker's priorities). The filter bar is **sticky (frozen on scroll)**, shows **selected-filter chips**, and has a **Clear filters** action.
-- **Done when:** Filters drive the query; context defaults apply; the bar stays pinned; chips reflect selection.
+- **Build:** Filters — Project (single/multi; defaults to SLA-enabled projects the user can access; project-level pre-selects and locks the current project when it has no sub-projects); Date Range (presets This Week, Last Week, This Month, Last Month, Last 3 Months, Custom); Tracker (SLA-configured trackers only); Priority (the selected tracker's priorities, minus the admin's unclassified priority, and offered only once a tracker is chosen). The filter bar is **sticky (frozen on scroll)**, shows **selected-filter chips**, and has a **Clear filters** action.
+- **Date Range scope:** Project/Tracker/Priority apply everywhere, but the date range does **not**. It scopes exactly two things: the **SLA Met** card (by resolution date) and the **Created-vs-Resolved trend** (which filters its two series against their own timestamp columns independently). Every open-ticket figure ignores it entirely — see Step 6.2.
+- **Done when:** Filters drive the query; context defaults apply; the bar stays pinned; chips reflect selection; changing the date preset moves the SLA Met card and the trend chart and nothing else.
 
 ### Step 6.2 — Summary cards
-- **Build:** Total tickets, % SLA met, % SLA breached, At risk (subset-of-met early-warning count), No SLA (not-configured vs not-tracked breakdown). Reconcile as `Total = met + breached + No SLA`; at-risk shown alongside met, not added to the total.
-- **Done when:** Cards reconcile to the total; the "met" label makes clear it includes open, un-breached tickets.
+The dashboard is split into two tabs because it answers two different questions, and mixing them was the defect this step now guards against.
+
+- **Open Tickets tab — the current backlog, at all times.** Population: every **open** ticket (not resolved, per §2), scoped by Project/Tracker/Priority only. Cards: **Total Open Tickets**, **Stale** (open tickets with no activity past their project's inactivity threshold), **SLA Breached**, **At Risk**, **No SLA** (not-configured vs not-tracked breakdown). Reconcile as `Total Open = Within Target + SLA Breached + No SLA`; at-risk is a subset of Within Target, shown alongside it and never added to the total. A breach is a live problem regardless of when the ticket was raised, which is why no date filter reaches this tab.
+- **SLA Trend tab — closed-loop compliance over a period.** The **SLA Met** card: of the tickets **resolved** inside the selected window, the share that met their target. Denominator is the evaluated tickets (met + breached) only. Open tickets never appear here.
+- **Done when:** the Open Tickets cards reconcile to Total Open and do not move when the date preset changes; a resolved ticket leaves every open-ticket card and the detail table; the SLA Met card counts only tickets resolved in the window and excludes No SLA from its denominator; no label reads "SLA Met" over the open population.
 
 ### Step 6.3 — Charts
-- **Build:** Compliance-split donut with three primary segments (SLA met / breached / No SLA) that sum to the total, with at-risk marked as a sub-band or marker inside the "met" portion (not a fourth slice); horizontal tickets-by-priority stacked bar; and a Created-vs-Resolved trend (dual line, Daily/Weekly/Monthly), where "Resolved" comes from the configured resolved-statuses. Use one shared legend across charts.
+- **Build:** Compliance-split donut with three primary segments (Within Target / breached / No SLA) that sum to the total open tickets, with at-risk marked as a sub-band or marker inside the "within target" portion (not a fourth slice); horizontal tickets-by-priority stacked bar; and a Created-vs-Resolved trend (dual line, Daily/Weekly/Monthly), where "Resolved" comes from the configured resolved-statuses. Use one shared legend across charts.
+- The donut and priority bar read the same open-ticket scope as the cards, so all three always agree. The trend chart is the exception: it is historical by nature and reads an unfiltered scope, applying its own created/resolved ranges.
 - **Done when:** Charts render from cache, share a common legend, and respond to filters.
 
 ### Step 6.4 — Detail table
-- **Build:** Columns — ticket, project, tracker, title, status, assignee, first-response time, resolution time, result (SLA met / breached / No SLA, with an at-risk flag shown alongside the badge when applicable), deviation (breaches only). Sortable; filterable by state; rows open the ticket in a **new tab**.
-- **Done when:** Sorting, filtering, and click-through all work; deviation shows only for breaches; at-risk appears as a flag on met rows, not as a replacement result.
+- **Build:** Columns — ticket, project, tracker, title, status, assignee, first-response time, resolution time, result (Within Target / SLA breached / No SLA, with an at-risk flag shown alongside the badge when applicable), deviation (breaches only). Sortable; filterable by state; rows open the ticket in a **new tab**. Same open-ticket scope as the cards. A CSV export emits every matching row under the same filters.
+- **Done when:** Sorting, filtering, and click-through all work; deviation shows only for breaches; at-risk appears as a flag on within-target rows, not as a replacement result.
+
+---
+
+# PHASE 6A — Open-Ticket Semantics & Subproject Enablement ✅Done
+
+> A second client pass on the built dashboard and settings tab. Two defects, both of which
+> changed what the numbers *mean* rather than how they render, so §1, §2 and Steps 6.1/6.2
+> above were amended rather than annotated here.
+
+### Step 6A.1 — Tri-state SLA on/off for a subproject
+- **The gap:** the only way for a child project to switch SLA off was **Override for this
+  project**, which clones the ancestor's whole configuration. From that moment the child stopped
+  tracking the parent's coverage, targets and status mappings — a policy fork was being used to
+  express a one-bit decision.
+- **Build:** `sla_policies.inherits_config` (migration 005) separates the enabled decision from
+  the configuration; see Step 1.2a for the resolution rules. The inherited banner gains a
+  three-way control — **Inherit from `<Ancestor>` (currently on/off) / Enabled / Disabled** —
+  posting `section=enablement`, a controller path that writes only `enabled` and can delete the
+  row, and that never reaches the field-writing path. Override stays exactly as it was, and is
+  now unambiguously the heavier "fork the configuration" action.
+- **Watch out for:** the enablement path must refuse a project that has a self-defining row of
+  its own (it would strip the flag and orphan that row's definitions and status mappings), and
+  must not seed ancestor scalars onto the lightweight row (it would stop being lightweight).
+- **Done when:** the resolver tests in Step 1.2a pass; a child set to Disabled disappears from
+  the dashboard while its parent is unaffected; a child set to Enabled under a disabled parent
+  appears, still measured by the parent's configuration; Inherit clears the row.
+
+### Step 6A.2 — Open = not resolved, and the date range stops leaking
+- **The gap:** nothing in the dashboard scope filtered open vs closed, so every card, chart and
+  detail row counted resolved tickets alongside open ones. Separately, the date range was applied
+  to the SLA Met card by `issues.created_on` over each ticket's *current* state — which answered
+  "of tickets created in this window, how many are currently within target", not a compliance
+  figure.
+- **Build:** `resolved_at` becomes the single definition of open (§2). The engine's `closed_at`
+  walks an explicit ladder — a recorded transition into a `resolved`-role status, else the
+  ticket sitting in one now (falling back to Redmine's `closed_on`, then to the last recorded
+  activity, never to `now`, which would drift on every sweep), else Redmine's `closed_on` alone
+  where no policy exists — and No-SLA results now carry it too. `Sla::DashboardScope` replaces
+  its generic `date_range` with two purpose-named filters, `open_only` and `resolved_range`;
+  `Sla::StaleSummary` moves onto the same definition. The sweep re-scopes off `Issue.open` for
+  the same reason: a ticket Redmine calls closed but the policy never mapped to `resolved` still
+  has a running clock and must keep being re-evaluated.
+- **Watch out for:** `resolved_at` was added by migration 004 with no backfill and was never set
+  on No-SLA rows, so the release needs a one-off `rake redmine_sla_compliance:recalculate_all`
+  before the open-ticket counts are trustworthy.
+- **Done when:** the Step 6.2 acceptance criteria hold, and unit tests cover every rung of the
+  resolution ladder, both new scope filters, and a Redmine-closed-but-unresolved ticket still
+  being swept.
 
 ---
 

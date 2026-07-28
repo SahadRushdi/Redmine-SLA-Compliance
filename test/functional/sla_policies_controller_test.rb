@@ -714,4 +714,122 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_response :forbidden
     assert SlaPolicy.exists?(project_id: @project.id)
   end
+
+  # --- Tri-state SLA on/off for an inheriting subproject --------------------------------------
+  # section=enablement writes a LIGHTWEIGHT row (inherits_config: true) carrying only the on/off
+  # decision, so the child keeps following the ancestor's configuration. It must never be able to
+  # reach the field-writing path, and must never strip a self-defining row's flag.
+
+  # @project (id 1) is the parent of project 5; the child inherits and jsmith can edit it.
+  def inheriting_child
+    parent_policy = SlaPolicy.create!(project_id: @project.id, enabled: true,
+                                       first_response_rule: 'either', at_risk_threshold: 90)
+    child = Project.find(5)
+    child.enable_module!(:sla_compliance)
+    member = Member.find_or_initialize_by(user_id: 2, project_id: child.id)
+    member.role_ids = (member.role_ids + [@role.id]).uniq
+    member.save!
+    [child, parent_policy]
+  end
+
+  def enablement_params(project, value)
+    { project_id: project.id, tab: 'sla_policy', section: 'enablement',
+      sla_policy: { enablement: value } }
+  end
+
+  test "enablement=disabled writes a lightweight row that switches SLA off for the child only" do
+    child, parent_policy = inheriting_child
+
+    put :update, params: enablement_params(child, 'disabled')
+
+    assert_redirected_to settings_project_path(child, tab: 'sla_policy')
+    policy = SlaPolicy.find_by(project_id: child.id)
+    assert policy.inherits_config?, 'must be a lightweight row, not a forked configuration'
+    refute policy.enabled?
+    assert_nil SlaPolicy.effective_for(child)
+    assert_equal parent_policy, SlaPolicy.effective_for(@project), 'the parent is untouched'
+  end
+
+  test "enablement=enabled switches SLA on for a child under a disabled parent" do
+    child, parent_policy = inheriting_child
+    parent_policy.update!(enabled: false)
+
+    put :update, params: enablement_params(child, 'enabled')
+
+    assert_equal parent_policy, SlaPolicy.effective_for(child),
+                 "the child's decision wins, and the parent still supplies the configuration"
+  end
+
+  test "enablement=inherit clears the child's lightweight row" do
+    child, parent_policy = inheriting_child
+    SlaPolicy.create!(project_id: child.id, enabled: false, inherits_config: true)
+
+    put :update, params: enablement_params(child, 'inherit')
+
+    assert_nil SlaPolicy.find_by(project_id: child.id)
+    assert_equal parent_policy, SlaPolicy.effective_for(child)
+  end
+
+  test "enablement enqueues a recalculation, since cached results change meaning" do
+    child, = inheriting_child
+
+    assert_enqueued_with(job: SlaPolicyRecalculationJob, args: [child.id]) do
+      put :update, params: enablement_params(child, 'disabled')
+    end
+  end
+
+  test "enablement writes nothing but the on/off decision, whatever else is posted" do
+    child, = inheriting_child
+
+    put :update, params: enablement_params(child, 'enabled').deep_merge(
+      sla_policy: { at_risk_threshold: '5', coverage_hours: 'business_hours',
+                    first_response_rule: 'first_comment' }
+    )
+
+    policy = SlaPolicy.find_by(project_id: child.id)
+    assert policy.enabled?
+    assert_equal 80, policy.at_risk_threshold, 'posted policy fields must not reach this path'
+    assert_equal '24x7', policy.coverage_hours
+  end
+
+  test "enablement is refused on a project that defines its own configuration" do
+    own = SlaPolicy.create!(project_id: @project.id, enabled: true, at_risk_threshold: 90)
+
+    put :update, params: enablement_params(@project, 'disabled')
+
+    assert_response :forbidden
+    own.reload
+    assert own.enabled?, 'a self-defining row uses the General section, not this path'
+    refute own.inherits_config?
+  end
+
+  test "an unrecognised enablement value falls back to inherit rather than enabling SLA" do
+    child, = inheriting_child
+    SlaPolicy.create!(project_id: child.id, enabled: false, inherits_config: true)
+
+    put :update, params: enablement_params(child, 'something-else')
+
+    assert_nil SlaPolicy.find_by(project_id: child.id)
+  end
+
+  test "enablement is forbidden without edit_sla_policy" do
+    child, = inheriting_child
+    @role.remove_permission!(:edit_sla_policy)
+
+    put :update, params: enablement_params(child, 'disabled')
+
+    assert_response :forbidden
+    assert_nil SlaPolicy.find_by(project_id: child.id)
+  end
+
+  test "saving a policy section over a lightweight row makes it self-defining again" do
+    child, = inheriting_child
+    SlaPolicy.create!(project_id: child.id, enabled: false, inherits_config: true)
+
+    put :update, params: general_params(project_id: child.id)
+
+    policy = SlaPolicy.find_by(project_id: child.id)
+    refute policy.inherits_config?, 'the Override path writes configuration, so the row owns it'
+    assert policy.enabled?
+  end
 end
