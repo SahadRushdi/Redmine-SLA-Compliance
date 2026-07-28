@@ -434,6 +434,27 @@ The dashboard is split into two tabs because it answers two different questions,
   can be saved from a value the user was never shown; the first save of any section leaves the
   project with the complete configuration it had a moment earlier plus the change just made.
 
+### Step 6A.4 — A new subproject arrives with the module enabled
+- **The gap:** the policy is inherited but the **module** is not. Redmine gives a new subproject
+  `Setting.default_projects_modules` regardless of its parent, and every SLA gate — the settings
+  tab, the dashboard scope, the sweep — is `has_module(:sla_compliance)`. So a child could inherit
+  a complete, enabled policy and still be invisible to the plugin until someone ticked a box in
+  Settings → Modules. That was the last manual step in an otherwise automatic chain.
+- **Build:** `RedmineSlaCompliance::Patches::ProjectsControllerPatch` prepends `#new` and calls
+  `enable_module!(:sla_compliance)` when the requested parent (`params[:parent_id]`, or
+  `params[:project][:parent_id]` on a re-render — the same two params, in the same order, as core's
+  `parent_project_select_tag`) already has the module.
+- **It sets a DEFAULT, nothing more.** `#create` is untouched, so the checkbox the user actually
+  submitted always wins and unticking it sticks. An `after_create` callback would have overruled
+  that choice with no way to refuse — "on by default, off if you say so" is the requirement, and
+  only the form default satisfies both halves.
+- Existing subprojects are covered by `rake redmine_sla_compliance:enable_module_on_subprojects`
+  (`DRY_RUN=1` to preview), deliberately a task an operator runs rather than something the plugin
+  does on its own: enabling a module changes which menus and tabs a project shows to everyone on
+  it, and that is the instance owner's call, not a side effect of an upgrade.
+- **Done when:** the checkbox is pre-ticked under an SLA-enabled parent, left alone under a parent
+  without the module and for a top-level project, and an unticked box survives a failed create.
+
 ---
 
 # PHASE 7 — Google Chat Notification

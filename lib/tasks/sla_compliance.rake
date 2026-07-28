@@ -35,4 +35,32 @@ namespace :redmine_sla_compliance do
     total = projects.sum { |project| Sla::ProjectRecalculator.run(project, include_descendants: false) }
     puts "[SLA] recalculation complete: #{total} issues recomputed across #{projects.size} project(s)."
   end
+
+  # One-off companion to the "new subproject inherits the module" default
+  # (RedmineSlaCompliance::Patches::ProjectsControllerPatch): that only affects projects created
+  # from now on, so this catches the ones already in the tree.
+  #
+  # Deliberately a task you run rather than something the plugin does on its own — enabling a
+  # module changes which menus and tabs a project shows to everyone on it, and that is the
+  # instance owner's call, not a side effect of installing an upgrade. Pass DRY_RUN=1 to list what
+  # would change without touching anything.
+  #
+  # Walks parent-first so a chain of nested subprojects is filled in top-down in a single pass.
+  desc 'Enable the SLA Compliance module on subprojects whose parent already has it (DRY_RUN=1 to preview)'
+  task enable_module_on_subprojects: :environment do
+    dry_run = ENV['DRY_RUN'].present?
+    enabled = []
+
+    Project.active.where.not(parent_id: nil).order(:lft).each do |project|
+      next unless project.parent&.module_enabled?(:sla_compliance)
+      next if project.module_enabled?(:sla_compliance)
+
+      project.enable_module!(:sla_compliance) unless dry_run
+      enabled << project
+    end
+
+    verb = dry_run ? 'would enable' : 'enabled'
+    puts "[SLA] #{verb} the SLA Compliance module on #{enabled.size} subproject(s)."
+    enabled.each { |project| puts "  - #{project.name} (#{project.identifier})" }
+  end
 end
