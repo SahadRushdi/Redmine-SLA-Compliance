@@ -422,7 +422,7 @@ The dashboard is split into two tabs because it answers two different questions,
   and its confirm are gone: the form *is* the override, taken when a section is saved. A one-line
   notice above the sections says where the values come from and what saving will do.
 - **The first save of any section forks the WHOLE inherited configuration**, then applies the
-  posted section on top (`seed_new_policy_from_source!` → `copy_configuration_from!`). Without
+  posted section on top (`seed_scalars_from!` → `copy_configuration_from!`). Without
   this a sectioned save would write a row holding only that section's slice — saving General alone
   would leave a project with no milestone statuses and no targets, a policy measuring nothing,
   moments after it was fully covered. This applies to a **lightweight row** too: it exists but owns
@@ -454,6 +454,23 @@ The dashboard is split into two tabs because it answers two different questions,
   it, and that is the instance owner's call, not a side effect of an upgrade.
 - **Done when:** the checkbox is pre-ticked under an SLA-enabled parent, left alone under a parent
   without the module and for a top-level project, and an unticked box survives a failed create.
+
+### Step 6A.5 — Settings-tab ordering
+- **Sidebar:** General → **SLA Targets** → Measurement Rules → Exclusions → Notifications. SLA
+  Targets is the section people come back to; measurement rules are set once and rarely revisited.
+  `SlaPoliciesHelper::SECTIONS` is the single source of that order (its first entry is also where
+  the tab opens), and `_form.html.erb` renders the panels in the same order — only one is visible
+  at a time, so that is for the no-JS fallback and for reading the file, but a file whose order
+  contradicts the nav is a trap.
+- **SLA Targets section:** Project Selection → Clone Policy → Tracker Selection → one Priority
+  Targets card per selected tracker. The clone source picker is split out of the Clone Policy card
+  into its own **Project Selection** card: choosing a project is reversible and does nothing on its
+  own, while Load discards everything currently entered in the section, so they now read as two
+  steps rather than one control with a button beside it. Neither renders when the user has no
+  clonable source project, exactly as before.
+- `POLICY_SECTIONS` is an allow-list of section keys a submit may name; `SECTIONS` decides which
+  are offered and in what order. The test pinning them together asserts **membership, not order**,
+  so the sidebar can be reordered without touching the controller.
 
 ---
 

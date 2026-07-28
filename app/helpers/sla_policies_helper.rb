@@ -13,10 +13,13 @@ module SlaPoliciesHelper
   #
   # :permission is the permission that must be held for the section to be offered at all; the four
   # policy sections share :edit_sla_policy, Notifications is gated separately (as it always was).
+  # Order here IS the sidebar order, and the first entry is where the tab opens
+  # (see #sla_current_section). SLA Targets sits above Measurement Rules because it is the section
+  # people come back to; the measurement rules are set once and rarely revisited.
   SECTIONS = [
     { key: 'general',       permission: :edit_sla_policy },
-    { key: 'measurement',   permission: :edit_sla_policy },
     { key: 'targets',       permission: :edit_sla_policy },
+    { key: 'measurement',   permission: :edit_sla_policy },
     { key: 'exclusions',    permission: :edit_sla_policy },
     { key: 'notifications', permission: :manage_sla_notifications }
   ].freeze
@@ -39,8 +42,9 @@ module SlaPoliciesHelper
     [source_project, source_policy]
   end
 
-  # Tri-state SLA on/off shown on the inherited banner: :inherit / :enabled / :disabled for this
-  # project, plus whether SLA actually ends up on — so "Inherit" can say WHICH state it inherits.
+  # Tri-state SLA on/off, shown in the General section while the configuration is inherited:
+  # :inherit / :enabled / :disabled for this project, plus whether SLA actually ends up on — so
+  # "Inherit" can say WHICH state it inherits.
   def sla_enablement_state(project)
     SlaPolicy.enablement_for(project)
   end
@@ -130,7 +134,7 @@ module SlaPoliciesHelper
   #      populated form as its parent instead of a read-only summary, and every field it shows is
   #      the value actually governing its tickets today. Nothing is saved until the user presses a
   #      section's Save, at which point the whole inherited configuration is written as this
-  #      project's own (SlaPoliciesController#seed_new_policy_from_source!);
+  #      project's own (SlaPoliciesController#copy_configuration_from!);
   #   4. a fresh record whose DB defaults give a sensible blank form (no policy anywhere in the tree).
   #
   # A LIGHTWEIGHT row (SlaPolicy#inherits_config?) takes case 3 with its OWN `enabled` kept: its

@@ -261,8 +261,9 @@ class SlaPoliciesControllerTest < ActionController::TestCase
                  'every SlaStatusMapping role must be claimed by exactly one section, and no ' \
                  'section may claim a role that does not exist'
     assert_equal owned.uniq, owned, 'a role claimed by two sections would be cleared by either save'
-    assert_equal SlaPoliciesHelper::SECTIONS.map { |s| s[:key] } & SlaPoliciesController::POLICY_SECTIONS,
-                 SlaPoliciesController::POLICY_SECTIONS,
+    # Membership, not order — SECTIONS is also the sidebar's running order and is free to change.
+    assert_empty SlaPoliciesController::POLICY_SECTIONS -
+                 SlaPoliciesHelper::SECTIONS.map { |section| section[:key] },
                  'every savable section must also be offered in the sidebar'
     assert (SlaPoliciesController::SECTION_STATUS_ROLES.keys - SlaPoliciesController::POLICY_SECTIONS).empty?,
            'a role owned by an unknown section could never be posted'

@@ -1,29 +1,37 @@
-<%# Clone from another project. The picker is not a form param; the Load button %>
-<%# fetches a prefilled re-render, and clone_source_id (hidden, in _form) rides along on save. %>
+<%# Clone from another project, as two cards: pick the project, then load its policy. %>
+<%# %>
+<%# The picker is NOT a form param — the Load button fetches a prefilled re-render, and %>
+<%# clone_source_id (hidden, in _form) is what rides along on save. Splitting the two into %>
+<%# separate cards is deliberate: choosing a project is reversible and does nothing on its own, %>
+<%# while Load discards everything currently entered in the section, so they read as two steps. %>
+<%# Locals: project. %>
 <% sources = sla_clone_source_projects(project) %>
 <% if sources.any? %>
   <%= render layout: 'sla_policies/card',
+             locals: { title: l(:label_sla_project_selection_card),
+                       description: l(:text_sla_project_selection_card) } do %>
+    <div class="md:tw-w-96">
+      <label for="sla-clone-source" class="<%= sla_label_classes %>"><%= l(:field_sla_clone_source) %></label>
+      <%# data-sla-select: the same styled Tom Select dropdown every other picker in the plugin %>
+      <%# uses, rather than the OS-rendered native <select> popup this field kept. Per CLAUDE.md, %>
+      <%# reuse the component already solving this instead of introducing another pattern. %>
+      <%# %>
+      <%# prompt:, not include_blank: — select_tag's include_blank ignores a string label and %>
+      <%# always emits an option containing a non-breaking space, which Tom Select renders as a %>
+      <%# blank, seemingly broken first row. Either way the empty option must exist, so that no %>
+      <%# project is preselected and Load can't act on one the user never chose. %>
+      <%= select_tag 'sla_clone_picker',
+            options_from_collection_for_select(sources, :id, :name),
+            prompt: l(:label_sla_clone_source_blank), id: 'sla-clone-source',
+            class: sla_input_classes, data: { sla_select: true } %>
+    </div>
+  <% end %>
+
+  <%= render layout: 'sla_policies/card',
              locals: { title: l(:label_sla_clone_section),
                        description: l(:text_sla_clone_hint) } do %>
-    <div class="tw-flex tw-flex-col md:tw-flex-row tw-gap-3 md:tw-items-end">
-      <div class="md:tw-w-64">
-        <label for="sla-clone-source" class="<%= sla_label_classes %>"><%= l(:field_sla_clone_source) %></label>
-        <%# data-sla-select: the same styled Tom Select dropdown every other picker in the plugin %>
-        <%# uses, rather than the OS-rendered native <select> popup this field kept. Per CLAUDE.md, %>
-        <%# reuse the component already solving this instead of introducing another pattern. %>
-        <%# %>
-        <%# prompt:, not include_blank: — select_tag's include_blank ignores a string label and %>
-        <%# always emits an option containing a non-breaking space, which Tom Select renders as a %>
-        <%# blank, seemingly broken first row. Either way the empty option must exist, so that no %>
-        <%# project is preselected and Load can't act on one the user never chose. %>
-        <%= select_tag 'sla_clone_picker',
-              options_from_collection_for_select(sources, :id, :name),
-              prompt: l(:label_sla_clone_source_blank), id: 'sla-clone-source',
-              class: sla_input_classes, data: { sla_select: true } %>
-      </div>
-      <button type="button" id="sla-clone-load" class="<%= sla_secondary_button_classes %>">
-        <%= sla_copy_icon %><span><%= l(:button_sla_clone_load) %></span>
-      </button>
-    </div>
+    <button type="button" id="sla-clone-load" class="<%= sla_secondary_button_classes %>">
+      <%= sla_copy_icon %><span><%= l(:button_sla_clone_load) %></span>
+    </button>
   <% end %>
 <% end %>

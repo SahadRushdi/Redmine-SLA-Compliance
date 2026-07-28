@@ -1,6 +1,10 @@
 <%# The four policy sections of the sectioned settings tab (Steps 4.2–4.5, 4.7, 4.8). %>
 <%# Locals: project, policy, current (active section key), inherited_source. %>
 <%# %>
+<%# Panels are rendered in the sidebar's own order (General, SLA Targets, Measurement Rules, %>
+<%# Exclusions). Only one is visible at a time, so this is for the no-JS fallback and for reading %>
+<%# the file — but a file whose order contradicts the nav is a trap for the next person. %>
+<%# %>
 <%# Each section is its OWN <form> posting the same PUT with a hidden `section` field, so a save %>
 <%# only rewrites that section's slice of the policy (see SlaPoliciesController#update). Replaces %>
 <%# the previous single form whose one Save button owned every field on a page-long scroll. %>
@@ -8,15 +12,6 @@
 
 <%= render 'sla_policies/general', project: project, policy: policy, current: current,
            inherited_source: inherited_source %>
-
-<%= render layout: 'sla_policies/panel', locals: { key: 'measurement', current: current } do %>
-  <%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-measurement-form' do %>
-    <%= hidden_field_tag 'tab', 'sla_policy' %>
-    <%= hidden_field_tag 'section', 'measurement' %>
-    <%= render 'sla_policies/measurement', project: project, policy: policy %>
-    <%= render 'sla_policies/save_bar', label: l(:button_sla_save_measurement) %>
-  <% end %>
-<% end %>
 
 <%= render layout: 'sla_policies/panel', locals: { key: 'targets', current: current } do %>
   <%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-policy-form',
@@ -26,8 +21,8 @@
     <%= hidden_field_tag 'section', 'targets' %>
     <%= hidden_field_tag 'clone_source_id', params[:clone_from].presence, id: 'sla-clone-source-id' %>
 
-    <%= render 'sla_policies/definitions', project: project, policy: policy %>
     <%= render 'sla_policies/clone', project: project %>
+    <%= render 'sla_policies/definitions', project: project, policy: policy %>
 
     <%# Step 4.8 — forward-only save by default; optional historical recalculation. It shares a row %>
     <%# with this section's save button (rather than using the shared _save_bar) because the tick %>
@@ -46,6 +41,15 @@
         <%= sla_save_icon %><span><%= l(:button_sla_save_policy) %></span>
       </button>
     </div>
+  <% end %>
+<% end %>
+
+<%= render layout: 'sla_policies/panel', locals: { key: 'measurement', current: current } do %>
+  <%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-measurement-form' do %>
+    <%= hidden_field_tag 'tab', 'sla_policy' %>
+    <%= hidden_field_tag 'section', 'measurement' %>
+    <%= render 'sla_policies/measurement', project: project, policy: policy %>
+    <%= render 'sla_policies/save_bar', label: l(:button_sla_save_measurement) %>
   <% end %>
 <% end %>
 

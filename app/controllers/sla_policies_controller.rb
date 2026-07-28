@@ -10,9 +10,10 @@ class SlaPoliciesController < ApplicationController
   before_action :find_project_by_project_id
   before_action :authorize
 
-  # The tab is split into independently-savable sections (see SlaPoliciesHelper::SECTIONS, which
-  # must stay in sync with this list). A submit carries the section it came from and may only
-  # rewrite that section's slice of the policy — otherwise saving, say, General would post no
+  # The tab is split into independently-savable sections. This is the ALLOW-LIST of section keys a
+  # submit may name; SlaPoliciesHelper::SECTIONS decides which are offered and in what order, and
+  # every key here must appear there (pinned by a test). A submit carries the section it came from
+  # and may only rewrite that section's slice of the policy — otherwise saving, say, General would post no
   # status_mappings and silently wipe every milestone status configured under Measurement Rules.
   POLICY_SECTIONS = %w[general measurement targets exclusions].freeze
 
@@ -26,7 +27,7 @@ class SlaPoliciesController < ApplicationController
 
   # Every policy scalar the sectioned form manages, in one place: it is both the strong-params
   # allow-list and the set copied when a section other than General creates the row
-  # (see #seed_new_policy_scalars!). The two must not drift apart.
+  # (see #seed_scalars_from!). The two must not drift apart.
   POLICY_ATTRIBUTES = %i[enabled coverage_hours business_calendar_id first_response_rule
                          at_risk_threshold pause_enabled].freeze
 
@@ -114,7 +115,7 @@ class SlaPoliciesController < ApplicationController
   # project keeps following its ancestor's coverage/targets/status mappings. That is the whole
   # difference from "Override for this project", which forks the configuration outright.
   #
-  # Deliberately does NOT go through #policy_params / #seed_new_policy_scalars!: seeding would copy
+  # Deliberately does NOT go through #policy_params / #seed_scalars_from!: seeding would copy
   # the ancestor's scalars onto the row, and a row holding its own scalars is no longer lightweight
   # — the next parent change would silently stop reaching this project.
   def update_enablement

@@ -2257,9 +2257,6 @@
   .sla-plugin .md\:tw-w-56 {
     width: 14rem;
   }
-  .sla-plugin .md\:tw-w-64 {
-    width: 16rem;
-  }
   .sla-plugin .md\:tw-w-96 {
     width: 24rem;
   }
@@ -2277,9 +2274,6 @@
   }
   .sla-plugin .md\:tw-items-start {
     align-items: flex-start;
-  }
-  .sla-plugin .md\:tw-items-end {
-    align-items: flex-end;
   }
   .sla-plugin .md\:tw-justify-between {
     justify-content: space-between;

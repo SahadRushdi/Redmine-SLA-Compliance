@@ -222,11 +222,13 @@ en:
   text_sla_pause_hint: "Time spent in these statuses is subtracted from SLA measurements. Leave empty for no pauses."
   text_sla_pause_statuses_hint: "Leave empty for no pauses."
 
+  label_sla_project_selection_card: "Project Selection"
+  text_sla_project_selection_card: "Choose a project to copy an existing SLA policy from. Selecting one changes nothing on its own."
   label_sla_clone_section: "Clone Policy"
-  field_sla_clone_source: "Clone from project"
+  field_sla_clone_source: "Project"
   label_sla_clone_source_blank: "— Select a project —"
   button_sla_clone_load: "Load"
-  text_sla_clone_hint: "Pre-fills this form from another project's policy, including targets for all its trackers. Nothing is saved until you press Save."
+  text_sla_clone_hint: "Pre-fills this section from the selected project's policy, including targets for all its trackers. Nothing is saved until you press Save Policy."
   text_sla_clone_confirm_overwrite: "Loading will replace everything currently entered in this form. Continue?"
 
   button_sla_save_policy: "Save Policy"
