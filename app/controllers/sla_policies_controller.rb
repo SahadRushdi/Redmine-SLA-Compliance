@@ -59,13 +59,21 @@ class SlaPoliciesController < ApplicationController
 
     begin
       ActiveRecord::Base.transaction do
-        seed_new_policy_scalars! if @sla_policy.new_record?
+        # A project whose configuration is inherited edits a form pre-filled from the ancestor, so
+        # this save is a FORK: the whole inherited configuration is written as the project's own and
+        # the posted section is applied on top. Captured before the row is touched, since assigning
+        # below is exactly what stops it being inherited.
+        source = forking_from_inherited? ? inherited_seed_source : nil
+        seed_scalars_from!(source) if source
         @sla_policy.assign_attributes(policy_params)
         # Saving any policy section writes configuration onto this row, which by definition makes
         # it self-defining — the case that matters is a project that first used the tri-state
-        # control (leaving a lightweight row) and then pressed "Override for this project".
+        # control (leaving a lightweight row) and then edited a field here.
         @sla_policy.inherits_config = false
         @sla_policy.save!
+        # Before the posted section's own writes, so those override the copied values rather than
+        # being overwritten by them.
+        copy_configuration_from!(source, definitions: !cloning_definitions?(section)) if source
         replace_status_mappings!(SECTION_STATUS_ROLES.fetch(section, []))
         if section == 'targets'
           apply_clone_source!
@@ -171,28 +179,73 @@ class SlaPoliciesController < ApplicationController
     params.fetch(:sla_policy, {}).permit(*POLICY_ATTRIBUTES)
   end
 
-  # Give a policy row being CREATED by a section that doesn't own every scalar the values that
-  # section's form was showing, instead of the DB column defaults.
-  #
-  # Without this, `enabled` falls back to its default of FALSE whenever the row is first written
-  # from any section other than General — and a disabled policy is an explicit "SLA off" that also
-  # stops inheritance (SlaPolicy.effective_for). The damaging case is B3's Override: the user
-  # presses "Override for this project" on a project inheriting an ENABLED ancestor policy, the
-  # form renders prefilled from that ancestor with the SLA Tracking toggle ON, and then saving any
-  # section other than General first would persist enabled=false — silently switching SLA off for
-  # a project whose screen still showed it on. Seeding from the source the form was prefilled from
-  # keeps what was displayed and what gets saved in agreement.
-  #
-  # Source order mirrors what the form actually rendered: the clone/Override source when one was
-  # loaded, else the ancestor policy this project inherits today. With neither (the first policy
-  # anywhere in the tree) the DB defaults stand — there the blank form shows the toggle OFF too,
-  # so nothing diverges.
-  def seed_new_policy_scalars!
-    source = authorized_source_policy(params[:clone_source_id]) if params[:clone_source_id].present?
-    source ||= SlaPolicy.config_source_for(@project).last
-    return if source.nil?
+  # Does this project not yet own its configuration? True with no row at all, and true for a
+  # LIGHTWEIGHT row (which carries only the enabled decision) — both render a form pre-filled from
+  # an ancestor, so both must copy that ancestor's configuration across when saved.
+  def forking_from_inherited?
+    @sla_policy.new_record? || @sla_policy.inherits_config?
+  end
 
-    @sla_policy.assign_attributes(source.attributes.slice(*POLICY_ATTRIBUTES.map(&:to_s)))
+  # The policy the form the user just submitted was populated from: the clone source when one was
+  # loaded, else the ancestor whose configuration this project inherits today. nil for the first
+  # policy anywhere in the tree — there the form really is blank and the DB defaults are right.
+  def inherited_seed_source
+    source = authorized_source_policy(params[:clone_source_id]) if params[:clone_source_id].present?
+    source || SlaPolicy.config_source_for(@project).last
+  end
+
+  # Scalars first, so the posted section's own fields (assigned after this) win.
+  #
+  # Without it, every scalar the posted section does not own falls back to the DB column default —
+  # and for `enabled` that default is FALSE, an explicit "SLA off" that also stops inheritance
+  # (SlaPolicy.effective_for). Saving, say, Measurement Rules on a project inheriting an ENABLED
+  # policy would silently switch SLA off for a project whose screen showed it on.
+  #
+  # `enabled` is the one exception on an EXISTING row: a lightweight row's on/off decision is its
+  # own (set through the tri-state control) and must not be overwritten by the ancestor's.
+  def seed_scalars_from!(source)
+    attributes = source.attributes.slice(*POLICY_ATTRIBUTES.map(&:to_s))
+    attributes.delete('enabled') unless @sla_policy.new_record?
+    @sla_policy.assign_attributes(attributes)
+  end
+
+  # Copy the source's status mappings and (unless the clone path below is about to do it) its
+  # definitions onto the newly self-defining row. Only references valid in THIS project survive,
+  # matching what the form displayed.
+  #
+  # This is what makes a sectioned save safe on an inherited policy: saving General alone would
+  # otherwise leave a row with no milestone statuses and no targets — a policy that measures
+  # nothing — for a project that was fully covered a moment earlier.
+  def copy_configuration_from!(source, definitions: true)
+    @sla_policy.sla_status_mappings.delete_all
+    source.sla_status_mappings.each do |mapping|
+      next unless project_status_ids.include?(mapping.status_id)
+
+      @sla_policy.sla_status_mappings.create!(role: mapping.role, status_id: mapping.status_id)
+    end
+    return unless definitions
+
+    @sla_policy.sla_definitions.delete_all
+    copy_definitions_from!(source)
+  end
+
+  # Shared by the fork above and Step 4.7's clone: the source's definitions, restricted to trackers
+  # this project has enabled and never including the unclassified priority (which can hold no
+  # target — see Sla::PolicyContext#definition_for).
+  def copy_definitions_from!(source)
+    source.sla_definitions.where(tracker_id: @project.trackers.ids)
+          .where.not(priority_id: Sla::PluginSettings.unclassified_priority_id)
+          .find_each do |definition|
+      @sla_policy.sla_definitions.create!(
+        definition.attributes.slice(*SlaDefinition::COPY_ATTRIBUTES)
+      )
+    end
+  end
+
+  # True when #apply_clone_source! is about to replace every definition from the same source, so
+  # copying them here first would just be thrown away.
+  def cloning_definitions?(section)
+    section == 'targets' && params[:clone_source_id].present?
   end
 
   def project_status_ids
@@ -223,39 +276,41 @@ class SlaPoliciesController < ApplicationController
     return unless source
 
     @sla_policy.sla_definitions.delete_all
-    unclassified_priority_id = Sla::PluginSettings.unclassified_priority_id
-    source.sla_definitions.where(tracker_id: @project.trackers.ids)
-          .where.not(priority_id: unclassified_priority_id).find_each do |definition|
-      @sla_policy.sla_definitions.create!(
-        tracker_id: definition.tracker_id,
-        priority_id: definition.priority_id,
-        response_seconds: definition.response_seconds,
-        workaround_seconds: definition.workaround_seconds,
-        resolution_seconds: definition.resolution_seconds,
-        response_best_effort: definition.response_best_effort,
-        workaround_best_effort: definition.workaround_best_effort,
-        resolution_best_effort: definition.resolution_best_effort
-      )
+    copy_definitions_from!(source)
+  end
+
+  # Step 4.4 save: replace the definitions of the POSTED trackers only — the SLA Targets section
+  # shows one Priority Targets table per tracker chosen in its picker and saves them all together.
+  #
+  # Trackers absent from the submit are left exactly as they are: the picker chooses what is on
+  # screen and therefore editable, not which trackers have an SLA. Clearing a tracker's targets is
+  # done by setting its rows to "not tracked" (all-blank rows create no record), not by hiding it —
+  # so deselecting can never silently discard stored targets.
+  def replace_tracker_definitions!
+    tracker_ids = Array(params.dig(:definitions, :tracker_ids)).map(&:to_i).uniq &
+                  @project.trackers.ids
+    return if tracker_ids.empty?
+
+    previous = @sla_policy.sla_definitions.where(tracker_id: tracker_ids).group_by(&:tracker_id)
+    @sla_policy.sla_definitions.where(tracker_id: tracker_ids).delete_all
+
+    tracker_ids.each do |tracker_id|
+      rows = params.dig(:definitions, :rows, tracker_id.to_s)
+      next if rows.blank?
+
+      create_tracker_definitions!(tracker_id, rows,
+                                  Array(previous[tracker_id]).index_by(&:priority_id))
     end
   end
 
-  # Step 4.4 save: replace the definitions of the posted tracker ONLY. Priorities are validated
-  # against the live enumeration; seconds against the admin lookup (or the value previously
-  # saved for that row, so a lookup edit doesn't invalidate existing policies). A row with all
-  # targets blank creates no record — that priority is excluded.
-  def replace_tracker_definitions!
-    tracker_id = params.dig(:definitions, :tracker_id).to_i
-    return unless @project.trackers.ids.include?(tracker_id)
-
-    previous = @sla_policy.sla_definitions.where(tracker_id: tracker_id)
-                          .index_by(&:priority_id)
-    @sla_policy.sla_definitions.where(tracker_id: tracker_id).delete_all
-
-    rows = params.dig(:definitions, :rows)
-    return if rows.blank?
-
+  # One tracker's posted rows. Priorities are validated against the live enumeration; seconds
+  # against the admin lookup (or the value previously saved for that row, so a lookup edit doesn't
+  # invalidate existing policies). A row with all targets blank creates no record — that priority
+  # is excluded.
+  def create_tracker_definitions!(tracker_id, rows, previous)
     allowed_priority_ids = IssuePriority.active.ids
     unclassified_priority_id = Sla::PluginSettings.unclassified_priority_id
+
     rows.each do |priority_id, targets|
       priority_id = priority_id.to_i
       next unless allowed_priority_ids.include?(priority_id)
@@ -263,30 +318,33 @@ class SlaPoliciesController < ApplicationController
       # shown disabled), but never trust the client — reject a forged/stale submission for it too.
       next if priority_id == unclassified_priority_id
 
-      attributes = {}
-      SlaTargetOption::TARGET_TYPES.each do |target_type|
-        raw = targets[target_type].presence
-        next unless raw
-
-        if raw == SlaPoliciesHelper::SLA_BEST_EFFORT_VALUE
-          next unless SlaTargetOption.exists?(target_type: target_type, best_effort: true)
-
-          attributes["#{target_type}_seconds"] = nil
-          attributes["#{target_type}_best_effort"] = true
-        else
-          seconds = raw.to_i
-          previously_saved = previous[priority_id]&.public_send("#{target_type}_seconds")
-          if allowed_seconds_for(target_type).include?(seconds) || seconds == previously_saved
-            attributes["#{target_type}_seconds"] = seconds
-            attributes["#{target_type}_best_effort"] = false
-          end
-        end
-      end
+      attributes = definition_targets(targets, previous[priority_id])
       next if attributes.empty?
 
       @sla_policy.sla_definitions.create!(
         { tracker_id: tracker_id, priority_id: priority_id }.merge(attributes)
       )
+    end
+  end
+
+  def definition_targets(targets, previous_definition)
+    SlaTargetOption::TARGET_TYPES.each_with_object({}) do |target_type, attributes|
+      raw = targets[target_type].presence
+      next unless raw
+
+      if raw == SlaPoliciesHelper::SLA_BEST_EFFORT_VALUE
+        next unless SlaTargetOption.exists?(target_type: target_type, best_effort: true)
+
+        attributes["#{target_type}_seconds"] = nil
+        attributes["#{target_type}_best_effort"] = true
+      else
+        seconds = raw.to_i
+        previously_saved = previous_definition&.public_send("#{target_type}_seconds")
+        if allowed_seconds_for(target_type).include?(seconds) || seconds == previously_saved
+          attributes["#{target_type}_seconds"] = seconds
+          attributes["#{target_type}_best_effort"] = false
+        end
+      end
     end
   end
 
@@ -312,40 +370,11 @@ class SlaPoliciesController < ApplicationController
     SlaPolicy.find_by(project_id: source_project.id)
   end
 
-  # In-memory (unsaved) policy mirroring the source, used to prefill the form. Only references
-  # valid in THIS project survive: mappings keep statuses the project actually uses, and
-  # definitions keep trackers the project has enabled.
+  # In-memory (unsaved) policy mirroring the source, used to prefill the form. Shared with the
+  # settings tab, which builds the same thing to show an inheriting project its ancestor's
+  # configuration as editable fields (SlaPoliciesHelper#sla_policy_for_form).
   def build_clone_prefill(source_project_id)
-    source = authorized_source_policy(source_project_id)
-    return nil unless source
-
-    policy = SlaPolicy.new(
-      project_id: @project.id,
-      enabled: source.enabled,
-      coverage_hours: source.coverage_hours,
-      business_calendar_id: source.business_calendar_id,
-      first_response_rule: source.first_response_rule,
-      at_risk_threshold: source.at_risk_threshold,
-      pause_enabled: source.pause_enabled
-    )
-    source.sla_status_mappings.each do |mapping|
-      next unless project_status_ids.include?(mapping.status_id)
-      policy.sla_status_mappings.build(role: mapping.role, status_id: mapping.status_id)
-    end
-    tracker_ids = @project.trackers.ids
-    source.sla_definitions.each do |definition|
-      next unless tracker_ids.include?(definition.tracker_id)
-      policy.sla_definitions.build(
-        tracker_id: definition.tracker_id,
-        priority_id: definition.priority_id,
-        response_seconds: definition.response_seconds,
-        workaround_seconds: definition.workaround_seconds,
-        resolution_seconds: definition.resolution_seconds,
-        response_best_effort: definition.response_best_effort,
-        workaround_best_effort: definition.workaround_best_effort,
-        resolution_best_effort: definition.resolution_best_effort
-      )
-    end
-    policy
+    Sla::PolicyPrefill.call(project: @project,
+                            source: authorized_source_policy(source_project_id))
   end
 end

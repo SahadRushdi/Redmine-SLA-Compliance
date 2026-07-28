@@ -408,7 +408,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
     assert_select '#sla-detail-state-tabs' do
       assert_select 'a', text: /\AAll \(5\)\z/
-      assert_select 'a', text: /\AWithin Target \(2\)\z/
+      assert_select 'a', text: /\A#{Regexp.escape(I18n.t(:label_sla_card_met))} \(2\)\z/
       assert_select 'a', text: /\ASLA Breached \(2\)\z/
       assert_select 'a', text: /\AAt Risk \(1\)\z/
       assert_select 'a', text: /\ANo SLA \(1\)\z/
@@ -472,7 +472,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
     get :index, params: { project_id: @project.id }
 
     assert_select "#sla-detail-row-#{issues[:at_risk].id}" do
-      assert_select 'span', text: 'Within Target'
+      assert_select 'span', text: I18n.t(:label_sla_card_met)
       assert_select 'span', text: 'At Risk'
     end
   end

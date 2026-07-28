@@ -42,7 +42,8 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
       assert_select '#sla-notification-form'
       assert_select 'input#sla_policy_at_risk_threshold[value="85"]'
       assert_select "select[name='status_mappings[created][]'] option[selected][value='#{status_id}']"
-      assert_select '#sla-definitions-rows option[selected][value="14400"]'
+      assert_select "#sla-definitions-rows-#{@project.trackers.first.id} " \
+                    'option[selected][value="14400"]'
       assert_select "option[selected][value='ops@example.com']"
     end
   end
@@ -126,10 +127,11 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
     assert_response :success
 
+    tracker_id = @project.trackers.sorted.first.id
     assert_select '[data-sla-panel="targets"]' do
-      assert_select "select[name^='definitions[rows][#{none.id}]']", 0,
+      assert_select "select[name^='definitions[rows][#{tracker_id}][#{none.id}]']", 0,
                     'no input may be offered for a priority whose submission is always rejected'
-      assert_select "select[name='definitions[rows][#{classified.id}][response]']", 1,
+      assert_select "select[name='definitions[rows][#{tracker_id}][#{classified.id}][response]']", 1,
                     'other priorities must still get their target dropdowns'
     end
   end
@@ -138,8 +140,9 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
     assert_response :success
 
+    tracker_id = @project.trackers.sorted.first.id
     IssuePriority.active.each do |priority|
-      assert_select "select[name='definitions[rows][#{priority.id}][response]']", 1
+      assert_select "select[name='definitions[rows][#{tracker_id}][#{priority.id}][response]']", 1
     end
   end
 
@@ -192,29 +195,37 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     project.enable_module!(:sla_compliance)
   end
 
-  test "a project with no policy of its own but an inherited one shows the banner, not the form" do
-    parent = Project.find(5) # private-child, parent = ecookbook (1)
-    grant_child_access(parent)
-    SlaPolicy.create!(project_id: @project.id, enabled: true) # ecookbook's own policy
+  test "an inheriting project gets the full editable form, pre-filled from its ancestor" do
+    child = Project.find(5) # private-child, parent = ecookbook (1)
+    grant_child_access(child)
+    parent_policy = SlaPolicy.create!(project_id: @project.id, enabled: true,
+                                      at_risk_threshold: 85, first_response_rule: 'either')
+    status_id = @project.rolled_up_statuses.first.id
+    parent_policy.sla_status_mappings.create!(role: 'created', status_id: status_id)
+    parent_policy.sla_definitions.create!(tracker_id: child.trackers.first.id,
+                                          priority_id: IssuePriority.active.first.id,
+                                          response_seconds: 14_400)
 
-    get :settings, params: { id: parent.identifier, tab: 'sla_policy' }
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
     assert_response :success
 
-    assert_select '#sla-policy-form', 0, 'must never render the editable form for an inherited policy'
-    assert_select '#sla-policy-tab-body' do
-      assert_select 'button#sla-override-load'
+    # Same sidebar and same sections as the project it inherits from — no read-only summary.
+    %w[general measurement targets exclusions notifications].each do |key|
+      assert_select "a[data-sla-section-link='#{key}']"
     end
-    # The four policy sections are not offered while the policy is inherited — there is nothing
-    # editable behind them until Override is pressed.
-    %w[general measurement targets exclusions].each do |key|
-      assert_select "a[data-sla-section-link='#{key}']", 0
-    end
-    assert_select "a[data-sla-section-link='notifications']"
+    assert_select '#sla-policy-form'
+    # ...and every control carries the INHERITED value, so nothing can be saved from a field the
+    # user was never shown.
+    assert_select 'input#sla_policy_at_risk_threshold[value="85"]'
+    assert_select "select[name='status_mappings[created][]'] option[selected][value='#{status_id}']"
+    assert_select "#sla-definitions-rows-#{child.trackers.first.id} " \
+                  'option[selected][value="14400"]'
+    assert_select 'button#sla-override-load', 0, 'the form itself is the override now'
   end
 
-  # --- Tri-state SLA on/off on the inherited banner -------------------------------------------
+  # --- Tri-state SLA on/off above the inherited (pre-filled) sections --------------------------
 
-  test "the inherited banner offers the tri-state control, defaulted to Inherit" do
+  test "the inherited policy offers the tri-state control, defaulted to Inherit" do
     child = Project.find(5)
     grant_child_access(child)
     SlaPolicy.create!(project_id: @project.id, enabled: true)
@@ -239,10 +250,12 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     get :settings, params: { id: child.identifier, tab: 'sla_policy' }
     assert_response :success
 
-    assert_select '#sla-policy-form', 0, 'a lightweight row still has no configuration to edit'
+    # A lightweight row owns no configuration, so the form still shows the ancestor's — but the
+    # tri-state, not the plain switch, owns the on/off decision, and it must show THIS project's.
+    assert_select '#sla-policy-form'
     assert_select "input[name='sla_policy[enablement]'][value='disabled'][checked]"
-    # The summary must report SLA as off for THIS project, not echo the ancestor's enabled flag.
-    assert_select 'dd', text: I18n.t(:general_text_No)
+    assert_select "input[type=checkbox][name='sla_policy[enabled]']", 0,
+                  'the plain SLA-tracking switch would be a second, conflicting on/off control'
   end
 
   test "the tri-state control is not offered to a project that defines its own policy" do
@@ -256,6 +269,8 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
 
     assert_select 'form#sla-enablement-form', 0
     assert_select '#sla-policy-form'
+    # A self-defining project keeps the plain SLA-tracking switch.
+    assert_select "input[type=checkbox][name='sla_policy[enabled]']", 1
   end
 
   test "a project with its own policy renders the editable form even though its parent also has one" do

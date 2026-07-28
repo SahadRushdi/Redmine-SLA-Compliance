@@ -1,0 +1,29 @@
+<%# One tracker's Priority Targets card. Rendered once per selected tracker by _definitions, and %>
+<%# individually by edit.js.erb when a tracker is added to the picker — which is why the card, not %>
+<%# just its rows, is the unit here and carries the id the JS inserts against. Locals: policy, %>
+<%# tracker. %>
+<div id="sla-definitions-table-<%= tracker.id %>" data-sla-definition-table="<%= tracker.id %>">
+  <%= render layout: 'sla_policies/card',
+             locals: { title: l(:label_sla_priority_targets_card, tracker: tracker.name),
+                       description: l(:text_sla_priority_targets_card, tracker: tracker.name) } do %>
+    <%# tw-table-fixed: the target cells hold Tom Select controls whose intrinsic width grows the %>
+    <%# moment one is focused (its type-ahead input stops being zero-width). Under the default %>
+    <%# auto layout that re-flowed every column mid-click; fixed layout makes the columns depend %>
+    <%# only on the header widths, so clicking a dropdown moves nothing. It also means the table %>
+    <%# always fits its card — no horizontal scrollbar, and so no scroll container to clip the %>
+    <%# dropdowns. %>
+    <table class="tw-w-full tw-table-fixed tw-text-sm tw-text-left tw-text-gray-700">
+      <thead class="tw-bg-gray-50 tw-text-gray-700">
+        <tr>
+          <th class="tw-w-40 tw-px-4 tw-py-2 tw-font-medium"><%= l(:label_sla_priority) %></th>
+          <th class="tw-px-4 tw-py-2 tw-font-medium"><%= l(:label_sla_target_response) %></th>
+          <th class="tw-px-4 tw-py-2 tw-font-medium"><%= l(:label_sla_target_workaround) %></th>
+          <th class="tw-px-4 tw-py-2 tw-font-medium"><%= l(:label_sla_target_resolution) %></th>
+        </tr>
+      </thead>
+      <tbody id="sla-definitions-rows-<%= tracker.id %>">
+        <%= render 'sla_policies/definition_rows', policy: policy, tracker: tracker %>
+      </tbody>
+    </table>
+  <% end %>
+</div>

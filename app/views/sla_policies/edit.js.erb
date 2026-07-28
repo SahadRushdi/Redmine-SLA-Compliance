@@ -1,7 +1,7 @@
 <% if params[:clone_from].present? %>
-<%# Clone-source load and B3's Override both swap the nav AND the policy sections: Override %>
-<%# starts from the read-only inherited banner, whose sidebar offers Notifications only, so the %>
-<%# nav has to be rebuilt alongside the sections it now points at. %>
+<%# Clone-source load: swap the nav AND the policy sections. The sections are rebuilt from the %>
+<%# in-memory prefill (@sla_policy), and the inheritance notice/tri-state must go with them — %>
+<%# what's on screen is now the clone source's policy, not the inherited one. %>
 <%# %>
 <%# The Notifications panel is NOT part of either region and is left untouched, so text typed %>
 <%# there (and its Tom Select instances) survives a clone load. %>
@@ -13,9 +13,19 @@ $('#sla-policy-tab-body').html('<%= escape_javascript(
   render 'sla_policies/policy_body',
          project: @project, policy: @sla_policy, current: current, inherited_source: nil) %>');
 <% else %>
+<%# A tracker was added to the SLA Targets picker: build just that tracker's table. Inserted %>
+<%# rather than replacing the whole section, so target values already entered for the other %>
+<%# selected trackers survive — the reason this is per-table and not a full re-render. %>
 <% policy = sla_policy_for_form(@project) %>
-$('#sla-definitions-rows').html('<%= escape_javascript(
-  render 'sla_policies/definition_rows',
-         policy: policy, tracker: sla_selected_tracker(@project, policy)) %>');
+<% tracker = sla_selected_trackers(@project, policy).first %>
+<% if tracker %>
+(function () {
+  var html = '<%= escape_javascript(
+    render 'sla_policies/definition_table', policy: policy, tracker: tracker) %>';
+  var existing = document.getElementById('sla-definitions-table-<%= tracker.id %>');
+  if (existing) { jQuery(existing).replaceWith(html); }
+  else { jQuery('#sla-definitions-tables').append(html); }
+})();
+<% end %>
 <% end %>
 window.slaPolicyForm.init();

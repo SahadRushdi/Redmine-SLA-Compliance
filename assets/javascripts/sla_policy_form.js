@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  var state = { defsSnapshot: '', prevTracker: '', bound: false, section: '' };
+  var state = { bound: false, section: '' };
 
   function byId(id) { return document.getElementById(id); }
 
@@ -110,12 +110,32 @@
     });
   }
 
-  function snapshotDefs() {
-    var rows = byId('sla-definitions-rows');
-    if (!rows) { return ''; }
-    return Array.prototype.map.call(rows.querySelectorAll('select'), function (select) {
-      return select.name + '=' + select.value;
-    }).join('&');
+  // --- SLA Targets: one Priority Targets table per selected tracker --------------------------
+  // Adding a tracker fetches ONLY that tracker's table and inserts it; removing one just detaches
+  // its table. Deliberately not a re-render of the whole section: targets already chosen for the
+  // other selected trackers are unsaved DOM state and must survive. Removing a table also stops
+  // its fields posting, which is what makes "hidden = not written" true on the server side too
+  // (SlaPoliciesController#replace_tracker_definitions!) — a hidden tracker keeps its stored
+  // targets rather than losing them.
+  function syncDefinitionTables(select) {
+    var wanted = Array.prototype.map.call(select.selectedOptions, function (option) {
+      return option.value;
+    });
+
+    document.querySelectorAll('[data-sla-definition-table]').forEach(function (table) {
+      if (wanted.indexOf(table.getAttribute('data-sla-definition-table')) === -1) {
+        table.parentNode.removeChild(table);
+      }
+    });
+
+    wanted.forEach(function (trackerId) {
+      if (byId('sla-definitions-table-' + trackerId)) { return; }
+      jQuery.ajax({
+        url: select.getAttribute('data-table-url'),
+        data: { tracker_id: trackerId, section: currentSection() },
+        dataType: 'script'
+      });
+    });
   }
 
   function toggleCalendarField() {
@@ -169,18 +189,8 @@
     jQuery(document).on('change',
       'input[name="sla_notification_setting[at_risk_email_frequency]"]', toggleDigestInterval);
 
-    jQuery(document).on('focusin', '#sla-definitions-tracker', function () {
-      state.prevTracker = this.value;
-    });
-    jQuery(document).on('change', '#sla-definitions-tracker', function () {
-      var trackerSelect = this;
-      if (snapshotDefs() !== state.defsSnapshot &&
-          !window.confirm(formData('confirm-switch'))) {
-        trackerSelect.value = state.prevTracker;
-        return;
-      }
-      state.prevTracker = trackerSelect.value;
-      fetchRerender({ tracker_id: trackerSelect.value });
+    jQuery(document).on('change', '#sla-definitions-trackers', function () {
+      syncDefinitionTables(this);
     });
 
     jQuery(document).on('click', '#sla-clone-load', function () {
@@ -189,29 +199,15 @@
       if (!window.confirm(formData('confirm-clone'))) { return; }
       fetchRerender({ clone_from: source.value });
     });
-
-    // B3 — "Override for this project": the button lives in the read-only inherited-policy
-    // banner, OUTSIDE #sla-policy-form (which doesn't exist yet in that state), so its own
-    // data- attributes carry the edit URL / confirm text rather than reading from the form.
-    jQuery(document).on('click', '#sla-override-load', function () {
-      var ancestorId = this.getAttribute('data-ancestor-id');
-      var editUrl = this.getAttribute('data-edit-url');
-      if (!ancestorId || !editUrl) { return; }
-      if (!window.confirm(this.getAttribute('data-confirm-override'))) { return; }
-      jQuery.ajax({ url: editUrl, data: { clone_from: ancestorId }, dataType: 'script' });
-    });
   }
 
   function init() {
-    // The inherited-policy banner (B3) has neither form but still needs its Override button
-    // wired up, so it's part of the same early-return guard as the two real forms.
-    if (!byId('sla-policy-settings') && !byId('sla-notification-form') && !byId('sla-override-load')) {
+    if (!byId('sla-policy-settings') && !byId('sla-notification-form')) {
       return;
     }
     // Re-assert the open section after an AJAX re-render replaced the nav and panels. The DOM —
-    // not the previously open section — is authoritative here: pressing Override from the
-    // inherited banner navigates you from Notifications (the only section offered there) to
-    // General, and honouring the stale value would hide every panel the response just built.
+    // not the previously open section — is authoritative here: the response decides which panels
+    // exist, and honouring a stale value could hide every one it just built.
     state.section = '';
     activateSection(domSection());
     initChips();
@@ -220,9 +216,6 @@
     syncReveals();
     toggleCalendarField();
     toggleDigestInterval();
-    state.defsSnapshot = snapshotDefs();
-    var trackerSelect = byId('sla-definitions-tracker');
-    state.prevTracker = trackerSelect ? trackerSelect.value : '';
     bindOnce();
   }
 

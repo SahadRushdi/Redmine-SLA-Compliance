@@ -1,12 +1,13 @@
 <%# The four policy sections of the sectioned settings tab (Steps 4.2–4.5, 4.7, 4.8). %>
-<%# Locals: project, policy, current (active section key). %>
+<%# Locals: project, policy, current (active section key), inherited_source. %>
 <%# %>
 <%# Each section is its OWN <form> posting the same PUT with a hidden `section` field, so a save %>
 <%# only rewrites that section's slice of the policy (see SlaPoliciesController#update). Replaces %>
 <%# the previous single form whose one Save button owned every field on a page-long scroll. %>
 <%# Re-rendered wholesale by edit.js.erb when a clone source is loaded. %>
 
-<%= render 'sla_policies/general', project: project, policy: policy, current: current %>
+<%= render 'sla_policies/general', project: project, policy: policy, current: current,
+           inherited_source: inherited_source %>
 
 <%= render layout: 'sla_policies/panel', locals: { key: 'measurement', current: current } do %>
   <%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-measurement-form' do %>
@@ -20,7 +21,6 @@
 <%= render layout: 'sla_policies/panel', locals: { key: 'targets', current: current } do %>
   <%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-policy-form',
                data: { edit_url: edit_project_sla_policy_path(project),
-                       confirm_switch: l(:text_sla_unsaved_definitions_confirm),
                        confirm_clone: l(:text_sla_clone_confirm_overwrite) } do %>
     <%= hidden_field_tag 'tab', 'sla_policy' %>
     <%= hidden_field_tag 'section', 'targets' %>

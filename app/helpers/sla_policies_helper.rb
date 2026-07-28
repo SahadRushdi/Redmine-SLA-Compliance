@@ -21,14 +21,15 @@ module SlaPoliciesHelper
     { key: 'notifications', permission: :manage_sla_notifications }
   ].freeze
 
-  # B3 — [source_project, source_policy] when this project's CONFIGURATION comes from an ANCESTOR
-  # (so the tab shows the read-only inherited banner instead of an editable form), else nil.
-  # `clone_from` present means Override was just pressed and we're mid AJAX re-render into the real
-  # edit form, so it takes precedence.
+  # B3 — [source_project, source_policy] when this project's CONFIGURATION comes from an ANCESTOR,
+  # else nil. The tab renders the same editable sections either way (see #sla_policy_for_form); this
+  # only decides whether the inheritance notice and the tri-state on/off control appear above them.
+  # `clone_from` present means a clone source was just loaded and the form now shows THAT, so the
+  # inheritance notice would be describing something no longer on screen.
   #
   # Deliberately `config_source_for`, not `source_for`: a project holding a LIGHTWEIGHT row (its
-  # own SLA on/off decision, everything else inherited — see SlaPolicy#inherits_config?) still has
-  # no configuration to edit, so it must keep showing the ancestor's banner.
+  # own SLA on/off decision, everything else inherited — see SlaPolicy#inherits_config?) still owns
+  # no configuration, so it is still inheriting.
   def sla_inherited_policy_source(project)
     return nil if params[:clone_from].present?
 
@@ -50,14 +51,11 @@ module SlaPoliciesHelper
     SlaPolicy.effective_for(project.parent).present?
   end
 
-  # +inherited+: an inherited policy has no editable policy sections, so only Notifications is
-  # offered until Override turns the banner into the real form.
-  def sla_visible_sections(project, inherited: false)
-    SECTIONS.select do |section|
-      next false if inherited && section[:permission] == :edit_sla_policy
-
-      User.current.allowed_to?(section[:permission], project)
-    end
+  # Every section the user may see. Inheritance no longer removes any of them: a subproject renders
+  # the same sidebar and the same editable sections as the project it inherits from, pre-filled with
+  # the inherited configuration, so changing anything is a normal edit rather than a mode switch.
+  def sla_visible_sections(project)
+    SECTIONS.select { |section| User.current.allowed_to?(section[:permission], project) }
   end
 
   # Section the page opens on: the requested one when it exists and is permitted, else the first
@@ -124,12 +122,32 @@ module SlaPoliciesHelper
      "#{paths}</svg>").html_safe
   end
 
-  # The policy shown in the form: a controller-provided one (validation failure / clone
-  # prefill), the saved row, or a fresh record whose DB defaults give a sensible blank form.
+  # The policy shown in the form, in precedence order:
+  #
+  #   1. a controller-provided one (clone prefill / validation failure);
+  #   2. this project's own SELF-DEFINING row;
+  #   3. an in-memory copy of the configuration it INHERITS — so a subproject opens the same
+  #      populated form as its parent instead of a read-only summary, and every field it shows is
+  #      the value actually governing its tickets today. Nothing is saved until the user presses a
+  #      section's Save, at which point the whole inherited configuration is written as this
+  #      project's own (SlaPoliciesController#seed_new_policy_from_source!);
+  #   4. a fresh record whose DB defaults give a sensible blank form (no policy anywhere in the tree).
+  #
+  # A LIGHTWEIGHT row (SlaPolicy#inherits_config?) takes case 3 with its OWN `enabled` kept: its
+  # configuration is the ancestor's, but the on/off decision is not.
   def sla_policy_for_form(project)
-    @sla_policy ||= SlaPolicy.find_by(project_id: project.id) ||
-                    SlaPolicy.new(project_id: project.id)
+    @sla_policy ||= sla_own_or_inherited_policy(project)
   end
+
+  def sla_own_or_inherited_policy(project)
+    own = SlaPolicy.find_by(project_id: project.id)
+    return own if own && !own.inherits_config?
+
+    _source_project, source_policy = SlaPolicy.config_source_for(project)
+    Sla::PolicyPrefill.call(project: project, source: source_policy, enabled: own&.enabled) ||
+      SlaPolicy.new(project_id: project.id)
+  end
+  private :sla_own_or_inherited_policy
 
   # Status IDs selected for a milestone role, read from the in-memory association so unsaved
   # clone prefills render too.
@@ -143,14 +161,27 @@ module SlaPoliciesHelper
     policy.sla_definitions.select { |d| d.tracker_id == tracker.id }.index_by(&:priority_id)
   end
 
-  # The tracker whose target rows are displayed: explicit request param, else the first
-  # tracker that already has definitions, else the project's first tracker.
-  def sla_selected_tracker(project, policy)
-    trackers = project.trackers.to_a
-    requested = params[:tracker_id].presence
-    trackers.detect { |t| t.id == requested.to_i } ||
-      trackers.detect { |t| policy.sla_definitions.any? { |d| d.tracker_id == t.id } } ||
-      trackers.first
+  # The trackers whose target tables are displayed — one table each, all saved by the single SLA
+  # Targets submit. Explicit request params win (the picker posts `tracker_ids[]`, and the AJAX
+  # re-render of a newly added table posts a single `tracker_id`), else every tracker that already
+  # has definitions, else the project's first tracker so the section is never empty.
+  #
+  # Selection is only about WHICH trackers are on screen and therefore saved; deselecting one hides
+  # it and leaves its stored targets alone (see SlaPoliciesController#replace_tracker_definitions!).
+  # Clearing a tracker's targets is done by setting its rows to "not tracked", not by hiding it.
+  def sla_selected_trackers(project, policy)
+    trackers = project.trackers.sorted.to_a
+    requested = Array(params[:tracker_ids].presence || params[:tracker_id].presence).map(&:to_i)
+    selected =
+      if requested.any?
+        trackers.select { |tracker| requested.include?(tracker.id) }
+      else
+        trackers.select do |tracker|
+          policy.sla_definitions.any? { |definition| definition.tracker_id == tracker.id }
+        end
+      end
+
+    selected.presence || Array(trackers.first)
   end
 
   # <option> list for one target dropdown: a leading "not tracked" blank, then the admin lookup
@@ -194,41 +225,6 @@ module SlaPoliciesHelper
 
     id = Sla::PluginSettings.unclassified_priority_id
     @sla_unclassified_priority = id.present? ? IssuePriority.active.detect { |p| p.id == id } : nil
-  end
-
-  # --- B3: read-only display for the "inherited from an ancestor" banner ---------------------
-  # Plain text, not form pre-population — see _inherited_banner.html.erb for why this is
-  # deliberately NOT the same interactive form partial used for an owned policy.
-
-  def sla_status_names(policy, role)
-    ids = sla_status_ids(policy, role)
-    return l(:label_sla_target_skipped) if ids.empty?
-
-    IssueStatus.where(id: ids).order(:position).pluck(:name).join(', ')
-  end
-
-  # One summary line per priority that has a definition on +tracker+, e.g.
-  # "High — Response: 1h, Workaround: —, Resolution: Best Effort".
-  def sla_target_summary_lines(policy, tracker)
-    return [] unless tracker
-
-    definitions = sla_definition_map(policy, tracker)
-    IssuePriority.active.filter_map do |priority|
-      definition = definitions[priority.id]
-      next if definition.nil?
-
-      parts = SlaDefinition::TARGET_TYPES.map do |type|
-        "#{sla_target_type_label(type)}: #{sla_target_summary_value(definition, type)}"
-      end
-      "#{priority.name} — #{parts.join(', ')}"
-    end
-  end
-
-  def sla_target_summary_value(definition, type)
-    return l(:field_sla_best_effort) if definition.best_effort?(type)
-
-    seconds = definition.public_send("#{type}_seconds")
-    seconds.present? ? format_sla_duration(seconds) : l(:label_sla_target_skipped)
   end
 
   # Source candidates for "Clone from another project": projects the user could edit the

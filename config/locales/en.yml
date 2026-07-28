@@ -193,17 +193,18 @@ en:
 
   label_sla_definitions_section: "SLA Targets per Tracker and Priority"
   label_sla_tracker_card: "Tracker Selection"
-  text_sla_tracker_card: "Targets apply to the selected tracker. A priority with every target unset is excluded from SLA tracking."
-  label_sla_priority_targets_card: "Priority Targets"
+  text_sla_tracker_card: "Pick every tracker you want to set targets for. Each one gets its own table below, and all of them are saved together."
+  label_sla_priority_targets_card: "Priority Targets — %{tracker}"
   text_sla_priority_targets_card: "SLA time targets for the \"%{tracker}\" tracker by priority level."
-  field_sla_tracker: "Tracker"
+  field_sla_trackers: "Trackers"
+  text_sla_tracker_selection_hint: "Only the trackers shown here are written when you save. Removing one hides its table and leaves its saved targets untouched — to clear them, set every target to \"not tracked\" instead."
   label_sla_priority: "Priority"
   label_sla_target_response: "Response"
   label_sla_target_workaround: "Workaround"
   label_sla_target_resolution: "Resolution"
   label_sla_target_skipped: "— not tracked —"
   label_sla_target_current_value: "Current: %{value}"
-  text_sla_definitions_hint: "Targets apply to the selected tracker. A priority with every target unset is excluded from SLA tracking. Saving updates the selected tracker only."
+  text_sla_definitions_hint: "A priority with every target unset is excluded from SLA tracking. Saving updates the selected trackers only."
   text_sla_no_target_options: "No target duration options defined yet — an administrator can add them under Administration → Plugins → SLA Compliance."
   text_sla_no_trackers: "This project has no trackers enabled."
   label_sla_unclassified_badge: "Unclassified"
@@ -228,19 +229,15 @@ en:
   text_sla_clone_hint: "Pre-fills this form from another project's policy, including targets for all its trackers. Nothing is saved until you press Save."
   text_sla_clone_confirm_overwrite: "Loading will replace everything currently entered in this form. Continue?"
 
-  text_sla_unsaved_definitions_confirm: "You have unsaved target changes for this tracker. Switching will discard them. Continue?"
   button_sla_save_policy: "Save Policy"
   button_sla_save_general: "Save General Settings"
   button_sla_save_measurement: "Save Measurement Rules"
   button_sla_save_exclusions: "Save Exclusions"
   button_sla_save_notifications: "Save Notification Settings"
 
-  # --- Inheritance banner + Override/Revert (B3) --------------------------------------------
-  text_sla_inherited_banner: "This project inherits its SLA policy from %{project}. Editing it here will not change anything until you choose to override it."
-  button_sla_override: "Override for this project"
-  text_sla_override_confirm: "This loads %{project}'s policy into an editable form here. Nothing is saved until you press Save Policy. Continue?"
+  # --- Inheritance notice + Revert (B3) ------------------------------------------------------
+  text_sla_inherited_notice: "These settings are inherited from %{project} and apply to this project already. Change anything and save, and this project keeps its own copy from then on — %{project}'s later changes will no longer reach it."
   button_sla_view_source_policy: "View source project's policy"
-  label_sla_inherited_summary: "Inherited Policy Summary"
   button_sla_revert_to_inherited: "Revert to inherited policy"
   text_sla_revert_confirm: "This removes this project's own SLA policy. It will go back to inheriting from %{project}. Continue?"
   text_sla_revert_hint: "Removes this project's own policy so it inherits from %{project} again. Cached SLA results are recalculated, not deleted."
@@ -249,7 +246,7 @@ en:
 
   # --- Tri-state SLA on/off for an inheriting subproject -------------------------------------
   label_sla_enablement_card: "SLA for This Project"
-  text_sla_enablement_card: "Turn SLA tracking on or off for this project without changing the inherited policy."
+  text_sla_enablement_card: "Turn SLA tracking on or off for this project without taking a copy of the inherited settings."
   label_sla_enablement_inherit: "Inherit from %{project}"
   label_sla_enablement_enabled: "Enabled"
   label_sla_enablement_disabled: "Disabled"

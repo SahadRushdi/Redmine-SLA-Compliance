@@ -15,7 +15,7 @@
 <% end %>
 
 <% inherited_source = sla_inherited_policy_source(@project) %>
-<% sections = sla_visible_sections(@project, inherited: inherited_source.present?) %>
+<% sections = sla_visible_sections(@project) %>
 <% current = sla_current_section(sections) %>
 
 <div class="sla-plugin">

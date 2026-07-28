@@ -9,6 +9,13 @@ class SlaDefinition < ActiveRecord::Base
 
   TARGET_TYPES = %w[response workaround resolution].freeze
 
+  # Everything that makes up one definition, minus its own identity and owning policy — the exact
+  # slice copied when a policy is cloned or prefilled from an ancestor (Sla::PolicyPrefill,
+  # SlaPoliciesController#apply_clone_source!). Named once here so adding a target column can't be
+  # remembered in one copier and forgotten in the other.
+  COPY_ATTRIBUTES = (%w[tracker_id priority_id] +
+                     TARGET_TYPES.flat_map { |type| ["#{type}_seconds", "#{type}_best_effort"] }).freeze
+
   belongs_to :sla_policy
 
   validates :tracker_id, presence: true

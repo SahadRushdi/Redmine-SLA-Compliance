@@ -1,6 +1,8 @@
-<%# One row per active priority for the selected tracker. Replaced via edit.js.erb when the %>
-<%# tracker changes. A priority with all three targets unset gets no SlaDefinition row (it is %>
-<%# excluded / unclassified). %>
+<%# One row per active priority, for ONE tracker's table (see _definition_table). A priority with %>
+<%# all three targets unset gets no SlaDefinition row (it is excluded / unclassified). %>
+<%# %>
+<%# Field names are nested under the tracker id — definitions[rows][<tracker>][<priority>][<type>] %>
+<%# — so several trackers' tables can post together in one submit. %>
 <%# %>
 <%# The admin-designated "unclassified" priority (Administration → Plugins → SLA Compliance) gets %>
 <%# no row at all: no SlaDefinition can ever be saved for it (enforced server-side too, see %>
@@ -22,9 +24,9 @@
          resolution: [definition&.resolution_seconds, definition&.best_effort?(:resolution)]
        }.each do |target_type, (current_seconds, current_best_effort)| %>
       <td class="tw-px-4 tw-py-2">
-        <%= select_tag "definitions[rows][#{priority.id}][#{target_type}]",
+        <%= select_tag "definitions[rows][#{tracker.id}][#{priority.id}][#{target_type}]",
               sla_target_select_options(target_type, current_seconds, current_best_effort),
-              id: "sla-def-#{priority.id}-#{target_type}", class: sla_input_classes,
+              id: "sla-def-#{tracker.id}-#{priority.id}-#{target_type}", class: sla_input_classes,
               data: { sla_select: true } %>
       </td>
     <% end %>

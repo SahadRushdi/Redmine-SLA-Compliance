@@ -25,7 +25,7 @@ Each Redmine project represents one customer; SLA terms differ per customer, so 
 2. **Reuse Redmine's existing objects.** Store references (tracker IDs, priority IDs, status IDs), never label strings. The Priority field is the severity indicator; do not create a new custom field.
 3. **Support existing trackers.** The admin selects a tracker that already exists in the project; the plugin discovers that tracker's configured priorities and the project's statuses at runtime.
 4. **Do not break or slow Redmine.** No core file edits — use hooks and the plugin API. SLA math is precomputed and cached, never computed on page load. Google Chat and email calls run asynchronously and must never block issue saving.
-5. **Per-project, with parent→child inheritance.** A child project with no policy inherits its parent's effective policy — including whether SLA is switched on. A child may override **only that on/off decision** (a tri-state: Inherit / Enabled / Disabled) while still following the parent's configuration, so later changes to the parent's coverage, targets and statuses keep reaching it. Overriding the *configuration* is a separate, heavier action that forks the policy.
+5. **Per-project, with parent→child inheritance.** A child project with no policy inherits its parent's effective policy — including whether SLA is switched on. A child may override **only that on/off decision** (a tri-state: Inherit / Enabled / Disabled) while still following the parent's configuration, so later changes to the parent's coverage, targets and statuses keep reaching it. Overriding the *configuration* is a separate, heavier action that forks the policy — the child's settings tab shows every inherited value as an editable control (Step 6A.3), and saving any of it takes that fork.
 6. **Configurable visibility.** Config and dashboard pages are gated by role; default Admin-only; an admin screen grants access to other roles.
 7. **UI uses Tailwind + Flowbite**, compiled to a scoped stylesheet so it cannot leak into or break Redmine's existing styling. Charts use Chart.js with the Tableau 10 palette. Primary UI colour is blue.
 8. **Test the engine.** The calculation engine (Phase 2) must have unit tests over hand-crafted journal histories before any UI or notification depends on it.
@@ -133,7 +133,7 @@ Concrete choices so the engine is unambiguous. Where a value is configurable, th
 
 ### Step 1.2a — Decision vs configuration (tri-state subproject enablement)
 - **Goal:** Let a subproject switch SLA on or off for itself without forking the inherited policy (Global Rule 5).
-- **Build:** A policy row carries two separable things, and inheritance resolves them independently. `sla_policies.inherits_config` (migration 005) marks a **lightweight row** that holds only the `enabled` decision. Resolution: the nearest row on the branch makes the decision; disabled still stops inheritance; an enabled self-defining row *is* the policy; an enabled lightweight row keeps its decision but takes its configuration from the nearest **self-defining** ancestor, whose own enabled flag is ignored because the descendant has explicitly overridden it. A lightweight row with no self-defining ancestor has nothing to measure against and resolves to nil. `config_source_for` (nearest self-defining row) is what the settings tab's inherited banner renders; `enablement_for` is the tri-state control's current selection. Saving any policy section clears `inherits_config`, since writing configuration is what makes a row self-defining.
+- **Build:** A policy row carries two separable things, and inheritance resolves them independently. `sla_policies.inherits_config` (migration 005) marks a **lightweight row** that holds only the `enabled` decision. Resolution: the nearest row on the branch makes the decision; disabled still stops inheritance; an enabled self-defining row *is* the policy; an enabled lightweight row keeps its decision but takes its configuration from the nearest **self-defining** ancestor, whose own enabled flag is ignored because the descendant has explicitly overridden it. A lightweight row with no self-defining ancestor has nothing to measure against and resolves to nil. `config_source_for` (nearest self-defining row) is what the settings tab pre-fills its form from (Step 6A.3); `enablement_for` is the tri-state control's current selection. Saving any policy section clears `inherits_config`, since writing configuration is what makes a row self-defining.
 - **Done when:** Unit tests cover a lightweight ENABLED row under a disabled ancestor, a lightweight DISABLED row under an enabled ancestor, a lightweight row inheriting configuration past an intermediate lightweight row, a lightweight row with no self-defining ancestor, and a self-defining row left unaffected.
 
 ---
@@ -211,8 +211,10 @@ Concrete choices so the engine is unambiguous. Where a value is configurable, th
 - **Done when:** Selections persist as status IDs; the threshold persists.
 
 ### Step 4.4 — SLA definitions per Tracker × Priority
-- **Build:** Tracker selector (existing trackers only). On selection, read that tracker's configured priorities for the project and render a target row per priority with Response/Workaround/Resolution dropdowns (values from the admin lookup). Unset = skipped. Priority "None" is excluded and shown as unclassified.
-- **Done when:** Changing tracker re-renders the correct priority list dynamically; targets persist per tracker×priority.
+- **Build:** Tracker **multi-select** (existing trackers only). Each selected tracker gets its own Priority Targets table — a target row per active priority with Response/Workaround/Resolution dropdowns (values from the admin lookup) — and one Save writes them all. Unset = skipped. Priority "None" is excluded and shown once as an unclassified notice above the tables, never as a row with inputs.
+- Field names nest under the tracker (`definitions[rows][<tracker>][<priority>][<type>]`) and the posted `definitions[tracker_ids][]` list is the authority for what may be written: rows for a tracker not in that list are ignored, and a tracker absent from the submit keeps its stored targets untouched. **The picker chooses what is on screen and therefore editable, not which trackers have an SLA** — clearing a tracker's targets is done by setting its rows to "not tracked", so hiding one can never be a silent delete.
+- Adding a tracker fetches only that tracker's table and inserts it, rather than re-rendering the section, so targets already entered for the other selected trackers survive.
+- **Done when:** several trackers can be configured and saved in one action; targets persist per tracker×priority; an unselected tracker's saved targets are unaffected.
 - **Watch out for:** this is the heart of Global Rules 1–3. Nothing here may be hard-coded.
 
 ### Step 4.5 — Exclusions (pauses)
@@ -255,6 +257,10 @@ Concrete choices so the engine is unambiguous. Where a value is configurable, th
   24x7 coverage fails the save atomically with a clear error.
 
 ### Step 4A.2 — Inheritance banner + Override / Revert
+> **Partly superseded by Step 6A.3.** The read-only summary and the Override button described
+> here were replaced by a pre-filled editable form; Revert, and the reason the original blank
+> form was a defect, still stand. Kept for the history of why the blank form was never acceptable.
+
 - A project with no policy of its own but an inherited one now renders a **read-only summary**
   ("This project inherits its SLA policy from X") instead of the interactive form — the
   interactive form used to render blank in this case, and saving it silently created an empty
@@ -402,6 +408,31 @@ The dashboard is split into two tabs because it answers two different questions,
 - **Done when:** the Step 6.2 acceptance criteria hold, and unit tests cover every rung of the
   resolution ladder, both new scope filters, and a Redmine-closed-but-unresolved ticket still
   being swept.
+
+### Step 6A.3 — A subproject edits the inherited policy directly
+- **The gap:** Step 4A.2 fixed a blank editable form by making the inherited state read-only, which
+  traded one problem for another. A subproject saw a summary rather than the settings themselves,
+  and the only way to change anything was **Override** — a mode switch, in front of a confirm,
+  before a single field could be touched. The values governing that project's tickets were never
+  shown as the controls that produce them.
+- **Build:** the inherited state renders the **same sidebar and the same sections** as the project
+  it inherits from, every control pre-filled with the inherited value. `Sla::PolicyPrefill` (new,
+  shared with Step 4.7's clone) builds the in-memory copy, keeping only references valid in this
+  project — statuses it uses, trackers it has enabled. The read-only summary, the Override button
+  and its confirm are gone: the form *is* the override, taken when a section is saved. A one-line
+  notice above the sections says where the values come from and what saving will do.
+- **The first save of any section forks the WHOLE inherited configuration**, then applies the
+  posted section on top (`seed_new_policy_from_source!` → `copy_configuration_from!`). Without
+  this a sectioned save would write a row holding only that section's slice — saving General alone
+  would leave a project with no milestone statuses and no targets, a policy measuring nothing,
+  moments after it was fully covered. This applies to a **lightweight row** too: it exists but owns
+  no configuration, so it forks on the same terms, keeping its own `enabled` decision.
+- **Watch out for:** the tri-state control (Step 6A.1) replaces the plain SLA-tracking switch while
+  the configuration is inherited, so exactly one on/off control is on the page — and it stays the
+  way to turn SLA off *without* forking, which is the whole reason it exists.
+- **Done when:** a subproject's tab shows every inherited value as an editable control; no field
+  can be saved from a value the user was never shown; the first save of any section leaves the
+  project with the complete configuration it had a moment earlier plus the change just made.
 
 ---
 

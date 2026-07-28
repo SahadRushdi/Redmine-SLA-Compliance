@@ -1433,9 +1433,6 @@
 .sla-plugin .tw-h-6 {
   height: 1.5rem;
 }
-.sla-plugin .tw-h-8 {
-  height: 2rem;
-}
 .sla-plugin .tw-h-9 {
   height: 2.25rem;
 }
@@ -1480,9 +1477,6 @@
 }
 .sla-plugin .tw-w-6 {
   width: 1.5rem;
-}
-.sla-plugin .tw-w-8 {
-  width: 2rem;
 }
 .sla-plugin .tw-w-80 {
   width: 20rem;
@@ -1537,12 +1531,6 @@
   -webkit-user-select: none;
      -moz-user-select: none;
           user-select: none;
-}
-.sla-plugin .tw-list-inside {
-  list-style-position: inside;
-}
-.sla-plugin .tw-list-disc {
-  list-style-type: disc;
 }
 .sla-plugin .tw-list-none {
   list-style-type: none;
@@ -1601,11 +1589,6 @@
 }
 .sla-plugin .tw-gap-y-1 {
   row-gap: 0.25rem;
-}
-.sla-plugin .tw-space-y-1 > :not([hidden]) ~ :not([hidden]) {
-  --tw-space-y-reverse: 0;
-  margin-top: calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));
-  margin-bottom: calc(0.25rem * var(--tw-space-y-reverse));
 }
 .sla-plugin .tw-space-y-2\.5 > :not([hidden]) ~ :not([hidden]) {
   --tw-space-y-reverse: 0;
@@ -1905,9 +1888,6 @@
 }
 .sla-plugin .tw-pt-3 {
   padding-top: 0.75rem;
-}
-.sla-plugin .tw-pt-4 {
-  padding-top: 1rem;
 }
 .sla-plugin .tw-pt-5 {
   padding-top: 1.25rem;
@@ -2279,6 +2259,9 @@
   }
   .sla-plugin .md\:tw-w-64 {
     width: 16rem;
+  }
+  .sla-plugin .md\:tw-w-96 {
+    width: 24rem;
   }
   .sla-plugin .md\:tw-max-w-xl {
     max-width: 36rem;

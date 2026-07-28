@@ -2,18 +2,32 @@
 <%# Hours coverage). Its own <form>: each section saves independently, and the hidden `section` %>
 <%# field tells SlaPoliciesController#update which slice of the policy this submit may touch, so %>
 <%# saving here can never clear another section's status mappings or targets. Locals: project, %>
-<%# policy, current (active section key). %>
+<%# policy, current (active section key), inherited_source. %>
 <%= render layout: 'sla_policies/panel', locals: { key: 'general', current: current } do %>
+
+  <%# While the configuration is inherited, the on/off decision gets the TRI-STATE control rather %>
+  <%# than the plain switch, and lives in its own form (section=enablement) — choosing Enabled or %>
+  <%# Disabled there writes only that decision and keeps following the ancestor's configuration, %>
+  <%# whereas anything saved through the form below forks it. Exactly one on/off control is on the %>
+  <%# page either way; forms cannot nest, so this sits beside, not inside, the General form. %>
+  <% if inherited_source.present? %>
+    <%= render 'sla_policies/enablement', project: project, source_project: inherited_source.first,
+               state: sla_enablement_state(project),
+               inherited_on: sla_inherited_enablement_on?(project) %>
+  <% end %>
+
   <%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-general-form' do %>
     <%= hidden_field_tag 'tab', 'sla_policy' %>
     <%= hidden_field_tag 'section', 'general' %>
 
-    <%= render layout: 'sla_policies/card',
-               locals: { title: l(:label_sla_status_card),
-                         description: l(:text_sla_status_card) } do %>
-      <%= render 'sla_policies/switch_row', name: 'sla_policy[enabled]',
-                 checked: policy.enabled?, title: l(:field_sla_tracking),
-                 description: l(:text_sla_tracking_hint) %>
+    <% if inherited_source.blank? %>
+      <%= render layout: 'sla_policies/card',
+                 locals: { title: l(:label_sla_status_card),
+                           description: l(:text_sla_status_card) } do %>
+        <%= render 'sla_policies/switch_row', name: 'sla_policy[enabled]',
+                   checked: policy.enabled?, title: l(:field_sla_tracking),
+                   description: l(:text_sla_tracking_hint) %>
+      <% end %>
     <% end %>
 
     <%= render layout: 'sla_policies/card',

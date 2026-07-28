@@ -154,9 +154,9 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     # Override pressed (prefills from the ancestor), then SLA Targets saved before General.
     put :update, params: { project_id: child.id, tab: 'sla_policy', section: 'targets',
                            clone_source_id: @project.id.to_s,
-                           definitions: { tracker_id: child.trackers.first.id.to_s,
-                                          rows: { @priorities.first.id.to_s =>
-                                                    { response: @opt_1h.seconds.to_s } } } }
+                           definitions: { tracker_ids: [child.trackers.first.id.to_s],
+                                          rows: { child.trackers.first.id.to_s => { @priorities.first.id.to_s =>
+                                                      { response: @opt_1h.seconds.to_s } } } } }
 
     own = SlaPolicy.find_by(project_id: child.id)
     assert own.present?, 'the override must create the child its own policy'
@@ -168,12 +168,59 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_equal 'either', own.first_response_rule
   end
 
+  # The inheriting project now edits a form pre-filled from its ancestor, so the FIRST save of any
+  # section is a fork: the whole inherited configuration has to come across, not just the section
+  # that was posted. Without this, saving General alone would leave the child with a row holding no
+  # milestone statuses and no targets — a policy that measures nothing — for a project that was
+  # fully covered a moment before.
+  test "the first save of any section forks the whole inherited configuration" do
+    child = Project.find(5)
+    grant_child_access(child)
+    parent = SlaPolicy.create!(project_id: @project.id, enabled: true, at_risk_threshold: 90)
+    status_id = child.rolled_up_statuses.first.id
+    parent.sla_status_mappings.create!(role: 'resolved', status_id: status_id)
+    parent.sla_definitions.create!(tracker_id: child.trackers.first.id,
+                                   priority_id: @priorities.first.id, response_seconds: 3600)
+
+    # General posts only coverage/enabled — nothing about statuses or targets.
+    put :update, params: { project_id: child.id, tab: 'sla_policy', section: 'general',
+                           sla_policy: { enabled: '1', coverage_hours: '24x7' } }
+
+    own = SlaPolicy.find_by(project_id: child.id)
+    assert_equal [status_id], own.status_ids_for(:resolved)
+    assert_equal 3600, own.sla_definitions.find_by(tracker_id: child.trackers.first.id,
+                                                   priority_id: @priorities.first.id)
+                          .response_seconds
+    assert_equal 90, own.at_risk_threshold, "the ancestor's scalars come across too"
+  end
+
+  # Same fork, starting from a LIGHTWEIGHT row: the row already exists (so it is not a new record)
+  # but owns no configuration, and its own on/off decision must survive the fork rather than being
+  # overwritten by the ancestor's.
+  test "forking from a lightweight row copies the configuration and keeps its own decision" do
+    child = Project.find(5)
+    grant_child_access(child)
+    parent = SlaPolicy.create!(project_id: @project.id, enabled: true)
+    status_id = child.rolled_up_statuses.first.id
+    parent.sla_status_mappings.create!(role: 'resolved', status_id: status_id)
+    SlaPolicy.create!(project_id: child.id, enabled: false, inherits_config: true)
+
+    # Exclusions owns the `pause` role only — every other role has to arrive by inheritance.
+    put :update, params: { project_id: child.id, tab: 'sla_policy', section: 'exclusions',
+                           sla_policy: { pause_enabled: '1' } }
+
+    own = SlaPolicy.find_by(project_id: child.id)
+    assert_not own.inherits_config?, 'saving configuration makes the row self-defining'
+    assert_not own.enabled?, "the lightweight row's own SLA-off decision must survive the fork"
+    assert_equal [status_id], own.status_ids_for(:resolved), 'the inherited role comes across'
+  end
+
   test "cloning another project's policy from a non-General section keeps its scalars" do
     build_clone_source # project 2, enabled, at_risk_threshold 90, rule 'either'
 
     put :update, params: targets_params(
       { clone_source_id: '2',
-        definitions: { tracker_id: @trackers.first.id.to_s, rows: {} } }
+        definitions: { tracker_ids: [@trackers.first.id.to_s], rows: { @trackers.first.id.to_s => {} } } }
     )
 
     saved = policy
@@ -325,8 +372,8 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     )
     put :update, params: exclusions_params(status_mappings: {}) # pause intentionally left empty
     put :update, params: targets_params(
-      definitions: { tracker_id: @trackers.first.id.to_s,
-                     rows: { @priorities.first.id.to_s => { response: @opt_1h.seconds.to_s } } }
+      definitions: { tracker_ids: [@trackers.first.id.to_s],
+                     rows: { @trackers.first.id.to_s => { @priorities.first.id.to_s => { response: @opt_1h.seconds.to_s } } } }
     )
     saved = policy
     assert_equal [], saved.status_ids_for(:pause), 'pause selection must round-trip to empty'
@@ -364,9 +411,9 @@ class SlaPoliciesControllerTest < ActionController::TestCase
   test "targets persist per tracker and priority as seconds from the lookup" do
     priority = @priorities.first
     put :update, params: targets_params(
-      definitions: { tracker_id: @trackers.first.id.to_s,
-                     rows: { priority.id.to_s => { response: '3600', workaround: '7200',
-                                                   resolution: '86400' } } }
+      definitions: { tracker_ids: [@trackers.first.id.to_s],
+                     rows: { @trackers.first.id.to_s => { priority.id.to_s => { response: '3600', workaround: '7200',
+                                                     resolution: '86400' } } } }
     )
     definition = policy.sla_definitions.find_by(tracker_id: @trackers.first.id,
                                                 priority_id: priority.id)
@@ -386,8 +433,8 @@ class SlaPoliciesControllerTest < ActionController::TestCase
                                          priority_id: priority.id, response_seconds: 3600)
 
     put :update, params: targets_params(
-      definitions: { tracker_id: @trackers.second.id.to_s,
-                     rows: { priority.id.to_s => { response: '14400' } } }
+      definitions: { tracker_ids: [@trackers.second.id.to_s],
+                     rows: { @trackers.second.id.to_s => { priority.id.to_s => { response: '14400' } } } }
     )
 
     assert_equal 3600, keep.reload.response_seconds # tracker 1 untouched
@@ -396,12 +443,62 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_equal 14_400, replaced.response_seconds
   end
 
+  test "several trackers posted together are all written in one save" do
+    priority = @priorities.first
+    first, second = @trackers.first, @trackers.second
+
+    put :update, params: targets_params(
+      definitions: { tracker_ids: [first.id.to_s, second.id.to_s],
+                     rows: { first.id.to_s  => { priority.id.to_s => { response: '3600' } },
+                             second.id.to_s => { priority.id.to_s => { response: '14400' } } } }
+    )
+
+    assert_equal 3600, policy.sla_definitions
+                             .find_by(tracker_id: first.id, priority_id: priority.id)
+                             .response_seconds
+    assert_equal 14_400, policy.sla_definitions
+                               .find_by(tracker_id: second.id, priority_id: priority.id)
+                               .response_seconds
+  end
+
+  # The picker chooses which trackers are on screen and therefore editable — not which trackers
+  # have an SLA. Hiding one must never be a silent delete; clearing targets is done by setting
+  # every one of that tracker's rows to "not tracked".
+  test "a tracker left out of the submit keeps its stored targets" do
+    saved_policy = SlaPolicy.create!(project_id: @project.id, enabled: true)
+    priority = @priorities.first
+    untouched = saved_policy.sla_definitions.create!(tracker_id: @trackers.second.id,
+                                                     priority_id: priority.id,
+                                                     response_seconds: 3600)
+
+    put :update, params: targets_params(
+      definitions: { tracker_ids: [@trackers.first.id.to_s],
+                     rows: { @trackers.first.id.to_s => { priority.id.to_s => { response: '14400' } } } }
+    )
+
+    assert_equal 3600, untouched.reload.response_seconds
+  end
+
+  # Rows posted for a tracker the submit did not select are ignored — the tracker_ids list is the
+  # authority, so a stale or forged rows entry cannot write outside what the form showed.
+  test "rows for an unselected tracker are ignored" do
+    priority = @priorities.first
+
+    put :update, params: targets_params(
+      definitions: { tracker_ids: [@trackers.first.id.to_s],
+                     rows: { @trackers.first.id.to_s  => { priority.id.to_s => { response: '3600' } },
+                             @trackers.second.id.to_s => { priority.id.to_s => { response: '14400' } } } }
+    )
+
+    assert_nil policy.sla_definitions.find_by(tracker_id: @trackers.second.id)
+  end
+
   test "a priority with every target blank gets no definition row" do
     priority = @priorities.first
     put :update, params: targets_params(
-      definitions: { tracker_id: @trackers.first.id.to_s,
-                     rows: { priority.id.to_s => { response: '', workaround: '',
-                                                   resolution: '' } } }
+      definitions: { tracker_ids: [@trackers.first.id.to_s],
+                     rows: { @trackers.first.id.to_s => { priority.id.to_s => { response: '', workaround: '',
+                                                     resolution: '' } } } }
     )
     assert_equal 0, policy.sla_definitions.count
   end
@@ -409,8 +506,8 @@ class SlaPoliciesControllerTest < ActionController::TestCase
   test "seconds not in the lookup are rejected" do
     priority = @priorities.first
     put :update, params: targets_params(
-      definitions: { tracker_id: @trackers.first.id.to_s,
-                     rows: { priority.id.to_s => { response: '12345' } } }
+      definitions: { tracker_ids: [@trackers.first.id.to_s],
+                     rows: { @trackers.first.id.to_s => { priority.id.to_s => { response: '12345' } } } }
     )
     assert_equal 0, policy.sla_definitions.count
   end
@@ -423,8 +520,8 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     priority = @priorities.first
 
     put :update, params: targets_params(
-      definitions: { tracker_id: @trackers.first.id.to_s,
-                     rows: { priority.id.to_s => { resolution: 'best_effort' } } }
+      definitions: { tracker_ids: [@trackers.first.id.to_s],
+                     rows: { @trackers.first.id.to_s => { priority.id.to_s => { resolution: 'best_effort' } } } }
     )
 
     definition = policy.sla_definitions.find_by(tracker_id: @trackers.first.id, priority_id: priority.id)
@@ -436,8 +533,8 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     priority = @priorities.first
 
     put :update, params: targets_params(
-      definitions: { tracker_id: @trackers.first.id.to_s,
-                     rows: { priority.id.to_s => { resolution: 'best_effort' } } }
+      definitions: { tracker_ids: [@trackers.first.id.to_s],
+                     rows: { @trackers.first.id.to_s => { priority.id.to_s => { resolution: 'best_effort' } } } }
     )
 
     assert_equal 0, policy.sla_definitions.count
@@ -451,8 +548,8 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     # Coverage is set in General, the target in SLA Targets — two saves, as the UI does it.
     put :update, params: general_params(sla_policy: { coverage_hours: '24x7' })
     put :update, params: targets_params(
-      definitions: { tracker_id: @trackers.first.id.to_s,
-                     rows: { priority.id.to_s => { resolution: '28800' } } }
+      definitions: { tracker_ids: [@trackers.first.id.to_s],
+                     rows: { @trackers.first.id.to_s => { priority.id.to_s => { resolution: '28800' } } } }
     )
 
     assert flash[:error].present?
@@ -470,8 +567,8 @@ class SlaPoliciesControllerTest < ActionController::TestCase
       sla_policy: { coverage_hours: 'business_hours', business_calendar_id: calendar.id.to_s }
     )
     put :update, params: targets_params(
-      definitions: { tracker_id: @trackers.first.id.to_s,
-                     rows: { priority.id.to_s => { resolution: '28800' } } }
+      definitions: { tracker_ids: [@trackers.first.id.to_s],
+                     rows: { @trackers.first.id.to_s => { priority.id.to_s => { resolution: '28800' } } } }
     )
 
     refute flash[:error].present?
@@ -484,8 +581,8 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     Setting.plugin_redmine_sla_compliance = { 'unclassified_priority_id' => none.id.to_s }
 
     put :update, params: targets_params(
-      definitions: { tracker_id: @trackers.first.id.to_s,
-                     rows: { none.id.to_s => { response: @opt_1h.seconds.to_s } } }
+      definitions: { tracker_ids: [@trackers.first.id.to_s],
+                     rows: { @trackers.first.id.to_s => { none.id.to_s => { response: @opt_1h.seconds.to_s } } } }
     )
 
     assert_equal 0, policy.sla_definitions.where(priority_id: none.id).count
@@ -501,8 +598,8 @@ class SlaPoliciesControllerTest < ActionController::TestCase
                                          response_seconds: 99_999) # no longer in the lookup
 
     put :update, params: targets_params(
-      definitions: { tracker_id: @trackers.first.id.to_s,
-                     rows: { priority.id.to_s => { response: '99999' } } }
+      definitions: { tracker_ids: [@trackers.first.id.to_s],
+                     rows: { @trackers.first.id.to_s => { priority.id.to_s => { response: '99999' } } } }
     )
     definition = policy.sla_definitions.find_by(tracker_id: @trackers.first.id,
                                                 priority_id: priority.id)
@@ -536,8 +633,8 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     )
     put :update, params: targets_params(
       { clone_source_id: '2',
-        definitions: { tracker_id: @trackers.second.id.to_s,
-                       rows: { priority.id.to_s => { response: '3600' } } } }
+        definitions: { tracker_ids: [@trackers.second.id.to_s],
+                       rows: { @trackers.second.id.to_s => { priority.id.to_s => { response: '3600' } } } } }
     )
 
     saved = policy
@@ -559,7 +656,7 @@ class SlaPoliciesControllerTest < ActionController::TestCase
 
     put :update, params: targets_params(
       { clone_source_id: '2',
-        definitions: { tracker_id: @trackers.second.id.to_s, rows: {} } }
+        definitions: { tracker_ids: [@trackers.second.id.to_s], rows: { @trackers.second.id.to_s => {} } } }
     )
 
     assert_equal 0, policy.sla_definitions.where(priority_id: none.id).count
@@ -608,8 +705,8 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_no_enqueued_jobs do
       put :update, params: targets_params(
         { recalculate: '1',
-          definitions: { tracker_id: @trackers.first.id.to_s,
-                         rows: { @priorities.first.id.to_s => { resolution: '28800' } } } }
+          definitions: { tracker_ids: [@trackers.first.id.to_s],
+                         rows: { @trackers.first.id.to_s => { @priorities.first.id.to_s => { resolution: '28800' } } } } }
       )
     end
     assert flash[:error].present?
