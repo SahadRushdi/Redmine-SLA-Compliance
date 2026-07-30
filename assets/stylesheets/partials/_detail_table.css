@@ -15,7 +15,7 @@
 [data-sla-detail-controls] { display: none; }
 
 .sla-detail-expanded .sla-detail-col-extra { display: table-cell; }
-.sla-detail-expanded [data-sla-detail-controls] { display: flex; }
+[data-sla-modal-controls-slot] [data-sla-detail-controls] { display: flex; }
 /* Only the expanded (modal) table may scroll sideways; the compact in-card table must not. */
 .sla-detail-expanded [data-sla-detail-tablewrap] { overflow-x: auto; }
 

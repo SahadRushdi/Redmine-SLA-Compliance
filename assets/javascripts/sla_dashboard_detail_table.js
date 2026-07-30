@@ -35,6 +35,30 @@
           '<path d="M7 10l5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   };
 
+  // Mirrors Redmine::Pagination::Paginator#linked_pages (lib/redmine/pagination.rb) so this
+  // client-side pager windows exactly like Redmine's own server-rendered ones (Spent time, issue
+  // list): always first + last + current, plus current ± 2, with the gaps rendered as an ellipsis.
+  // Without it a 259-row scope at 6/page emitted all 41 page buttons, which overflowed the card and
+  // pushed the whole dashboard into horizontal scroll.
+  function linkedPages(current, pages) {
+    var wanted = [1, current, pages];
+    for (var p = current - 2; p <= current + 2; p++) {
+      if (p > 1 && p < pages) { wanted.push(p); }
+    }
+    return wanted
+      .filter(function (page, index) { return page >= 1 && page <= pages && wanted.indexOf(page) === index; })
+      .sort(function (a, b) { return a - b; });
+  }
+
+  // Inert grey "…" marking a skipped range between two page buttons. Deliberately a <span>, never a
+  // <button>, so it can't be mistaken for (or focused as) a page.
+  function ellipsisSpacer() {
+    var span = document.createElement('span');
+    span.className = 'tw-px-2 tw-py-1.5 tw-text-xs tw-text-gray-400 tw-select-none';
+    span.textContent = '…';
+    return span;
+  }
+
   function cellValue(row, index) {
     var cell = row.children[index];
     if (!cell) { return ''; }
@@ -209,10 +233,15 @@
     if (pages <= 1) { return; }
 
     var nav = document.createElement('div');
-    nav.className = 'tw-inline-flex tw-items-center tw-gap-1';
+    nav.className = 'tw-inline-flex tw-items-center tw-flex-wrap tw-gap-1';
     nav.appendChild(this.pageButton(this.labels.prev, this.page - 1, { disabled: this.page <= 1 }));
-    for (var p = 1; p <= pages; p++) {
+    var numbers = linkedPages(this.page, pages);
+    var previous = null;
+    for (var i = 0; i < numbers.length; i++) {
+      var p = numbers[i];
+      if (previous !== null && p !== previous + 1) { nav.appendChild(ellipsisSpacer()); }
       nav.appendChild(this.pageButton(String(p), p, { active: p === this.page }));
+      previous = p;
     }
     nav.appendChild(this.pageButton(this.labels.next, this.page + 1, { disabled: this.page >= pages }));
     this.pager.appendChild(nav);
@@ -287,6 +316,10 @@
     var modal = byId('sla-detail-modal');
     var body = byId('sla-detail-modal-body');
     var expandBtn = document.querySelector('[data-sla-detail-expand]');
+    // Search + per-page: one node, moved onto the modal's pill row on expand and returned to the
+    // top of the table node on close (see _detail_table.css for the matching visibility rule).
+    var controls = document.querySelector('[data-sla-detail-controls]');
+    var controlsSlot = modal ? modal.querySelector('[data-sla-modal-controls-slot]') : null;
     if (!tableNode || !home || !modal || !body || !expandBtn) { return; }
 
     // Point the (hidden) real <select> and its visible trigger label at `value` WITHOUT firing a
@@ -301,6 +334,7 @@
 
     function open() {
       body.appendChild(tableNode);
+      if (controls && controlsSlot) { controlsSlot.appendChild(controls); }
       tableNode.classList.add('sla-detail-expanded');
       modal.classList.remove('hidden');
       document.body.style.overflow = 'hidden';
@@ -313,6 +347,8 @@
 
     function close() {
       home.appendChild(tableNode);
+      // Back to where the ERB rendered it (first child), so the next expand finds it there again.
+      if (controls) { tableNode.insertBefore(controls, tableNode.firstChild); }
       tableNode.classList.remove('sla-detail-expanded');
       modal.classList.add('hidden');
       document.body.style.overflow = '';
@@ -337,7 +373,7 @@
     // clicking one reloads the whole page. Flag the modal as open first so init() re-opens it after
     // the reload, so filtering from inside the modal feels like it never left. The compact card's
     // pills deliberately carry no such flag, so they never spring the modal open.
-    var modalTabs = modal.querySelector('[data-sla-modal-tabs]');
+    var modalTabs = modal.querySelector('[data-sla-modal-pills]');
     if (modalTabs) {
       modalTabs.querySelectorAll('a').forEach(function (link) {
         link.addEventListener('click', function () {

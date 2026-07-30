@@ -742,15 +742,19 @@
  * result/deviation are shown, and the search + per-page controls are hidden. Clicking the card's
  * expand button MOVES the exact same #sla-detail-table node into the modal (single rendered row
  * set - rows are never duplicated) and adds `.sla-detail-expanded`, which reveals every extra
- * column, the search box, the per-page dropdown, and lets the wide table scroll horizontally
- * INSIDE the modal only (the compact card itself never scrolls sideways - CLAUDE.md/no inline
- * scroll). Column visibility is a class toggle rather than a JS style loop so the two states can
- * never drift out of sync with the markup.
+ * column and lets the wide table scroll horizontally INSIDE the modal only (the compact card itself
+ * never scrolls sideways - CLAUDE.md/no inline scroll). Column visibility is a class toggle rather
+ * than a JS style loop so the two states can never drift out of sync with the markup.
+ *
+ * The search box + per-page dropdown are a separate case: the same script MOVES that one node onto
+ * the modal's state-pill row (into [data-sla-modal-controls-slot]) instead of leaving it inside the
+ * table, so the modal spends no band of its own on them. Their visibility therefore keys off where
+ * the node is parked, not off `.sla-detail-expanded` - which no longer contains them once expanded.
  */
 .sla-plugin .sla-detail-col-extra { display: none; }
 .sla-plugin [data-sla-detail-controls] { display: none; }
 .sla-plugin .sla-detail-expanded .sla-detail-col-extra { display: table-cell; }
-.sla-plugin .sla-detail-expanded [data-sla-detail-controls] { display: flex; }
+.sla-plugin [data-sla-modal-controls-slot] [data-sla-detail-controls] { display: flex; }
 /* Only the expanded (modal) table may scroll sideways; the compact in-card table must not. */
 .sla-plugin .sla-detail-expanded [data-sla-detail-tablewrap] { overflow-x: auto; }
 /* Title truncates tightly in the narrow in-card table, wider once expanded into the roomy modal. */

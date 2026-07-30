@@ -58,9 +58,10 @@
   <div id="sla-detail-table-home" class="tw-flex-1">
     <div id="sla-detail-table" data-sla-detail-table
          data-l-no-search-match="<%= l(:text_sla_detail_no_search_matches) %>">
-      <%# Search + per-page: hidden in the compact card (see _detail_table.css), revealed only when %>
-      <%# the table is expanded into the modal. %>
-      <div data-sla-detail-controls class="tw-items-center tw-justify-between tw-flex-wrap tw-gap-3 tw-mb-4">
+      <%# Search + per-page: hidden here (see _detail_table.css) and MOVED onto the modal's state-pill %>
+      <%# row when the table is expanded (sla_dashboard_detail_table.js parks this node in %>
+      <%# [data-sla-modal-controls-slot]), so the modal spends no band of its own on them. %>
+      <div data-sla-detail-controls class="tw-items-center tw-flex-wrap tw-gap-4">
         <%# Client-side instant search (sla_dashboard_detail_table.js) - filters the already-rendered %>
         <%# rows below on every keystroke via each row's data-sla-search attribute. %>
         <div class="tw-relative">
@@ -205,8 +206,15 @@
         </svg>
       </button>
     </div>
-    <div data-sla-modal-tabs class="tw-flex tw-flex-wrap tw-gap-2 tw-px-5 tw-py-3 tw-border-b tw-border-gray-200">
-      <%= render 'sla_dashboard/state_tabs' %>
+    <%# One header band: state pills on the left, and the search box + per-page dropdown parked on %>
+    <%# the right by sla_dashboard_detail_table.js on expand (they render inside #sla-detail-table %>
+    <%# and are moved here, so there is only ever one of each in the DOM). The pills keep their own %>
+    <%# wrapper so the reopen-flag click binding can target pill links only, never a control. %>
+    <div data-sla-modal-tabs class="tw-flex tw-items-center tw-justify-between tw-flex-wrap tw-gap-3 tw-px-5 tw-py-3 tw-border-b tw-border-gray-200">
+      <div data-sla-modal-pills class="tw-flex tw-flex-wrap tw-gap-2">
+        <%= render 'sla_dashboard/state_tabs' %>
+      </div>
+      <div data-sla-modal-controls-slot class="tw-flex tw-items-center tw-flex-wrap tw-gap-4"></div>
     </div>
     <div id="sla-detail-modal-body" class="tw-p-5 tw-overflow-y-auto tw-flex-1"></div>
   </div>
