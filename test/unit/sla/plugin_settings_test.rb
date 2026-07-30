@@ -136,4 +136,20 @@ class Sla::PluginSettingsTest < ActiveSupport::TestCase
   test "viewer_users is empty without a query when nothing is listed" do
     assert_equal [], Sla::PluginSettings.viewer_users.to_a
   end
+
+  # --- Step 7.1: global Google Chat webhook ---------------------------------------------------
+
+  test "default_google_chat_webhook is nil when unset or blank" do
+    assert_nil Sla::PluginSettings.default_google_chat_webhook
+
+    Setting.plugin_redmine_sla_compliance = { 'google_chat_webhook' => '' }
+    assert_nil Sla::PluginSettings.default_google_chat_webhook,
+               'a blank field must read as "no global fallback", not as an empty URL'
+  end
+
+  test "default_google_chat_webhook reads the configured value" do
+    url = 'https://chat.googleapis.com/v1/spaces/AAA/messages?key=k'
+    Setting.plugin_redmine_sla_compliance = { 'google_chat_webhook' => url }
+    assert_equal url, Sla::PluginSettings.default_google_chat_webhook
+  end
 end

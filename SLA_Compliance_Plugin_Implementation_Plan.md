@@ -336,7 +336,7 @@ minute — no app restart, no dynamic Rufus job rescheduling.
 
 ---
 
-# PHASE 6 — SLA Compliance Dashboard
+# PHASE 6 — SLA Compliance Dashboard ✅Done
 
 > One dashboard with two access contexts: top-level (cross-project) and project-level. Reads only from the `sla_results` cache.
 
@@ -474,12 +474,28 @@ The dashboard is split into two tabs because it answers two different questions,
 
 ---
 
-# PHASE 7 — Google Chat Notification
+# PHASE 7 — Google Chat Notification ✅Done
 
 ### Step 7.1 — Notify Google Chat on issue creation
 - **Goal:** Post a formatted message to a Google Chat webhook when an issue is created — only for SLA-configured trackers.
 - **Build:** On issue create (model hook), fire an asynchronous POST to the webhook (from Step 4.6) with reference, title, type, priority, submitter, assignee, due date, and a link. Fire only when the issue's tracker is SLA-configured.
 - **Done when:** Creating an issue on an SLA tracker posts the message; non-SLA trackers do not; a webhook failure logs an error but never blocks or delays issue creation.
+- **As built:** `IssuePatch` gains `after_commit :sla_notify_google_chat, on: :create`, which does
+  only the module check and enqueues `SlaGoogleChatNotificationJob`; every other gate (webhook,
+  SLA-configured tracker via `PolicyContext#tracker_configured?`, dedup claim) is re-checked inside
+  the job, off the request. `Sla::GoogleChatMessage` builds the payload (pure, no I/O) and
+  `Sla::GoogleChatClient` is the only outbound HTTP in the plugin. The message renders twelve
+  fields — reference, title, project, type, status, priority, category, target version, submitter,
+  assignee, start date, due date — in a monospace fence, with `—` for anything unset.
+- **Webhook resolution:** project's own `google_chat_webhook`, else the new instance-wide default
+  under Administration → Plugins (the "global fallback" from Fixed Decisions). It deliberately does
+  **not** walk up the project tree the way SLA policies do — the form shows a single field with no
+  hint that a value could be inherited, so inheriting a parent's webhook would post to a space the
+  project's admin never saw.
+- **Exactly-once:** `SlaNotificationLog.claim!(… 'google_chat_created')` is taken *before* the POST,
+  so a retried or duplicated job cannot double-post; `sent_at` is stamped only on success, leaving
+  `sent_at IS NULL` as the audit trail of a failed delivery. A failed POST is therefore not retried
+  — a deliberate trade (a duplicate alert is worse than a missed one here).
 
 ---
 
