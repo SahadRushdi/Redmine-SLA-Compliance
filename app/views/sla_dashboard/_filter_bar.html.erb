@@ -15,68 +15,40 @@
   normally and every existing functional-test assertion on it (option[selected], clamped values,
   etc.) keeps working unmodified.
 
-  The <form> uses `tw-contents` (display: contents) so its children lay out as direct flex items
-  of the surrounding header row - lets the title sit on the left and Date Range/Tracker/Priority/
-  Export CSV sit on the right of the SAME row (opposite the heading), while Project still submits
-  as part of the one real <form> underneath.
+  Every control lives on the single header row: the title sits on the left, and Project/Tracker/
+  Priority/Export CSV sit on the right of that SAME row, opposite the heading. The row's own
+  tw-flex handles that, so the <form> needs no `tw-contents` — it has exactly one child.
 %>
 <div class="tw-mb-6">
-  <%= form_tag(sla_dashboard_base_path(@project), method: :get, id: 'sla-filter-form', class: 'tw-contents') do %>
-    <div class="tw-flex tw-items-start tw-justify-between tw-flex-wrap tw-gap-4 tw-mb-4">
+  <%= form_tag(sla_dashboard_base_path(@project), method: :get, id: 'sla-filter-form') do %>
+    <div class="tw-flex tw-items-start tw-justify-between tw-flex-wrap tw-gap-4">
       <div>
         <h1 class="tw-text-2xl tw-font-bold tw-text-gray-900">
           <%= @project ? "#{l(:label_sla_compliance)} — #{@project.name}" : l(:label_sla_dashboard_all) %>
         </h1>
-        <p class="tw-text-sm tw-text-gray-500 tw-mt-1"><%= sla_dashboard_date_range_label(@filters[:date_range]) %></p>
+        <p class="tw-text-sm tw-text-gray-500 tw-mt-1"><%= l(:label_sla_dashboard_subtitle) %></p>
       </div>
 
       <%# Clean single-line header (Figma): no stacked field labels — the Date Range pills, the %>
       <%# Tracker/Priority dropdowns, and Export CSV sit centered on one baseline. Labels are %>
       <%# preserved for screen readers via aria-label on each control/group. %>
       <div class="tw-flex tw-flex-wrap tw-items-center tw-gap-3">
-        <div>
-          <div class="tw-inline-flex tw-rounded-lg tw-shadow-sm" role="group" aria-label="<%= l(:label_sla_filter_date_range) %>">
-            <% sla_date_presets.each_with_index do |preset, i| %>
-              <% active = @filters[:date_preset] == preset %>
-              <%# tw-shadow-none is required, not decorative: Purplemine2's global `button{}` rule sets %>
-              <%# `box-shadow: 0 1px 0 #004dc2` (a permanent blue 1px line under every button) that no %>
-              <%# border/background utility touches, since box-shadow is a separate property - without %>
-              <%# this override it renders as one continuous blue bar under the whole pill group. %>
-              <button type="button" data-sla-preset-btn="<%= preset %>"
-                      class="tw-px-3 tw-py-2.5 tw-text-sm tw-font-medium tw-border tw-border-solid tw-shadow-none tw-transition-colors focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-inset focus:tw-ring-primary-300
-                             <%= 'tw-rounded-l-lg' if i.zero? %> <%= 'tw-rounded-r-lg' if i == sla_date_presets.size - 1 %>
-                             <%= '-tw-ml-px' unless i.zero? %>
-                             <%= active ? 'tw-bg-primary-600 tw-text-white tw-border-primary-600 tw-z-10' : 'tw-bg-white tw-text-gray-700 tw-border-gray-300 hover:tw-bg-gray-50' %>">
-                <%= sla_date_preset_label(preset) %>
-              </button>
-            <% end %>
-          </div>
-          <%= select_tag 'date_preset',
-                options_for_select(sla_date_presets.map { |p| [sla_date_preset_label(p), p] }, @filters[:date_preset]),
-                id: 'sla-filter-date-preset', class: 'tw-hidden' %>
-        </div>
+        <%# Date Range controls moved to the SLA Trend tab (_trend_panel.html.erb) — they scope only %>
+        <%# that tab. Project/Tracker/Priority scope BOTH tabs, so they stay here. %>
 
-        <%# One LINKED range picker across both inputs, not two independent ones — this is what %>
-        <%# tints the days between From and To (matching the My Time page). The library finds its %>
-        <%# two inputs via `element.querySelectorAll('input')` in DOM order, so this wrapper is %>
-        <%# the picker element itself and From must stay before To. %>
-        <%# The inputs deliberately carry no auto-apply data attribute: the library sets .value %>
-        <%# programmatically, which never fires a native `change` event — see the changeDate %>
-        <%# binding in sla_dashboard_filters.js. %>
-        <%# No visible From/To labels — the inputs (which already show the selected dates) sit on %>
-        <%# the same baseline as the Date Range pills; the label survives as placeholder + aria-label. %>
-        <div id="sla-custom-range" data-sla-daterangepicker
-             class="tw-flex tw-gap-2 <%= 'hidden' unless @filters[:date_preset] == 'custom' %>">
-          <div>
-            <%= text_field_tag 'from', @filters[:date_range]&.first&.strftime('%m/%d/%Y'), id: 'sla-filter-from',
-                  class: sla_input_classes, autocomplete: 'off',
-                  placeholder: l(:field_sla_date_from), 'aria-label': l(:field_sla_date_from) %>
-          </div>
-          <div>
-            <%= text_field_tag 'to', @filters[:date_range]&.last&.strftime('%m/%d/%Y'), id: 'sla-filter-to',
-                  class: sla_input_classes, autocomplete: 'off',
-                  placeholder: l(:field_sla_date_to), 'aria-label': l(:field_sla_date_to) %>
-          </div>
+        <%# Project sits inline with Tracker/Priority rather than in its own card row below: with a %>
+        <%# single permitted project (the common project-level case) that card was an almost-empty %>
+        <%# full-width band. Same chip control family as the other two, so it reads as one filter %>
+        <%# group. The locked-project explanation moves from a caption to the wrapper's title %>
+        <%# tooltip — there is no room for a caption on a single-line header. %>
+        <div class="tw-min-w-[12rem]"
+             <% if @locked_project %>title="<%= l(:text_sla_filter_locked_project_hint) %>"<% end %>>
+          <%= select_tag 'project_ids[]',
+                options_for_select(@permitted_projects.map { |p| [p.name, p.id] }, @filters[:project_ids]),
+                id: 'sla-filter-projects', multiple: true, disabled: @locked_project,
+                class: sla_input_classes, placeholder: l(:label_sla_filter_all_projects),
+                'aria-label': l(:label_sla_filter_project),
+                data: { 'sla-chips': true, 'sla-auto-apply-debounced': true } %>
         </div>
 
         <%# Tracker is a multi-select (chips), same control family as Priority — an empty selection %>
@@ -108,17 +80,6 @@
           <%= l(:button_sla_export_csv) %>
         <% end %>
       </div>
-    </div>
-
-    <div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-p-5 tw-shadow-sm">
-      <label class="<%= sla_label_classes %>" for="sla-filter-projects"><%= l(:label_sla_filter_project) %></label>
-      <%= select_tag 'project_ids[]',
-            options_for_select(@permitted_projects.map { |p| [p.name, p.id] }, @filters[:project_ids]),
-            id: 'sla-filter-projects', multiple: true, disabled: @locked_project,
-            class: "#{sla_input_classes} tw-max-w-xl", data: { 'sla-chips': true, 'sla-auto-apply-debounced': true } %>
-      <% if @locked_project %>
-        <p class="tw-text-xs tw-text-gray-400 tw-mt-1"><%= l(:text_sla_filter_locked_project_hint) %></p>
-      <% end %>
     </div>
   <% end %>
 </div>

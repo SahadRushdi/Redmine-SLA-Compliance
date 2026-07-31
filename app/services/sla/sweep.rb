@@ -20,9 +20,10 @@ module Sla
   #     a given project's digest window, and it naturally re-opens once the configured frequency
   #     interval has elapsed.
   #
-  # Nothing domain-specific is hard-coded: "open" is Redmine's own `Issue.open` (its `is_closed`
-  # status config), projects are those with the SLA module enabled and an enabled effective policy,
-  # and all tracker/priority/status handling flows through the engine via `PolicyContext`.
+  # Nothing domain-specific is hard-coded: "open" means not in one of the policy's own configured
+  # `resolved`-role statuses (see #open_issues), projects are those with the SLA module enabled and
+  # an enabled effective policy, and all tracker/priority/status handling flows through the engine
+  # via `PolicyContext`.
   class Sweep
     # swept          — issues recomputed
     # newly_at_risk  — issues that crossed the at-risk threshold this run
@@ -48,7 +49,7 @@ module Sla
         track_stale = notification_setting&.stale_email_enabled? || false
         stale_candidates = []
 
-        open_issues(project).find_each do |issue|
+        open_issues(project, context).find_each do |issue|
           outcome = ResultStore.recalculate(issue, context: context, now: @now)
           swept += 1
 
@@ -123,9 +124,21 @@ module Sla
       Project.active.has_module(:sla_compliance)
     end
 
-    # Open (non-closed) issues in the project, using Redmine's own status configuration.
-    def open_issues(project)
-      project.issues.open
+    # The issues still worth re-evaluating: the OPEN ones, using the plugin's own definition of
+    # open — not in a `resolved`-role status, the same milestone that stops the SLA clock and the
+    # same population the dashboard's open-ticket cards count.
+    #
+    # Redmine's `Issue.open` is not equivalent and cannot be used here: a "Resolved" status is
+    # commonly NOT is_closed (so `Issue.open` would keep re-sweeping tickets whose clock already
+    # stopped), and conversely a status Redmine treats as closed but the policy never mapped to
+    # `resolved` still has a running clock — under `Issue.open` those tickets would never be swept
+    # again and their at-risk flag and breach_at would freeze at whatever the last event left.
+    # Falls back to `Issue.open` only when the policy maps no resolved statuses at all.
+    def open_issues(project, context)
+      resolved_status_ids = Array(context.status_roles[:resolved])
+      return project.issues.open if resolved_status_ids.empty?
+
+      project.issues.where.not(status_id: resolved_status_ids)
     end
   end
 end

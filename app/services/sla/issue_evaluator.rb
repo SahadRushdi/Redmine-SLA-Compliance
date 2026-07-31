@@ -21,12 +21,18 @@ module Sla
       timeline = TimelineBuilder.new(@issue).build
 
       ResultClassifier.new(
-        timeline:           timeline,
-        policy:             @context.policy,
-        definition:         @context.definition_for(@issue.tracker_id, @issue.priority_id),
-        tracker_configured: @context.tracker_configured?(@issue.tracker_id),
-        status_roles:       @context.status_roles,
-        now:                @now
+        timeline:             timeline,
+        policy:               @context.policy,
+        definition:           @context.definition_for(@issue.tracker_id, @issue.priority_id),
+        tracker_configured:   @context.tracker_configured?(@issue.tracker_id),
+        status_roles:         @context.status_roles,
+        # The issue's live state, which the journal timeline alone cannot supply: needed so
+        # ResultClassifier#closed_at can still recognise a ticket that is SITTING in a resolved
+        # status without a recorded transition into it, and so a project with no policy at all can
+        # fall back to Redmine's own closed_on.
+        current_status_id:    @issue.status_id,
+        fallback_resolved_at: @issue.closed_on,
+        now:                  @now
       ).classify
     end
   end

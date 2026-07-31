@@ -42,7 +42,8 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
       assert_select '#sla-notification-form'
       assert_select 'input#sla_policy_at_risk_threshold[value="85"]'
       assert_select "select[name='status_mappings[created][]'] option[selected][value='#{status_id}']"
-      assert_select '#sla-definitions-rows option[selected][value="14400"]'
+      assert_select "#sla-definitions-rows-#{@project.trackers.first.id} " \
+                    'option[selected][value="14400"]'
       assert_select "option[selected][value='ops@example.com']"
     end
   end
@@ -54,6 +55,122 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_response :success
     assert_select '#sla-policy-form', 0
     assert_select '#sla-notification-form'
+  end
+
+  # --- Sectioned settings shell ----------------------------------------------------------------
+
+  test "the sidebar lists every section and opens General by default" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    SlaPoliciesHelper::SECTIONS.each do |section|
+      assert_select "a[data-sla-section-link='#{section[:key]}']", 1,
+                    "the #{section[:key]} section must be reachable from the sidebar"
+      assert_select "[data-sla-panel='#{section[:key]}']", 1
+    end
+    assert_select "a[data-sla-section-link='general'].is-active"
+    assert_select "[data-sla-panel='general']:not(.hidden)"
+    assert_select "[data-sla-panel='targets'].hidden"
+  end
+
+  test "the requested section is the one rendered open" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'exclusions' }
+    assert_response :success
+
+    assert_select "a[data-sla-section-link='exclusions'].is-active"
+    assert_select "[data-sla-panel='exclusions']:not(.hidden)"
+    assert_select "[data-sla-panel='general'].hidden"
+  end
+
+  test "an unknown section falls back to the first permitted one" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'nope' }
+    assert_response :success
+    assert_select "a[data-sla-section-link='general'].is-active"
+  end
+
+  # Regression: the clone/Override AJAX replaces #sla-policy-tab-body wholesale. The Notifications
+  # form belongs to a different controller and its own save button, so it must sit OUTSIDE that
+  # region — otherwise loading a clone source silently discards a webhook URL or recipient list
+  # the user had typed but not yet saved.
+  test "the notifications form is outside the region the clone AJAX replaces" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select '#sla-policy-tab-body #sla-notification-form', 0,
+                  'a clone load would wipe unsaved notification input if the form were in here'
+    assert_select '#sla-policy-tab-body' # the region itself still exists
+    assert_select '#sla-notification-form'
+  end
+
+  test "a notifications-only role gets a sidebar of just that section, opened" do
+    @role.remove_permission!(:edit_sla_policy)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select 'a[data-sla-section-link]', 1
+    assert_select "a[data-sla-section-link='notifications'].is-active"
+    assert_select "[data-sla-panel='notifications']:not(.hidden)"
+  end
+
+  # --- Section bodies ---------------------------------------------------------------------------
+
+  # The unclassified priority can never hold a target (enforced in
+  # SlaPoliciesController#replace_tracker_definitions!), so the Priority Targets card states that
+  # once in a notice rather than rendering a permanently disabled row. Rendering inputs for it
+  # would be worse than redundant — it would invite a submission the server is bound to discard.
+  test "the unclassified priority is a notice above the table, never a row with inputs" do
+    none = IssuePriority.active.first
+    Setting.plugin_redmine_sla_compliance = { 'unclassified_priority_id' => none.id.to_s }
+    classified = IssuePriority.active.detect { |p| p.id != none.id }
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+    assert_response :success
+
+    tracker_id = @project.trackers.sorted.first.id
+    assert_select '[data-sla-panel="targets"]' do
+      assert_select "select[name^='definitions[rows][#{tracker_id}][#{none.id}]']", 0,
+                    'no input may be offered for a priority whose submission is always rejected'
+      assert_select "select[name='definitions[rows][#{tracker_id}][#{classified.id}][response]']", 1,
+                    'other priorities must still get their target dropdowns'
+    end
+  end
+
+  test "with no unclassified priority configured every active priority gets a row" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+    assert_response :success
+
+    tracker_id = @project.trackers.sorted.first.id
+    IssuePriority.active.each do |priority|
+      assert_select "select[name='definitions[rows][#{tracker_id}][#{priority.id}][response]']", 1
+    end
+  end
+
+  # A disabled alert card collapses to just its switch, but its fields stay in the DOM and keep
+  # posting — otherwise turning an alert off and on again would silently drop the recipients the
+  # project had already saved.
+  test "a disabled alert card hides its detail fields without dropping them from the form" do
+    SlaNotificationSetting.create!(project_id: @project.id, at_risk_email_enabled: false,
+                                   at_risk_email_recipients: ['ops@example.com'])
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'notifications' }
+    assert_response :success
+
+    assert_select '[data-sla-reveal="at-risk-email"].hidden'
+    assert_select '#sla-notification-form select#sla-at-risk-recipients' do
+      assert_select "option[selected][value='ops@example.com']"
+    end
+  end
+
+  test "an enabled alert card renders its detail fields open" do
+    SlaNotificationSetting.create!(project_id: @project.id, at_risk_email_enabled: true)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'notifications' }
+    assert_response :success
+
+    assert_select '[data-sla-reveal="at-risk-email"]:not(.hidden)'
+    # The switch has to name the block it owns, or the JS has nothing to bind the two together by.
+    assert_select 'input[data-sla-reveals="at-risk-email"][type=checkbox]'
   end
 
   test "the tab is absent without either permission" do
@@ -78,18 +195,82 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     project.enable_module!(:sla_compliance)
   end
 
-  test "a project with no policy of its own but an inherited one shows the banner, not the form" do
-    parent = Project.find(5) # private-child, parent = ecookbook (1)
-    grant_child_access(parent)
-    SlaPolicy.create!(project_id: @project.id, enabled: true) # ecookbook's own policy
+  test "an inheriting project gets the full editable form, pre-filled from its ancestor" do
+    child = Project.find(5) # private-child, parent = ecookbook (1)
+    grant_child_access(child)
+    parent_policy = SlaPolicy.create!(project_id: @project.id, enabled: true,
+                                      at_risk_threshold: 85, first_response_rule: 'either')
+    status_id = @project.rolled_up_statuses.first.id
+    parent_policy.sla_status_mappings.create!(role: 'created', status_id: status_id)
+    parent_policy.sla_definitions.create!(tracker_id: child.trackers.first.id,
+                                          priority_id: IssuePriority.active.first.id,
+                                          response_seconds: 14_400)
 
-    get :settings, params: { id: parent.identifier, tab: 'sla_policy' }
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
     assert_response :success
 
-    assert_select '#sla-policy-form', 0, 'must never render the editable form for an inherited policy'
-    assert_select '#sla-policy-form-container' do
-      assert_select 'button#sla-override-load'
+    # Same sidebar and same sections as the project it inherits from — no read-only summary.
+    %w[general measurement targets exclusions notifications].each do |key|
+      assert_select "a[data-sla-section-link='#{key}']"
     end
+    assert_select '#sla-policy-form'
+    # ...and every control carries the INHERITED value, so nothing can be saved from a field the
+    # user was never shown.
+    assert_select 'input#sla_policy_at_risk_threshold[value="85"]'
+    assert_select "select[name='status_mappings[created][]'] option[selected][value='#{status_id}']"
+    assert_select "#sla-definitions-rows-#{child.trackers.first.id} " \
+                  'option[selected][value="14400"]'
+    assert_select 'button#sla-override-load', 0, 'the form itself is the override now'
+  end
+
+  # --- Tri-state SLA on/off above the inherited (pre-filled) sections --------------------------
+
+  test "the inherited policy offers the tri-state control, defaulted to Inherit" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select 'form#sla-enablement-form' do
+      assert_select "input[name='sla_policy[enablement]'][value='inherit'][checked]"
+      assert_select "input[name='sla_policy[enablement]'][value='enabled']:not([checked])"
+      assert_select "input[name='sla_policy[enablement]'][value='disabled']:not([checked])"
+      assert_select "input[name='section'][value='enablement']", 1
+    end
+  end
+
+  test "a lightweight row keeps the banner, preselects its own decision, and reports the effective state" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    SlaPolicy.create!(project_id: child.id, enabled: false, inherits_config: true)
+
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    # A lightweight row owns no configuration, so the form still shows the ancestor's — but the
+    # tri-state, not the plain switch, owns the on/off decision, and it must show THIS project's.
+    assert_select '#sla-policy-form'
+    assert_select "input[name='sla_policy[enablement]'][value='disabled'][checked]"
+    assert_select "input[type=checkbox][name='sla_policy[enabled]']", 0,
+                  'the plain SLA-tracking switch would be a second, conflicting on/off control'
+  end
+
+  test "the tri-state control is not offered to a project that defines its own policy" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    SlaPolicy.create!(project_id: child.id, enabled: true)
+
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select 'form#sla-enablement-form', 0
+    assert_select '#sla-policy-form'
+    # A self-defining project keeps the plain SLA-tracking switch.
+    assert_select "input[type=checkbox][name='sla_policy[enabled]']", 1
   end
 
   test "a project with its own policy renders the editable form even though its parent also has one" do

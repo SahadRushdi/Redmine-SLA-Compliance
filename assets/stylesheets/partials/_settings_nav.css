@@ -1,0 +1,90 @@
+/*
+ * SLA Policy settings — sidebar section navigation.
+ *
+ * Active/inactive state is expressed as ONE class (`is-active`) that sla_policy_form.js toggles,
+ * rather than a list of Tailwind utilities the JS would have to carry as string literals and keep
+ * in sync with the ERB. Purplemine2 styles `a` globally (colour + underline on hover) and this
+ * nav's links must not inherit that, so colour/decoration are set explicitly here per CLAUDE.md's
+ * "explicitly reset rather than rely on defaults" rule.
+ *
+ * postcss-prefix-selector scopes every rule below to `.sla-plugin ...` at build time.
+ */
+
+/* Preflight is disabled in this build, so the browser's default ul/li bullets and indent are
+ * still in force here — reset them explicitly or the nav renders as a bulleted list. */
+.sla-section-nav,
+.sla-section-nav li {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sla-section-nav li + li {
+  border-top: 1px solid #f3f4f6; /* gray-100 */
+}
+
+.sla-section-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  background-color: #ffffff;
+  text-decoration: none;
+  transition: background-color 0.12s ease-in-out;
+}
+
+.sla-section-link:hover {
+  background-color: #f9fafb; /* gray-50 */
+  text-decoration: none;
+}
+
+.sla-section-link-icon {
+  display: flex;
+  color: #9ca3af; /* gray-400 */
+}
+
+.sla-section-link-title {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  color: #111827; /* gray-900 */
+}
+
+.sla-section-link-desc {
+  display: block;
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: #6b7280; /* gray-500 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Rendered always so the row's height never shifts between states; only its opacity changes. */
+.sla-section-link-chevron {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  color: #2563eb; /* primary-600 */
+  opacity: 0;
+}
+
+/* --- Active section ------------------------------------------------------------------------- */
+/* The tint and the blue title are the only blue in this nav; both are the primary colour
+ * (#2563eb / primary-600), per Global Rule 7. */
+
+.sla-section-link.is-active,
+.sla-section-link.is-active:hover {
+  background-color: #eff6ff; /* primary-50 */
+}
+
+.sla-section-link.is-active .sla-section-link-icon,
+.sla-section-link.is-active .sla-section-link-title {
+  color: #2563eb;
+}
+
+.sla-section-link.is-active .sla-section-link-chevron {
+  opacity: 1;
+}

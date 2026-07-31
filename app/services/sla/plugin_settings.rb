@@ -44,6 +44,15 @@ module Sla
         IssuePriority.where('LOWER(name) = ?', 'none').first&.id
       end
 
+      # Step 7.1 — instance-wide Google Chat webhook, used by any project that has not set its own
+      # (the plan's "per-project setting, with a global fallback"). Lives here rather than in a
+      # column because it is a single instance-wide value, exactly like the two settings above.
+      # `SlaNotificationSetting.google_chat_webhook_for` is what applies the fallback; this only
+      # reports the configured default.
+      def default_google_chat_webhook
+        settings['google_chat_webhook'].presence
+      end
+
       # --- Step 5.1: the user access allow-lists ----------------------------------------------
       #
       # Redmine permissions attach to roles only, so there is no native way to grant SLA access to

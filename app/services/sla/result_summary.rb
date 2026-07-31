@@ -22,7 +22,14 @@ module Sla
   # not a schema-enforced guarantee, only an engine-contract one.
   class ResultSummary
     Counts = Struct.new(:total, :met, :breached, :at_risk, :no_sla,
-                         :not_configured, :not_tracked, keyword_init: true)
+                         :not_configured, :not_tracked, keyword_init: true) do
+      # Tickets that actually had an SLA to meet — the correct denominator for a "% SLA met"
+      # figure, since a No-SLA ticket was never evaluated and must not drag the percentage down.
+      # Defined here, once, so the SLA Met card and any future consumer cannot disagree about it.
+      def evaluated
+        met + breached
+      end
+    end
 
     # The live-reclassification SQL fragments themselves live on Sla::EffectiveState (included
     # into SlaResult) — shared with Sla::PriorityBreakdown, the dashboard detail table, and

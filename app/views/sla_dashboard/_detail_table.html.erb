@@ -1,129 +1,221 @@
 <%# Step 6.4 — ticket-level detail. Reads the exact same @scope every other part of the %>
 <%# dashboard reads (Sla::EffectiveState - same effective-state definition as the summary cards, %>
-<%# so this table can never disagree with them). State tabs, search and the main filters resubmit %>
-<%# as plain GET links/forms (they change WHICH rows are in scope). Sorting and pagination are %>
-<%# CLIENT-SIDE (sla_dashboard_detail_table.js) over the full row set rendered here - no reload. %>
+<%# so this table can never disagree with them). It now lives in the three-across analytics row, %>
+<%# so by default it renders COMPACT: only ticket/title/assignee/result/deviation, paginated 10 %>
+<%# per page, with the state pills beside the heading. The card's expand button MOVES this exact %>
+<%# #sla-detail-table node into the modal below (single rendered row set - rows are never %>
+<%# duplicated) and reveals every remaining column plus the search box and per-page control. %>
+<%# State tabs and the main filters still resubmit as plain GET links/forms (they change WHICH %>
+<%# rows are in scope). Free-text search, sorting and pagination are all CLIENT-SIDE %>
+<%# (sla_dashboard_detail_table.js) over the full row set rendered here - no reload for any of them. %>
+<%# Each column carries an `extra` flag: extra columns get the sla-detail-col-extra class and are %>
+<%# hidden until the table is expanded into the modal (see partials/_detail_table.css). %>
 <% detail_columns = [
-     ['ticket', l(:field_sla_detail_ticket), 'number'], ['project', l(:field_sla_detail_project), 'text'],
-     ['tracker', l(:field_sla_detail_tracker), 'text'], ['title', l(:field_sla_detail_title), 'text'],
-     ['status', l(:field_sla_detail_status), 'number'], ['assignee', l(:field_sla_detail_assignee), 'text'],
-     ['first_response', l(:field_sla_detail_first_response), 'number'], ['resolution', l(:field_sla_detail_resolution), 'number'],
-     ['result', l(:field_sla_detail_result), 'number'], ['deviation', l(:field_sla_detail_deviation), 'number']
+     ['ticket', l(:field_sla_detail_ticket), 'number', false], ['project', l(:field_sla_detail_project), 'text', true],
+     ['tracker', l(:field_sla_detail_tracker), 'text', true], ['title', l(:field_sla_detail_title), 'text', false],
+     ['status', l(:field_sla_detail_status), 'number', true], ['assignee', l(:field_sla_detail_assignee), 'text', false],
+     ['first_response', l(:field_sla_detail_first_response), 'number', true], ['resolution', l(:field_sla_detail_resolution), 'number', true],
+     ['result', l(:field_sla_detail_result), 'number', false], ['deviation', l(:field_sla_detail_deviation), 'number', false]
    ] %>
-<% detail_states = [['all', l(:label_sla_detail_state_all), @counts.total]] +
-     %w[met breached at_risk no_sla].map { |s| [s, sla_card_label(s.to_sym), @counts.public_send(s)] } %>
-<div id="sla-detail-table" data-sla-detail-table
-     class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-p-5 tw-shadow-sm">
-  <div class="tw-flex tw-items-center tw-justify-between tw-flex-wrap tw-gap-3 tw-mb-4">
-    <h3 class="tw-text-base tw-font-semibold tw-text-gray-900"><%= l(:label_sla_detail_table) %></h3>
+<%# Per-page options start at 10 (the compact/default page size) and fold in the admin-configured %>
+<%# Redmine options, so the modal's dropdown offers the same page sizes the rest of Redmine does. %>
+<% detail_per_page_options = ([10] + Setting.per_page_options_array).uniq %>
 
-    <div class="tw-flex tw-items-center tw-gap-3">
-      <%# Reconstructs every OTHER currently-active GET param as hidden fields (generic - never %>
-      <%# needs updating when a new filter param is added), so a search only ever narrows the %>
-      <%# existing view rather than resetting it. %>
-      <%= form_tag(sla_dashboard_base_path(@project), method: :get, class: 'tw-relative') do %>
-        <% request.query_parameters.except('q', 'page').each do |key, value| %>
-          <% Array(value).each { |v| hidden_field_tag(value.is_a?(Array) ? "#{key}[]" : key, v, id: nil) } %>
-        <% end %>
-        <svg class="tw-w-4 tw-h-4 tw-absolute tw-left-3 tw-top-1/2 -tw-translate-y-1/2 tw-text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
-        </svg>
-        <%= search_field_tag :q, @search_query, id: 'sla-detail-search', placeholder: l(:label_sla_detail_search_placeholder),
-              class: 'tw-bg-white tw-border tw-border-gray-300 tw-text-gray-900 tw-text-sm tw-rounded-lg ' \
-                     'focus:tw-ring-primary-500 focus:tw-border-primary-500 tw-pl-10 tw-pr-3 tw-py-2.5 tw-w-80' %>
-      <% end %>
-
-      <%# Client-side page size (sla_dashboard_detail_table.js) — a plain, non-typeable dropdown %>
-      <%# list; changing it re-paginates the already-rendered rows without a reload. %>
-      <div id="sla-detail-perpage" class="tw-flex tw-items-center tw-gap-2 tw-text-sm tw-text-gray-500">
-        <label for="sla-detail-per-page" class="tw-whitespace-nowrap"><%= l(:label_sla_detail_per_page) %></label>
-        <%= select_tag 'sla-detail-per-page',
-              options_for_select(Setting.per_page_options_array, Setting.per_page_options_array.first),
-              id: 'sla-detail-per-page', data: { 'sla-perpage': true },
-              class: 'tw-bg-white tw-border tw-border-gray-300 tw-text-gray-900 tw-text-sm tw-rounded-lg focus:tw-ring-primary-500 focus:tw-border-primary-500 tw-py-2 tw-pl-3 tw-pr-8' %>
+<%# tw-min-w-0: as a grid item this card defaults to min-width:auto and would otherwise refuse to %>
+<%# shrink below its table's content width, breaking the three-across track and pushing the page %>
+<%# into horizontal scroll. min-w-0 lets the compact table's flexible columns (title truncates, %>
+<%# assignee wraps) absorb the narrow one-third width instead. %>
+<div id="sla-detail-card" class="lg:tw-col-span-5 tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-p-5 tw-shadow-sm tw-flex tw-flex-col tw-min-w-0">
+  <div class="tw-flex tw-items-start tw-justify-between tw-gap-3 tw-mb-4">
+    <%# Heading + state pills sit together on one band (pills beside the heading), so the compact %>
+    <%# card can filter by state without the search/per-page chrome that only the modal shows. %>
+    <div class="tw-flex tw-items-center tw-gap-3 tw-flex-wrap">
+      <h3 class="tw-text-base tw-font-semibold tw-text-gray-900 tw-whitespace-nowrap"><%= l(:label_sla_detail_table) %></h3>
+      <div id="sla-detail-state-tabs" class="tw-flex tw-flex-wrap tw-gap-2">
+        <%= render 'sla_dashboard/state_tabs' %>
       </div>
     </div>
+
+    <%# Expand -> moves the table into the modal (sla_dashboard_detail_table.js). tw-shadow-none + %>
+    <%# explicit tw-bg-white rest state defeats Purplemine2's global blue button:hover/focus rule, %>
+    <%# same treatment as every other button in this plugin. %>
+    <button type="button" data-sla-detail-expand
+            title="<%= l(:label_sla_detail_expand_title) %>" aria-label="<%= l(:label_sla_detail_expand) %>"
+            class="tw-flex-shrink-0 tw-inline-flex tw-items-center tw-justify-center tw-w-10 tw-h-10 tw-bg-white tw-text-gray-500 tw-border tw-border-gray-300 tw-rounded-lg tw-shadow-none hover:tw-bg-gray-50 hover:tw-text-gray-700 focus:tw-outline-none focus:tw-ring-4 focus:tw-ring-primary-100">
+      <%# Feather "maximize-2" diagonal double-arrow — the same expand affordance the Time Analytics %>
+      <%# breakdown table uses. Drawn at 20px in a 40px button: at the previous 16px/32px it read as %>
+      <%# a faint hairline glyph next to the state pills and users missed it as the expand control. %>
+      <svg class="tw-w-5 tw-h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+        <polyline points="15 3 21 3 21 9"></polyline>
+        <polyline points="9 21 3 21 3 15"></polyline>
+        <line x1="21" y1="3" x2="14" y2="10"></line>
+        <line x1="3" y1="21" x2="10" y2="14"></line>
+      </svg>
+    </button>
   </div>
 
-  <div id="sla-detail-state-tabs" class="tw-flex tw-flex-wrap tw-gap-2 tw-mb-4">
-    <% detail_states.each do |state, label, count| %>
-      <%= link_to "#{label} (#{count})",
-            sla_detail_table_url(@filters, @project, state: state == 'all' ? nil : state, q: @search_query),
-            class: "tw-text-xs tw-font-medium tw-rounded-full tw-px-3 tw-py-1.5 tw-transition-colors #{
-              state == @state_filter ? 'tw-bg-primary-600 tw-text-white' : 'tw-bg-gray-100 tw-text-gray-600 hover:tw-bg-gray-200'}" %>
-    <% end %>
-  </div>
+  <%# Home slot the #sla-detail-table node is returned to when the modal closes. %>
+  <div id="sla-detail-table-home" class="tw-flex-1">
+    <div id="sla-detail-table" data-sla-detail-table
+         data-l-no-search-match="<%= l(:text_sla_detail_no_search_matches) %>">
+      <%# Search + per-page: hidden here (see _detail_table.css) and MOVED onto the modal's state-pill %>
+      <%# row when the table is expanded (sla_dashboard_detail_table.js parks this node in %>
+      <%# [data-sla-modal-controls-slot]), so the modal spends no band of its own on them. %>
+      <div data-sla-detail-controls class="tw-items-center tw-flex-wrap tw-gap-4">
+        <%# Client-side instant search (sla_dashboard_detail_table.js) - filters the already-rendered %>
+        <%# rows below on every keystroke via each row's data-sla-search attribute. %>
+        <div class="tw-relative">
+          <svg class="tw-w-4 tw-h-4 tw-absolute tw-left-3 tw-top-1/2 -tw-translate-y-1/2 tw-text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
+          </svg>
+          <%= search_field_tag :q, @search_query, id: 'sla-detail-search', placeholder: l(:label_sla_detail_search_placeholder), autocomplete: 'off',
+                class: 'tw-bg-white tw-border tw-border-gray-300 tw-text-gray-900 tw-text-sm tw-rounded-lg ' \
+                       'focus:tw-ring-primary-500 focus:tw-border-primary-500 tw-pl-10 tw-pr-3 tw-py-2.5 tw-w-80 tw-max-w-full' %>
+        </div>
 
-  <div class="tw-overflow-x-auto">
-    <table class="tw-min-w-full tw-text-sm tw-text-left">
-      <thead>
-        <tr class="tw-border-b tw-border-gray-200 tw-text-gray-500">
-          <% detail_columns.each do |key, label, type| %>
-            <%# Client-side sort trigger (no href). The grey up/down icon is managed by JS: neutral %>
-            <%# when inactive, a single arrow for the active column/direction. Never blue. %>
-            <th data-sla-sort="<%= key %>" data-sla-sort-type="<%= type %>"
-                class="tw-py-2 tw-pr-4 tw-font-medium tw-whitespace-nowrap tw-cursor-pointer tw-select-none">
-              <span class="tw-inline-flex tw-items-center tw-gap-1 tw-text-gray-500 hover:tw-text-gray-700">
-                <%= label %>
-                <span class="sla-sort-icon tw-inline-flex tw-text-gray-400" aria-hidden="true"></span>
-              </span>
-            </th>
-          <% end %>
-        </tr>
-      </thead>
-      <tbody id="sla-detail-table-body">
-        <% @detail_results.each do |sla_result| %>
-          <% issue = sla_result.issue %>
-          <tr data-sla-row class="tw-border-b tw-border-gray-100 hover:tw-bg-gray-50" id="sla-detail-row-<%= issue.id %>">
-            <td class="tw-py-2.5 tw-pr-4" data-sla-sort-value="<%= issue.id %>">
-              <%= link_to "##{issue.id}", issue_path(issue), target: '_blank', rel: 'noopener',
-                    class: 'tw-text-primary-600 tw-font-medium hover:tw-underline' %>
-            </td>
-            <td class="tw-py-2.5 tw-pr-4"><%= issue.project.name %></td>
-            <td class="tw-py-2.5 tw-pr-4"><%= issue.tracker.name %></td>
-            <td class="tw-py-2.5 tw-pr-4 tw-max-w-xs tw-truncate">
-              <%= link_to issue.subject, issue_path(issue), target: '_blank', rel: 'noopener',
-                    class: 'tw-text-gray-800 hover:tw-underline' %>
-            </td>
-            <td class="tw-py-2.5 tw-pr-4" data-sla-sort-value="<%= issue.status.position %>"><%= issue.status.name %></td>
-            <td class="tw-py-2.5 tw-pr-4"><%= issue.assigned_to&.name %></td>
-            <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap" data-sla-sort-value="<%= sla_result.response_seconds %>"><%= format_sla_duration(sla_result.response_seconds) %></td>
-            <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap" data-sla-sort-value="<%= sla_result.resolution_seconds %>"><%= format_sla_duration(sla_result.resolution_seconds) %></td>
-            <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap" data-sla-sort-value="<%= sla_result_sort_rank(sla_result) %>">
-              <% effective_state = sla_result.effective_primary_state %>
-              <span class="tw-inline-block tw-rounded-full tw-px-2 tw-py-0.5 tw-text-xs tw-font-medium <%= sla_card_color_classes(effective_state.to_sym) %>">
-                <%= sla_card_label(effective_state.to_sym) %>
-              </span>
-              <% if sla_result.effective_at_risk? %>
-                <span class="tw-inline-block tw-rounded-full tw-px-2 tw-py-0.5 tw-text-xs tw-font-medium <%= sla_card_color_classes(:at_risk) %>">
-                  <%= l(:label_sla_card_at_risk) %>
-                </span>
+        <%# Client-side page size — a Flowbite Dropdown over a hidden real <select data-sla-perpage> %>
+        <%# (the one source of truth sla_dashboard_detail_table.js reads via its `change` event). %>
+        <%# A native <select>'s open list is OS-drawn chrome no CSS can reach, hence the custom menu. %>
+        <%# The explicit tw-bg-white/tw-shadow-none rest states defeat Purplemine2's blue button rule. %>
+        <div id="sla-detail-perpage" class="tw-flex tw-items-center tw-gap-2 tw-text-sm tw-text-gray-500">
+          <label for="sla-detail-perpage-trigger" class="tw-whitespace-nowrap"><%= l(:label_sla_detail_per_page) %></label>
+          <button type="button" id="sla-detail-perpage-trigger" data-dropdown-toggle="sla-detail-perpage-menu"
+                  class="tw-inline-flex tw-items-center tw-gap-1.5 tw-bg-white tw-text-gray-900 tw-border tw-border-gray-300 tw-text-sm tw-rounded-lg tw-py-2 tw-pl-3 tw-pr-2.5 tw-shadow-none hover:tw-bg-gray-50 focus:tw-outline-none focus:tw-ring-4 focus:tw-ring-primary-100">
+            <span data-sla-perpage-label><%= detail_per_page_options.first %></span>
+            <svg class="tw-w-3 tw-h-3 tw-text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          <div id="sla-detail-perpage-menu" class="hidden tw-z-10 tw-bg-white tw-border tw-border-gray-200 tw-divide-y tw-divide-gray-100 tw-rounded-lg tw-shadow-lg tw-w-20">
+            <ul class="tw-list-none tw-m-0 tw-py-1 tw-pl-0 tw-text-sm tw-text-gray-700">
+              <% detail_per_page_options.each do |n| %>
+                <li>
+                  <button type="button" data-sla-perpage-option="<%= n %>"
+                          class="tw-block tw-w-full tw-text-left tw-bg-white tw-text-gray-700 tw-border-0 tw-shadow-none tw-px-4 tw-py-2 hover:tw-bg-gray-50 hover:tw-text-gray-900 focus:tw-outline-none"><%= n %></button>
+                </li>
               <% end %>
-            </td>
-            <%# Gated on the raw column, not effective_primary_state: a live-reclassified breach %>
-            <%# (stale persisted "met" + a passed breach_at) correctly shows the Breached badge %>
-            <%# above but has no computed deviation yet - the engine hasn't run for it since it %>
-            <%# breached, and this dashboard never computes SLA state live (Global Rule 4). %>
-            <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap <%= 'tw-text-red-600 tw-font-medium' if sla_result.deviation_seconds.present? %>"
-                data-sla-sort-value="<%= sla_result.deviation_seconds %>">
-              <%= sla_result.deviation_seconds.present? ? "+#{format_sla_duration(sla_result.deviation_seconds)}" : '—' %>
-            </td>
-          </tr>
-        <% end %>
-        <% if @detail_results.empty? %>
-          <tr data-sla-empty-row>
-            <td colspan="<%= detail_columns.size %>" class="tw-py-8 tw-text-center tw-text-gray-400">
-              <%= l(:text_sla_detail_table_empty_state) %>
-            </td>
-          </tr>
-        <% end %>
-      </tbody>
-    </table>
-  </div>
+            </ul>
+          </div>
+          <%= select_tag 'sla-detail-per-page',
+                options_for_select(detail_per_page_options, detail_per_page_options.first),
+                id: 'sla-detail-per-page', data: { 'sla-perpage': true }, class: 'tw-hidden' %>
+        </div>
+      </div>
 
-  <%# Client-side pagination (Showing a–b of N + page controls), rendered by JS from the rows above. %>
-  <div id="sla-detail-pagination"
-       data-l-showing="<%= l(:label_sla_detail_showing) %>" data-l-of="<%= l(:label_sla_detail_of) %>"
-       data-l-prev="<%= l(:label_previous) %>" data-l-next="<%= l(:label_next) %>"
-       class="tw-mt-4 tw-flex tw-items-center tw-justify-between tw-flex-wrap tw-gap-3 tw-text-sm tw-text-gray-500"></div>
+      <%# No inline horizontal scroll in the compact card (CLAUDE.md/user): extra columns are simply %>
+      <%# hidden there. Only the expanded modal table may scroll sideways - see _detail_table.css. %>
+      <div data-sla-detail-tablewrap>
+        <table class="tw-min-w-full tw-text-sm tw-text-left">
+          <thead>
+            <tr class="tw-border-b tw-border-gray-200 tw-text-gray-500">
+              <% detail_columns.each do |key, label, type, extra| %>
+                <%# Client-side sort trigger (no href). The grey up/down icon is managed by JS: neutral %>
+                <%# when inactive, a single arrow for the active column/direction. Never blue. %>
+                <th data-sla-sort="<%= key %>" data-sla-sort-type="<%= type %>"
+                    class="tw-py-2 tw-pr-4 tw-font-medium tw-whitespace-nowrap tw-cursor-pointer tw-select-none<%= ' sla-detail-col-extra' if extra %>">
+                  <span class="tw-inline-flex tw-items-center tw-gap-1 tw-text-gray-500 hover:tw-text-gray-700">
+                    <%= label %>
+                    <span class="sla-sort-icon tw-inline-flex tw-text-gray-400" aria-hidden="true"></span>
+                  </span>
+                </th>
+              <% end %>
+            </tr>
+          </thead>
+          <tbody id="sla-detail-table-body">
+            <% @detail_results.each do |sla_result| %>
+              <% issue = sla_result.issue %>
+              <% effective_state = sla_result.effective_primary_state %>
+              <% result_label = sla_card_label(effective_state.to_sym) %>
+              <% result_label = "#{result_label} #{l(:label_sla_card_at_risk)}" if sla_result.effective_at_risk? %>
+              <%# Searchable text for the client-side instant search above - every field a user would %>
+              <%# reasonably expect to search by, not just subject/id. %>
+              <% search_terms = [issue.id, issue.project.name, issue.tracker.name, issue.subject,
+                                 issue.status.name, issue.assigned_to&.name, result_label].join(' ') %>
+              <tr data-sla-row data-sla-search="<%= search_terms %>"
+                  class="tw-border-b tw-border-gray-100 hover:tw-bg-gray-50" id="sla-detail-row-<%= issue.id %>">
+                <td class="tw-py-2.5 tw-pr-4" data-sla-sort-value="<%= issue.id %>">
+                  <%= link_to "##{issue.id}", issue_path(issue), target: '_blank', rel: 'noopener',
+                        class: 'tw-text-primary-600 tw-font-medium hover:tw-underline' %>
+                </td>
+                <td class="tw-py-2.5 tw-pr-4 sla-detail-col-extra"><%= issue.project.name %></td>
+                <td class="tw-py-2.5 tw-pr-4 sla-detail-col-extra"><%= issue.tracker.name %></td>
+                <td class="tw-py-2.5 tw-pr-4 tw-truncate sla-detail-title">
+                  <%= link_to issue.subject, issue_path(issue), target: '_blank', rel: 'noopener',
+                        class: 'tw-text-gray-800 hover:tw-underline' %>
+                </td>
+                <td class="tw-py-2.5 tw-pr-4 sla-detail-col-extra" data-sla-sort-value="<%= issue.status.position %>"><%= issue.status.name %></td>
+                <td class="tw-py-2.5 tw-pr-4"><%= issue.assigned_to&.name %></td>
+                <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap sla-detail-col-extra" data-sla-sort-value="<%= sla_result.response_seconds %>"><%= format_sla_duration(sla_result.response_seconds) %></td>
+                <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap sla-detail-col-extra" data-sla-sort-value="<%= sla_result.resolution_seconds %>"><%= format_sla_duration(sla_result.resolution_seconds) %></td>
+                <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap" data-sla-sort-value="<%= sla_result_sort_rank(sla_result) %>">
+                  <span class="tw-inline-block tw-rounded-full tw-px-2 tw-py-0.5 tw-text-xs tw-font-medium <%= sla_card_color_classes(effective_state.to_sym) %>">
+                    <%= sla_card_label(effective_state.to_sym) %>
+                  </span>
+                  <% if sla_result.effective_at_risk? %>
+                    <span class="tw-inline-block tw-rounded-full tw-px-2 tw-py-0.5 tw-text-xs tw-font-medium <%= sla_card_color_classes(:at_risk) %>">
+                      <%= l(:label_sla_card_at_risk) %>
+                    </span>
+                  <% end %>
+                </td>
+                <%# Gated on the raw column, not effective_primary_state: a live-reclassified breach %>
+                <%# (stale persisted "met" + a passed breach_at) correctly shows the Breached badge %>
+                <%# above but has no computed deviation yet - the engine hasn't run for it since it %>
+                <%# breached, and this dashboard never computes SLA state live (Global Rule 4). %>
+                <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap <%= 'tw-text-red-600 tw-font-medium' if sla_result.deviation_seconds.present? %>"
+                    data-sla-sort-value="<%= sla_result.deviation_seconds %>">
+                  <%= sla_result.deviation_seconds.present? ? "+#{format_sla_duration(sla_result.deviation_seconds)}" : '—' %>
+                </td>
+              </tr>
+            <% end %>
+            <% if @detail_results.empty? %>
+              <tr data-sla-empty-row>
+                <td colspan="<%= detail_columns.size %>" class="tw-py-8 tw-text-center tw-text-gray-400">
+                  <%= l(:text_sla_detail_table_empty_state) %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+
+      <%# Client-side pagination (Showing a–b of N + page controls), rendered by JS from the rows above. %>
+      <div id="sla-detail-pagination"
+           data-l-showing="<%= l(:label_sla_detail_showing) %>" data-l-of="<%= l(:label_sla_detail_of) %>"
+           data-l-prev="<%= l(:label_previous) %>" data-l-next="<%= l(:label_next) %>"
+           class="tw-mt-4 tw-flex tw-items-center tw-justify-between tw-flex-wrap tw-gap-3 tw-text-sm tw-text-gray-500"></div>
+    </div>
+  </div>
+</div>
+
+<%# Expand modal — the #sla-detail-table node is moved into #sla-detail-modal-body on expand and %>
+<%# returned to #sla-detail-table-home on close (sla_dashboard_detail_table.js). Starts hidden. %>
+<%# Near-full-screen modal (max-w-[92vw]/h-[88vh]) so the full-column table has real room, matching %>
+<%# the reference. Its own state pills sit under the title bar (data-sla-modal-tabs): filtering %>
+<%# from inside the modal is the same server scope change the compact card's pills make, and %>
+<%# sla_dashboard_detail_table.js flags the modal to re-open after that reload so it feels seamless. %>
+<div id="sla-detail-modal" class="hidden tw-fixed tw-inset-0 tw-z-50 tw-flex tw-items-center tw-justify-center tw-p-4" role="dialog" aria-modal="true" aria-labelledby="sla-detail-modal-title">
+  <div class="tw-absolute tw-inset-0 tw-bg-gray-900/50" data-sla-detail-close></div>
+  <div class="tw-relative tw-bg-white tw-rounded-xl tw-shadow-xl tw-w-full tw-max-w-[92vw] tw-h-[88vh] tw-flex tw-flex-col">
+    <div class="tw-flex tw-items-center tw-justify-between tw-gap-3 tw-px-5 tw-py-4 tw-border-b tw-border-gray-200">
+      <h3 id="sla-detail-modal-title" class="tw-text-base tw-font-semibold tw-text-gray-900"><%= l(:label_sla_detail_table) %></h3>
+      <%# Clearly-visible close: a solid grey circle button with a bold X, not a faint thin glyph. %>
+      <button type="button" data-sla-detail-close aria-label="<%= l(:button_close) %>"
+              class="tw-inline-flex tw-items-center tw-justify-center tw-w-9 tw-h-9 tw-bg-gray-100 tw-text-gray-600 tw-border-0 tw-rounded-full tw-shadow-none hover:tw-bg-gray-200 hover:tw-text-gray-900 focus:tw-outline-none focus:tw-ring-4 focus:tw-ring-primary-100">
+        <svg class="tw-w-6 tw-h-6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+    <%# One header band: state pills on the left, and the search box + per-page dropdown parked on %>
+    <%# the right by sla_dashboard_detail_table.js on expand (they render inside #sla-detail-table %>
+    <%# and are moved here, so there is only ever one of each in the DOM). The pills keep their own %>
+    <%# wrapper so the reopen-flag click binding can target pill links only, never a control. %>
+    <div data-sla-modal-tabs class="tw-flex tw-items-center tw-justify-between tw-flex-wrap tw-gap-3 tw-px-5 tw-py-3 tw-border-b tw-border-gray-200">
+      <div data-sla-modal-pills class="tw-flex tw-flex-wrap tw-gap-2">
+        <%= render 'sla_dashboard/state_tabs' %>
+      </div>
+      <div data-sla-modal-controls-slot class="tw-flex tw-items-center tw-flex-wrap tw-gap-4"></div>
+    </div>
+    <div id="sla-detail-modal-body" class="tw-p-5 tw-overflow-y-auto tw-flex-1"></div>
+  </div>
 </div>

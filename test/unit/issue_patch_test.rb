@@ -17,6 +17,10 @@ class IssuePatchTest < ActiveSupport::TestCase
   setup do
     User.current = User.find(2)
     @base = Time.zone.local(2026, 6, 1, 9, 0, 0)
+    # after_commit fires in this transactional env and the test queue adapter is :inline, so an
+    # unstubbed enqueue would run the notification job for real on every `make_issue` below. The
+    # enqueue tests re-stub with an expectation; the rest just need it inert.
+    SlaGoogleChatNotificationJob.stubs(:perform_later)
   end
 
   def configure_sla(project)
@@ -76,5 +80,57 @@ class IssuePatchTest < ActiveSupport::TestCase
 
     Sla::ResultStore.stubs(:recalculate).raises('boom')
     assert_nothing_raised { issue.send(:sla_recalculate_result) }
+  end
+
+  # --- Step 7.1: Google Chat notification ---------------------------------------------------
+  #
+  # These assert the ENQUEUE only — whether a message is actually posted (SLA tracker vs not,
+  # webhook resolution, dedup, failure handling) is the job's own contract and is covered in
+  # sla_google_chat_notification_job_test.rb.
+  #
+  # Asserted with mocha rather than assert_enqueued_with because Redmine's test env pins
+  # `queue_adapter = :inline` (config/environments/test.rb), so a real perform_later would run the
+  # job — and its HTTP client — inline.
+
+  test "the after_commit Google Chat callback is registered on Issue" do
+    assert_includes Issue._commit_callbacks.map(&:filter), :sla_notify_google_chat
+  end
+
+  test "creating an issue enqueues the notification job when the module is enabled" do
+    project = Project.find(1)
+    project.enable_module!(:sla_compliance)
+
+    SlaGoogleChatNotificationJob.expects(:perform_later).with(instance_of(Integer)).once
+    make_issue(project)
+  end
+
+  # `on: :create` asserted behaviourally rather than by inspecting the callback's :if lambda,
+  # which Rails builds internally and gives no stable text to match on.
+  test "updating an existing issue does not enqueue a notification job" do
+    project = Project.find(1)
+    project.enable_module!(:sla_compliance)
+    issue = make_issue(project)
+
+    SlaGoogleChatNotificationJob.expects(:perform_later).never
+    issue.subject = 'edited after creation'
+    issue.save!(validate: false)
+  end
+
+  test "no notification job is enqueued when the project does not have the SLA module enabled" do
+    project = Project.find(2)
+    project.disable_module!(:sla_compliance) if project.module_enabled?(:sla_compliance)
+    issue = make_issue(project)
+
+    SlaGoogleChatNotificationJob.expects(:perform_later).never
+    issue.send(:sla_notify_google_chat)
+  end
+
+  test "an enqueue failure never propagates out of the callback" do
+    project = Project.find(1)
+    project.enable_module!(:sla_compliance)
+    issue = make_issue(project)
+
+    SlaGoogleChatNotificationJob.stubs(:perform_later).raises('queue down')
+    assert_nothing_raised { issue.send(:sla_notify_google_chat) }
   end
 end

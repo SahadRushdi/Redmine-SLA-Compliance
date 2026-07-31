@@ -38,14 +38,18 @@ module Sla
     #   #any_target?, nil] the SlaDefinition for this tracker×priority (nil ⇒ not tracked).
     # @param tracker_configured [Boolean] whether the tracker is under SLA at all.
     # @param status_roles [Hash] {created:, work_started:, resolved:, pause:} => [status_id, ...].
+    # @param current_status_id [Integer, nil] the issue's status RIGHT NOW — see #closed_at rung 2.
+    # @param fallback_resolved_at [Time, nil] the issue's own `closed_on` — see #closed_at rungs 2/3.
     def initialize(timeline:, policy:, definition:, tracker_configured:, status_roles:,
-                   now: Time.current)
-      @timeline           = timeline
-      @policy             = policy
-      @definition         = definition
-      @tracker_configured = tracker_configured
-      @roles              = status_roles || {}
-      @now                = now
+                   current_status_id: nil, fallback_resolved_at: nil, now: Time.current)
+      @timeline             = timeline
+      @policy               = policy
+      @definition           = definition
+      @tracker_configured   = tracker_configured
+      @roles                = status_roles || {}
+      @current_status_id    = current_status_id
+      @fallback_resolved_at = fallback_resolved_at
+      @now                  = now
     end
 
     def classify
@@ -73,8 +77,14 @@ module Sla
 
     private
 
+    # `resolved_at` is set here too, even though a No-SLA ticket has nothing to measure: the
+    # dashboard's definition of an OPEN ticket is `sla_results.resolved_at IS NULL`, and the No SLA
+    # card counts open tickets. Leaving it nil would park every No-SLA ticket ever created in the
+    # open population for life. `cycle_started_at` stays nil — No SLA never reaches the at-risk
+    # path that consumes it (see the Result comment above).
     def no_sla(reason)
-      Result.new(primary_state: 'no_sla', no_sla_reason: reason, at_risk: false)
+      Result.new(primary_state: 'no_sla', no_sla_reason: reason, at_risk: false,
+                 resolved_at: closed_at)
     end
 
     def evaluated_milestones
@@ -131,10 +141,33 @@ module Sla
       first_transition_into(role(:resolved))
     end
 
+    # When this ticket stopped being OPEN. "Open" means not resolved — the plugin's own configured
+    # `resolved`-role statuses, the same milestone that stops the SLA clock, not Redmine's
+    # is_closed flag (a "Resolved" status is commonly not is_closed).
+    #
+    # A journal transition is the accurate answer but is not always available, so this walks an
+    # explicit ladder:
+    #   1. the first transition into a `resolved`-role status after the clock started — the normal
+    #      case, and the only one that gives a true resolution instant;
+    #   2. otherwise, if the ticket is SITTING in a resolved-role status right now with no such
+    #      transition recorded (created directly in it, imported, or resolved before the status was
+    #      mapped to the role), fall back to Redmine's own `closed_on`, and failing that to the last
+    #      recorded activity — a stable timestamp, unlike `now`, which would drift on every sweep;
+    #   3. otherwise, when NO resolved-role statuses are configured at all (no policy — the
+    #      `not_configured` case), fall back to Redmine's `closed_on` alone, so those tickets can
+    #      still leave the open population.
     def closed_at
       return @closed_at if defined?(@closed_at)
 
-      @closed_at = first_transition_into(role(:resolved))
+      resolved_ids = role(:resolved)
+      @closed_at =
+        if resolved_ids.empty?
+          @fallback_resolved_at
+        elsif (transition = first_transition_into(resolved_ids))
+          transition
+        elsif resolved_ids.include?(@current_status_id)
+          @fallback_resolved_at || @timeline.last_event_at || @now
+        end
     end
 
     def open?

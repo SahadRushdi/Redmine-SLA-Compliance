@@ -1,33 +1,45 @@
 <%# SLA Policy tab shell. Rendered inline by ProjectsController#settings; the tab %>
 <%# itself is injected by RedmineSlaCompliance::Patches::ProjectsHelperPatch. Each section is %>
 <%# gated by its own permission. All markup lives inside .sla-plugin (scoped Tailwind). %>
+<%# %>
+<%# Layout: a sidebar of sections beside a column of panels, instead of one long scrolling page. %>
+<%# Which sections exist, and which one opens, is decided by SlaPoliciesHelper (permission- and %>
+<%# inheritance-aware) so the nav and the panels can never disagree. %>
+<%# %>
+<%# The panel column holds two independently-replaceable regions: #sla-policy-tab-body (the %>
+<%# policy sections, swapped by the clone/Override AJAX) and the Notifications panel, which sits %>
+<%# OUTSIDE it so a clone load cannot discard unsaved notification input. %>
 <%= render 'sla_compliance/assets' %>
 <% content_for :header_tags do %>
   <%= javascript_include_tag 'sla_policy_form.js', plugin: 'redmine_sla_compliance' %>
 <% end %>
 
+<% inherited_source = sla_inherited_policy_source(@project) %>
+<% sections = sla_visible_sections(@project) %>
+<% current = sla_current_section(sections) %>
+
 <div class="sla-plugin">
-  <% if User.current.allowed_to?(:edit_sla_policy, @project) %>
-    <div id="sla-policy-form-container">
-      <%# B3: an inherited (not-own) policy renders as a read-only banner, never a blank %>
-      <%# editable form — saving a blank form used to silently create an empty override that %>
-      <%# disabled SLA for this project. `clone_from` present means Override was just clicked %>
-      <%# (mid AJAX re-render into the real edit form), so it takes precedence. %>
-      <% source_project, source_policy = SlaPolicy.source_for(@project) %>
-      <% if source_project.present? && source_project != @project && params[:clone_from].blank? %>
-        <%= render 'sla_policies/inherited_banner',
-                   project: @project, source_project: source_project, source_policy: source_policy %>
-      <% else %>
-        <% if source_project.nil? && params[:clone_from].blank? %>
-          <p class="tw-text-sm tw-text-gray-500 tw-mb-4"><%= l(:text_sla_no_policy_anywhere_hint) %></p>
+  <div class="tw-mb-6">
+    <h2 class="tw-m-0 tw-text-xl tw-font-semibold tw-text-gray-900"><%= l(:label_sla_policy_settings) %></h2>
+    <p class="tw-mt-1 tw-mb-0 tw-text-sm tw-text-gray-500"><%= l(:text_sla_policy_settings_intro) %></p>
+  </div>
+
+  <div id="sla-policy-settings" class="tw-flex tw-flex-col lg:tw-flex-row tw-gap-6 tw-items-start">
+    <%= render 'sla_policies/nav_slot', project: @project, sections: sections, current: current %>
+
+    <div class="tw-flex-1 tw-min-w-0 tw-w-full">
+      <div id="sla-policy-tab-body">
+        <%= render 'sla_policies/policy_body',
+                   project: @project, policy: sla_policy_for_form(@project),
+                   current: current, inherited_source: inherited_source %>
+      </div>
+
+      <% if User.current.allowed_to?(:manage_sla_notifications, @project) %>
+        <%= render layout: 'sla_policies/panel',
+                   locals: { key: 'notifications', current: current } do %>
+          <%= render 'sla_notification_settings/form', project: @project %>
         <% end %>
-        <%= render 'sla_policies/form',
-                   project: @project, policy: sla_policy_for_form(@project) %>
       <% end %>
     </div>
-  <% end %>
-
-  <% if User.current.allowed_to?(:manage_sla_notifications, @project) %>
-    <%= render 'sla_notification_settings/form', project: @project %>
-  <% end %>
+  </div>
 </div>

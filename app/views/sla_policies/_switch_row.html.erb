@@ -1,0 +1,18 @@
+<%# A labelled setting row with its on/off switch pushed to the right edge of the card body. %>
+<%# Locals: name (input name), checked (boolean), title; description and reveals optional. %>
+<%# %>
+<%# `reveals` names a block of detail fields that only make sense while the switch is on: it is %>
+<%# stamped on the checkbox as data-sla-reveals and matched against a [data-sla-reveal="<key>"] %>
+<%# element by sla_policy_form.js, which toggles that block's visibility. Omit it for a switch %>
+<%# that has no dependent fields. %>
+<div class="tw-flex tw-items-center tw-justify-between tw-gap-4">
+  <div class="tw-min-w-0">
+    <%# tw-m-0 / tw-mb-0 — see the note in _card.html.erb (Preflight off, theme p margins apply). %>
+    <p class="tw-m-0 tw-text-sm tw-font-medium tw-text-gray-900"><%= title %></p>
+    <% if local_assigns[:description].present? %>
+      <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500"><%= description %></p>
+    <% end %>
+  </div>
+  <%= render 'sla_compliance/toggle', name: name, checked: checked,
+             reveals: local_assigns[:reveals] %>
+</div>

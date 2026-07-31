@@ -1,0 +1,9 @@
+<%# Stable wrapper around the sidebar so the AJAX re-render has something to replace even when %>
+<%# there is currently no nav to show (inherited policy + no notifications permission). Hidden %>
+<%# rather than absent when empty, so it contributes no flex gap beside a full-width banner. %>
+<%# Locals: project, sections, current. %>
+<div id="sla-policy-nav-slot" class="<%= 'hidden' if sections.empty? %>">
+  <% if sections.any? %>
+    <%= render 'sla_policies/nav', project: project, sections: sections, current: current %>
+  <% end %>
+</div>

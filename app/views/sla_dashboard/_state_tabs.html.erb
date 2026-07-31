@@ -1,0 +1,15 @@
+<%# Shared SLA state filter pills (All / SLA Met / SLA Breached / At Risk / No SLA) for the %>
+<%# ticket-level detail. Rendered BOTH beside the compact card heading and inside the expand modal %>
+<%# so both filter the exact same server scope identically. Each pill is a plain GET link that %>
+<%# carries the active project/tracker/priority/date filters forward (a server-side scope change, %>
+<%# not client-side) - the counts come from @counts, the single source every dashboard part reads. %>
+<%# When these are the modal's copy, sla_dashboard_detail_table.js flags the modal to re-open after %>
+<%# the reload so filtering from inside the modal feels seamless. %>
+<% detail_states = [['all', l(:label_sla_detail_state_all), @counts.total]] +
+     %w[met breached at_risk no_sla].map { |s| [s, sla_card_label(s.to_sym), @counts.public_send(s)] } %>
+<% detail_states.each do |state, label, count| %>
+  <%= link_to "#{label} (#{count})",
+        sla_detail_table_url(@filters, @project, state: state == 'all' ? nil : state, q: @search_query),
+        class: "tw-text-xs tw-font-medium tw-rounded-full tw-px-3 tw-py-1.5 tw-transition-colors #{
+          state == @state_filter ? 'tw-bg-primary-600 tw-text-white' : 'tw-bg-gray-100 tw-text-gray-600 hover:tw-bg-gray-200'}" %>
+<% end %>

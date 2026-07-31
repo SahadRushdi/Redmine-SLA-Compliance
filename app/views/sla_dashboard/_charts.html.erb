@@ -1,14 +1,20 @@
-<%# Step 6.3 — charts. The donut and priority bar both encode the same met/breached/at_risk/ %>
-<%# no_sla state dimension and use the exact same color mapping (Global Rule 9) - the donut's %>
-<%# side legend (met/breached/no_sla with counts+percentages, at-risk as a distinct subset row) %>
-<%# is the primary, numbers-bearing legend; the priority chart's own small legend below it %>
-<%# repeats only the dot+label key (no numbers) so the same counts never have to stay in sync in %>
-<%# two places. Both charts disable Chart.js's own native legend (see sla_dashboard_charts.js). %>
-<div class="tw-grid tw-grid-cols-1 lg:tw-grid-cols-2 tw-gap-6 tw-mb-6">
-  <div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-shadow-sm tw-p-5">
+<%# Step 6.3/6.4 — top analytics row. Priority bar, compliance donut and the ticket-level detail %>
+<%# table share ONE horizontal band, matching the reference design. It is a 12-column grid rather %>
+<%# than three equal thirds so the compact compliance donut only takes the width it needs (3/12) %>
+<%# and the detail table gets the freed space (5/12) - priority keeps 4/12. The donut/priority bar %>
+<%# both encode the same met/breached/at_risk/no_sla state dimension with the identical color %>
+<%# mapping (Global Rule 9); the donut's legend sits BELOW its chart so the card survives its %>
+<%# narrow column. Default grid `items-stretch` (no items-start) makes all three cards share ONE %>
+<%# height rather than each taking its own - the detail table now defaults to 6 rows per page so it %>
+<%# no longer towers over the others, and the priority card grows its chart to fill the same %>
+<%# height. The detail card carries its own lg:tw-col-span-5. %>
+<div class="tw-grid tw-grid-cols-1 lg:tw-grid-cols-12 tw-gap-6 tw-mb-6">
+  <div class="lg:tw-col-span-4 tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-shadow-sm tw-p-5">
     <%= render 'sla_dashboard/priority_chart' %>
   </div>
-  <div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-shadow-sm tw-p-5">
+  <div class="lg:tw-col-span-3 tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-shadow-sm tw-p-5">
     <%= render 'sla_dashboard/donut_chart' %>
   </div>
+  <%# Renders its own lg:tw-col-span-5 card plus the expand-to-modal shell. %>
+  <%= render 'sla_dashboard/detail_table' %>
 </div>

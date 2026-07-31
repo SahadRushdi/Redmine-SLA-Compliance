@@ -74,6 +74,7 @@ end
 Rails.application.config.after_initialize do
   require_dependency File.expand_path('lib/redmine_sla_compliance/patches/issue_patch', __dir__)
   require_dependency File.expand_path('lib/redmine_sla_compliance/patches/projects_helper_patch', __dir__)
+  require_dependency File.expand_path('lib/redmine_sla_compliance/patches/projects_controller_patch', __dir__)
   require_dependency File.expand_path('lib/redmine_sla_compliance/patches/user_patch', __dir__)
   require File.expand_path('lib/redmine_sla_compliance/sweep_scheduler', __dir__)
 
@@ -94,6 +95,13 @@ Rails.application.config.after_initialize do
   unless ProjectsHelper.include?(RedmineSlaCompliance::Patches::ProjectsHelperPatch)
     ProjectsHelper.prepend(RedmineSlaCompliance::Patches::ProjectsHelperPatch)
   end
+  # Step 6A.4 — a new subproject of an SLA-enabled project arrives with the module already
+  # ticked, since the policy it inherits is useless while the module is off. Prepended so the
+  # patch runs AFTER core's #new has built @project (it calls super first).
+  unless ProjectsController.include?(RedmineSlaCompliance::Patches::ProjectsControllerPatch)
+    ProjectsController.prepend(RedmineSlaCompliance::Patches::ProjectsControllerPatch)
+  end
+
   # The tab partial renders inside ProjectsController#settings, whose views don't include
   # plugin helpers by default — make the form helpers available there.
   ProjectsController.helper(:sla_policies)

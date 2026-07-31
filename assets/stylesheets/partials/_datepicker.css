@@ -1,0 +1,265 @@
+/*
+ * Custom date-range picker (Flowbite's own bundled Datepicker, `window.Datepicker` inside
+ * flowbite.min.js — no separate `flowbite-datepicker` npm package or its CSS file anymore).
+ *
+ * This file is now fully self-contained: it supplies BOTH structure (grid layout, cell sizing,
+ * absolute positioning) AND color/visual treatment, rather than layering visual overrides on top
+ * of a vendored base stylesheet. Two reasons that changed:
+ *
+ *   1. Flowbite 4's popup template ships its own Tailwind utility classes baked in
+ *      (`grid grid-cols-7`, `rounded-base`, `bg-brand`, ...) for BOTH structure and color, using
+ *      its new "Phoenix" design-token classes. Those are unprefixed and reference CSS custom
+ *      properties this build never defines (we don't vendor flowbite.css/flowbite.min.css, only
+ *      flowbite.min.js), so none of it does anything here regardless of version.
+ *   2. The old `flowbite-datepicker` npm package (a separate, Bulma-styled base stylesheet) is no
+ *      longer imported, so its structural CSS (`.datepicker-grid`, cell sizing, `.datepicker`
+ *      positioning) is gone too — this file now provides all of that itself.
+ *
+ * The class names below are extracted directly from this plugin's own vendored
+ * `assets/javascripts/flowbite.min.js` (Flowbite 4.0.2) — not guessed, not carried over from the
+ * old Bulma version. In particular:
+ *   - The outer popup element is `.datepicker` (not `.datepicker-dropdown`, which no longer
+ *     exists in Flowbite 4's markup) — `place()` in flowbite.min.js positions it by setting inline
+ *     `style.left`/`style.top` relative to its offsetParent, so it needs `position: absolute`
+ *     here; nothing in the JS ever sets `position` itself.
+ *   - Every day cell always gets the base class `datepicker-cell`, then conditionally
+ *     `prev`/`next`/`today`/`disabled`/`highlighted`/`range`/`range-start`/`range-end`/`selected`/
+ *     `focused` — there is no `.day` class in this version (the old Bulma build had one; some
+ *     other Redmine plugins' still-on-2.x vendored copies may still reference it, this one no
+ *     longer needs to).
+ *   - `prevArrow`/`nextArrow` default to inline SVG icons with no explicit width/height attribute,
+ *     so they need explicit CSS sizing or they render at the browser's native SVG fallback size.
+ *
+ * Colors below are matched 1:1 to the Time Analytics plugin's "My Time" page custom range picker
+ * (`redmine_time_analytics/assets/stylesheets/time_analytics.css`, its `.datepicker-*` block) so
+ * both plugins' pickers read as the same component. No `!important` is needed here (unlike that
+ * plugin's `body`-scoped, `!important`-heavy version) because postcss-prefix-selector scopes every
+ * rule below under `.sla-plugin`, and there is no competing vendor stylesheet loaded anymore to
+ * out-rank.
+ */
+
+.datepicker {
+  position: absolute;
+  z-index: 11000;
+}
+
+.datepicker-picker {
+  display: inline-block;
+  border: 1px solid #d1d5db; /* gray-300 */
+  border-radius: 0.75rem;
+  background-color: #ffffff;
+  padding: 1rem;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.12);
+  max-width: min(20rem, calc(100vw - 1rem));
+  z-index: 11001;
+}
+
+.datepicker-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+/* Purplemine2's global `button { box-shadow: 0 1px 0 #004dc2 }` (same rule that put a blue line
+   under the Date Range pills — see _filter_bar.html.erb) reaches every button in this popup too,
+   since none of the classes below set box-shadow on their own. Neutralise it once, here. */
+.datepicker button {
+  box-shadow: none;
+}
+
+.prev-btn,
+.next-btn,
+.view-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.25rem;
+  border: 1px solid #d1d5db; /* gray-300 */
+  border-radius: 0.5rem;
+  background-color: #ffffff;
+  color: #1f2937; /* gray-800 */
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.prev-btn,
+.next-btn {
+  width: 2.25rem;
+  padding: 0;
+}
+
+.prev-btn svg,
+.next-btn svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.view-switch {
+  padding: 0.625rem 1.25rem;
+}
+
+.prev-btn:hover,
+.next-btn:hover,
+.view-switch:hover,
+.prev-btn:focus,
+.next-btn:focus,
+.view-switch:focus {
+  outline: none;
+  background-color: #f9fafb; /* gray-50 */
+  border-color: #cbd5e1;
+  color: #111827; /* gray-900 */
+  box-shadow: none; /* neutral, deliberately not blue: this is chrome, not the primary action */
+}
+
+.prev-btn:disabled,
+.next-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.datepicker-main {
+  padding: 0.25rem;
+}
+
+/* .datepicker-view (flex, from flowbite.min.js's View base class) wraps the days-of-week header
+   and the day grid; both are 7-column grids so weekday letters line up with the dates below.
+   Fixed width (matching flowbite.min.js's own template - `datepicker-grid w-64 grid grid-cols-7`,
+   16rem) rather than letting `1fr` columns size off an `inline-block` ancestor
+   (.datepicker-picker) that is itself sized by ITS content - that circular sizing relationship is
+   what was causing the picker to reflow/resize between renders, misaligning the two range
+   pickers' grids by a few sub-pixels wherever they overlapped mid-transition. */
+.days-of-week,
+.datepicker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  width: 16rem;
+}
+
+.days-of-week {
+  margin-bottom: 0.25rem;
+}
+
+.datepicker-view .dow {
+  height: 1.75rem;
+  line-height: 1.75rem;
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.datepicker-cell {
+  height: 2.25rem;
+  line-height: 2.25rem;
+  text-align: center;
+  border-radius: 0.5rem;
+  color: #111827;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.datepicker-cell:not(.disabled):hover {
+  background-color: #f3f4f6;
+}
+
+.datepicker-cell.prev,
+.datepicker-cell.next {
+  color: #9ca3af; /* gray-400 — adjacent-month days */
+}
+
+.datepicker-cell.disabled {
+  color: #d1d5db; /* gray-300 */
+  cursor: not-allowed;
+}
+
+.datepicker-cell.focused:not(.selected) {
+  background-color: #eff6ff; /* primary-50 */
+}
+
+.datepicker-cell.today {
+  background-color: #ffffff;
+  border: 1px solid #93c5fd; /* primary-300 */
+  color: #1d4ed8; /* primary-700 */
+  font-weight: 700;
+}
+
+.datepicker-cell.today:hover,
+.datepicker-cell.today.focused {
+  background-color: #eff6ff; /* primary-50 */
+  color: #1d4ed8;
+}
+
+/* Both ends of the range are also `.selected` on the picker that originated the click - listing
+   all three keeps the ends solid even on the OTHER picker, whose own click never fired .selected. */
+.datepicker-cell.selected,
+.datepicker-cell.range-start,
+.datepicker-cell.range-end {
+  background-color: #3b82f6; /* blue-500 — matches Time Analytics' My Time picker exactly */
+  border-color: #2563eb; /* primary-600 */
+  color: #ffffff;
+}
+
+.datepicker-cell.today.selected,
+.datepicker-cell.today.range-start,
+.datepicker-cell.today.range-end {
+  background-color: #eff6ff; /* primary-50 */
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+/* The days BETWEEN From and To - the linked-range tint that only exists because the two inputs
+   share one DateRangePicker.
+   border-radius: 0 is required here, not decorative: flowbite.min.js strips ITS OWN rounding
+   classes (rounded-base/-s/-e) when a cell becomes .range, but those classes do nothing in this
+   build anyway (unprefixed). The rounding these cells actually have comes from THIS file's own
+   base `.datepicker-cell { border-radius: 0.5rem }` rule, which nothing was resetting for plain
+   .range cells - at every internal grid line where four rounded-corner range cells meet, each
+   cell's rounded corner leaves a small notch, and together the four notches show through as a
+   tiny diamond/star of the popup's white background at that intersection (the "sparkle" look
+   reported against the light-blue range band - a border-radius bug, not an overlap/positioning
+   one, unlike the two previous rounds' fixes). */
+.datepicker-cell.range {
+  background-color: #dbeafe; /* primary-100 */
+  color: #1d4ed8; /* primary-700 */
+  border-radius: 0;
+}
+
+.datepicker-cell.range:hover,
+.datepicker-cell.range.focused {
+  background-color: #bfdbfe; /* primary-200 */
+  color: #1d4ed8;
+}
+
+.datepicker-cell.selected:hover,
+.datepicker-cell.range-start:hover,
+.datepicker-cell.range-end:hover,
+.datepicker-cell.selected.focused,
+.datepicker-cell.range-start.focused,
+.datepicker-cell.range-end.focused {
+  background-color: #2563eb;
+  color: #ffffff;
+}
+
+/* Flowbite's own render step already gives range-start/range-end their half-pill rounding
+   (rounded-s-base / rounded-e-base) and strips it from the flat cells in between - but those are
+   unprefixed Tailwind classes this build never generates, so the shapes need to be set here too. */
+.datepicker-cell.range-start {
+  border-radius: 0.5rem 0 0 0.5rem;
+}
+
+.datepicker-cell.range-end {
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+/* The From/To inputs are `#sla-filter-form input[type=text]` and already get the dashboard's
+   white/blue treatment (see _tom_select.css); Flowbite adds `.datepicker-input.in-edit` on top
+   while the user is mid-typing a date by hand. */
+.datepicker-input.in-edit,
+.datepicker-input.in-edit:focus,
+.datepicker-input.in-edit:active {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px #2563eb;
+}

@@ -70,10 +70,12 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
     Timeline.new(events.sort_by(&:at))
   end
 
-  def classify(tl, definition:, now:, policy: @policy, tracker_configured: true)
+  def classify(tl, definition:, now:, policy: @policy, tracker_configured: true,
+               status_roles: ROLES, current_status_id: nil, fallback_resolved_at: nil)
     Sla::ResultClassifier.new(
       timeline: tl, policy: policy, definition: definition,
-      tracker_configured: tracker_configured, status_roles: ROLES, now: now
+      tracker_configured: tracker_configured, status_roles: status_roles,
+      current_status_id: current_status_id, fallback_resolved_at: fallback_resolved_at, now: now
     ).classify
   end
 
@@ -84,7 +86,7 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
                            policy: nil, now: at(1))
     assert_equal 'no_sla', r.primary_state
     assert_equal 'not_configured', r.no_sla_reason
-    assert_nil r.resolved_at, 'a no_sla ticket was never evaluated for resolution'
+    assert_nil r.resolved_at, 'still open: nothing has resolved it'
   end
 
   test "tracker not under SLA -> no_sla / not_configured" do
@@ -324,5 +326,80 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
       assert_nil r.breach_at
       assert_equal (32_400 - 14_400), r.deviation_seconds
     end
+  end
+
+  # --- resolved_at: the open/resolved ladder --------------------------------------------
+  # `resolved_at` is what the dashboard's "open" filter reads (open = resolved_at IS NULL), so
+  # every rung of Sla::ResultClassifier#closed_at has to be exercised: a ticket stuck at nil sits
+  # in the open population for life.
+
+  test "rung 1: a transition into a resolved-role status is the resolution instant" do
+    d  = Definition.new(resolution_seconds: 36_000)
+    tl = timeline([[OPEN, RESOLVED, at(2)]])
+
+    r = classify(tl, definition: d, now: at(50))
+
+    assert_equal at(2), r.resolved_at
+    assert_equal 'met', r.primary_state
+  end
+
+  test "rung 2: sitting in a resolved status with no recorded transition falls back to closed_on" do
+    d  = Definition.new(resolution_seconds: 36_000)
+    tl = timeline([], initial: RESOLVED) # created directly as Resolved — no transition to find
+
+    r = classify(tl, definition: d, now: at(50),
+                 current_status_id: RESOLVED, fallback_resolved_at: at(3))
+
+    assert_equal at(3), r.resolved_at
+  end
+
+  test "rung 2 with no closed_on: uses the last recorded activity, not `now`" do
+    d  = Definition.new(resolution_seconds: 36_000)
+    # A "Resolved" status Redmine does not treat as closed leaves closed_on nil. Anchoring on the
+    # last event keeps the value stable across sweeps; `now` would drift on every run.
+    tl = timeline([], comments: [[at(4), false]], initial: RESOLVED)
+
+    r = classify(tl, definition: d, now: at(50), current_status_id: RESOLVED)
+
+    assert_equal at(4), r.resolved_at
+  end
+
+  test "rung 3: with no resolved statuses configured at all, Redmine's closed_on decides" do
+    r = classify(timeline, definition: Definition.new(response_seconds: 3600), policy: nil,
+                 status_roles: {}, now: at(5), fallback_resolved_at: at(2))
+
+    assert_equal 'not_configured', r.no_sla_reason
+    assert_equal at(2), r.resolved_at, 'a No-SLA ticket must still be able to leave the open population'
+  end
+
+  test "a ticket in a non-resolved status stays open on every rung" do
+    d = Definition.new(resolution_seconds: 36_000)
+
+    r = classify(timeline([[OPEN, WORK, at(1)]]), definition: d, now: at(5),
+                 current_status_id: WORK, fallback_resolved_at: nil)
+
+    assert_nil r.resolved_at
+  end
+
+  test "a no_sla / not_tracked ticket reports resolved_at like any other" do
+    tl = timeline([[OPEN, RESOLVED, at(6)]])
+
+    r = classify(tl, definition: nil, now: at(50))
+
+    assert_equal 'not_tracked', r.no_sla_reason
+    assert_equal at(6), r.resolved_at
+    assert_nil r.cycle_started_at, 'no_sla never reaches the at-risk path that consumes it'
+  end
+
+  test "a reopened ticket is open again: the resolution instant is cleared" do
+    d = Definition.new(resolution_seconds: 36_000)
+    # Resolved at +2h, reopened at +4h. clock_start moves to the reopen, and #first_transition_into
+    # only counts transitions after it — so there is no resolution in the current cycle.
+    tl = timeline([[OPEN, RESOLVED, at(2)], [RESOLVED, OPEN, at(4)]])
+
+    r = classify(tl, definition: d, now: at(5), current_status_id: OPEN)
+
+    assert_nil r.resolved_at
+    assert_equal at(4), r.cycle_started_at
   end
 end

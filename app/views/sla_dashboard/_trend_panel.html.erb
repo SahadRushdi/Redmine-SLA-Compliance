@@ -1,0 +1,56 @@
+<%# SLA Trend tab. The ONLY place the date range applies. The Date Range pills + custom-range %>
+<%# inputs were moved here from the header filter bar; they sit OUTSIDE #sla-filter-form's DOM %>
+<%# subtree, so each carries form="sla-filter-form" (HTML5 form association) to still submit as %>
+<%# part of that one filter form — the same pattern the granularity pills already use. %>
+<div class="tw-flex tw-items-start tw-justify-between tw-flex-wrap tw-gap-4 tw-mb-6">
+  <p class="tw-text-sm tw-text-gray-500 tw-max-w-xl">
+    <%= l(:text_sla_trend_window_hint) %>
+    <span class="tw-font-medium tw-text-gray-700"><%= sla_dashboard_date_range_label(@filters[:date_range]) %></span>
+  </p>
+
+  <div class="tw-flex tw-flex-wrap tw-items-center tw-gap-3">
+    <div>
+      <div class="tw-inline-flex tw-rounded-lg tw-shadow-sm" role="group" aria-label="<%= l(:label_sla_filter_date_range) %>">
+        <% sla_date_presets.each_with_index do |preset, i| %>
+          <% active = @filters[:date_preset] == preset %>
+          <%# tw-shadow-none defeats Purplemine2's permanent blue 1px button box-shadow (see filter bar). %>
+          <button type="button" data-sla-preset-btn="<%= preset %>"
+                  class="tw-px-3 tw-py-2.5 tw-text-sm tw-font-medium tw-border tw-border-solid tw-shadow-none tw-transition-colors focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-inset focus:tw-ring-primary-300
+                         <%= 'tw-rounded-l-lg' if i.zero? %> <%= 'tw-rounded-r-lg' if i == sla_date_presets.size - 1 %>
+                         <%= '-tw-ml-px' unless i.zero? %>
+                         <%= active ? 'tw-bg-primary-600 tw-text-white tw-border-primary-600 tw-z-10' : 'tw-bg-white tw-text-gray-700 tw-border-gray-300 hover:tw-bg-gray-50' %>">
+            <%= sla_date_preset_label(preset) %>
+          </button>
+        <% end %>
+      </div>
+      <%= select_tag 'date_preset',
+            options_for_select(sla_date_presets.map { |p| [sla_date_preset_label(p), p] }, @filters[:date_preset]),
+            id: 'sla-filter-date-preset', form: 'sla-filter-form', class: 'tw-hidden' %>
+    </div>
+
+    <%# One LINKED range picker across both inputs (tints the days between From and To). The library %>
+    <%# finds its two inputs via querySelectorAll('input') in DOM order, so From must stay first. %>
+    <div id="sla-custom-range" data-sla-daterangepicker
+         class="tw-flex tw-gap-2 <%= 'hidden' unless @filters[:date_preset] == 'custom' %>">
+      <div>
+        <%= text_field_tag 'from', @filters[:date_range]&.first&.strftime('%m/%d/%Y'), id: 'sla-filter-from',
+              class: sla_input_classes, autocomplete: 'off', form: 'sla-filter-form',
+              placeholder: l(:field_sla_date_from), 'aria-label': l(:field_sla_date_from) %>
+      </div>
+      <div>
+        <%= text_field_tag 'to', @filters[:date_range]&.last&.strftime('%m/%d/%Y'), id: 'sla-filter-to',
+              class: sla_input_classes, autocomplete: 'off', form: 'sla-filter-form',
+              placeholder: l(:field_sla_date_to), 'aria-label': l(:field_sla_date_to) %>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="tw-grid tw-grid-cols-1 lg:tw-grid-cols-12 tw-gap-6 tw-mb-6 lg:tw-items-stretch">
+  <div class="lg:tw-col-span-3">
+    <%= render 'sla_dashboard/sla_met_card' %>
+  </div>
+  <div class="lg:tw-col-span-9 tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-shadow-sm tw-p-5">
+    <%= render 'sla_dashboard/trend_chart' %>
+  </div>
+</div>

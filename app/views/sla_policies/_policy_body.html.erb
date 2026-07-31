@@ -1,0 +1,25 @@
+<%# The policy half of the tab: the four editable policy sections, preceded by the inheritance %>
+<%# notice when this project's configuration comes from an ancestor. Locals: project, policy, %>
+<%# current, inherited_source. %>
+<%# %>
+<%# A subproject gets the SAME sidebar and the SAME populated sections as the project it inherits %>
+<%# from — not a read-only summary — so what governs its tickets is visible field by field and %>
+<%# changing any of it is an ordinary edit. The earlier bug this replaces (a BLANK editable form %>
+<%# silently saving a disabling override) is prevented by the form being pre-filled from the %>
+<%# inherited policy (SlaPoliciesHelper#sla_policy_for_form) and by the first save copying that %>
+<%# whole configuration across (SlaPoliciesController#seed_new_policy_from_source!), so no field %>
+<%# can be written from a value the user was never shown. %>
+<%# %>
+<%# This is the AJAX re-render target (with the nav slot) — see edit.js.erb. The Notifications %>
+<%# panel is deliberately NOT in here: it belongs to a different controller and its own save %>
+<%# button, so a clone load must not throw away text typed into it. %>
+<% if User.current.allowed_to?(:edit_sla_policy, project) %>
+  <% if inherited_source.present? %>
+    <%= render 'sla_policies/inherited_notice', project: project,
+               source_project: inherited_source.first %>
+  <% elsif SlaPolicy.config_source_for(project).first.nil? %>
+    <p class="tw-text-sm tw-text-gray-500 tw-mb-4"><%= l(:text_sla_no_policy_anywhere_hint) %></p>
+  <% end %>
+  <%= render 'sla_policies/form', project: project, policy: policy, current: current,
+             inherited_source: inherited_source %>
+<% end %>

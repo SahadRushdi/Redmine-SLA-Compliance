@@ -6,12 +6,17 @@
   'use strict';
 
   var AUTO_APPLY_DEBOUNCE_MS = 700;
-  var state = { bound: false, debounceTimer: null };
+  var state = { bound: false, debounceTimer: null, rangeOutsideCloseBound: false };
 
   function byId(id) { return document.getElementById(id); }
 
+  // Prefer HTML5 form association (el.form) over closest('form'): the custom-range From/To inputs
+  // now live on the SLA Trend tab, OUTSIDE #sla-filter-form's DOM subtree, and reach it via a
+  // form="sla-filter-form" attribute — closest('form') would find nothing from that position, but
+  // el.form resolves the associated form directly. Falls back to closest('form') for controls that
+  // are still nested inside the form (Project/Tracker/Priority in the header).
   function submitFormFor(el) {
-    var form = el.closest ? el.closest('form') : el.form;
+    var form = el.form || (el.closest ? el.closest('form') : null);
     if (!form) { return; }
     (form.requestSubmit ? form.requestSubmit() : form.submit());
   }
@@ -86,13 +91,45 @@
     markActivePresetButton(btn);
 
     if (value !== 'custom') {
-      var form = select.closest('form');
+      // The pills now live on the SLA Trend tab, outside #sla-filter-form — target the form by id
+      // directly (same as the granularity pills) rather than closest('form'), which finds nothing
+      // from here.
+      var form = byId('sla-filter-form');
       if (form) { (form.requestSubmit ? form.requestSubmit() : form.submit()); }
     }
   }
 
   function markActivePresetButton(activeBtn) {
     document.querySelectorAll('[data-sla-preset-btn]').forEach(function (btn) {
+      var active = btn === activeBtn;
+      btn.classList.toggle('tw-bg-primary-600', active);
+      btn.classList.toggle('tw-text-white', active);
+      btn.classList.toggle('tw-border-primary-600', active);
+      btn.classList.toggle('tw-bg-white', !active);
+      btn.classList.toggle('tw-text-gray-700', !active);
+      btn.classList.toggle('tw-border-gray-300', !active);
+    });
+  }
+
+  // Granularity pills (Daily/Weekly/Monthly) for the trend chart. Same segmented-pill-over-a-
+  // hidden-<select> pattern as the Date Range pills above, but the pills live in
+  // _trend_chart.html.erb - outside #sla-filter-form's own DOM subtree (that partial renders as a
+  // sibling of _filter_bar.html.erb under sla_dashboard/index.html.erb). The hidden <select>
+  // carries `form="sla-filter-form"` so it's still submitted as part of that form (HTML5 form
+  // association), but submitting here targets #sla-filter-form by id directly rather than
+  // `closest('form')`, which would find nothing from this DOM position.
+  function selectGranularity(btn) {
+    var select = byId('sla-filter-granularity');
+    var form = byId('sla-filter-form');
+    if (!select || !form) { return; }
+
+    select.value = btn.getAttribute('data-sla-granularity-btn');
+    markActiveGranularityButton(btn);
+    (form.requestSubmit ? form.requestSubmit() : form.submit());
+  }
+
+  function markActiveGranularityButton(activeBtn) {
+    document.querySelectorAll('[data-sla-granularity-btn]').forEach(function (btn) {
       var active = btn === activeBtn;
       btn.classList.toggle('tw-bg-primary-600', active);
       btn.classList.toggle('tw-text-white', active);
@@ -147,7 +184,16 @@
     var inner = instance.getDatepickerInstance && instance.getDatepickerInstance();
     var datepickers = (inner && inner.datepickers) || [];
     datepickers.forEach(function (dp) {
-      dp.setOptions({ todayHighlight: true });
+      // showOnFocus/showOnClick: false hands ALL opening/closing over to bindManualRangeToggle
+      // below, instead of Flowbite's own triggers. This isn't a style preference - Flowbite's
+      // built-in autohide (onClickOutside in flowbite.min.js) starts with
+      // `if (element !== document.activeElement) return;`, and by the time that listener runs for
+      // the FROM picker, clicking TO has already moved focus there, so the guard is always true
+      // and hide() never gets called. Both popups stay open and overlap (visibly, since they're
+      // both `position: absolute` and anchored to adjacent inputs) - the exact same bug the
+      // time_analytics plugin's own range picker (My Time / My Team pages) hit and works around
+      // with this identical manual-toggle approach, not a new pattern invented here.
+      dp.setOptions({ todayHighlight: true, showOnFocus: false, showOnClick: false, autohide: true });
       if (dp.picker && dp.picker.element) {
         dp.config.container = scope;
         scope.appendChild(dp.picker.element);
@@ -168,6 +214,63 @@
       if (!input) { return; }
       input.addEventListener('changeDate', submitDateRangeDebounced);
       input.addEventListener('change', submitDateRangeDebounced);
+    });
+
+    bindManualRangeToggle();
+  }
+
+  // Full manual show/hide control for the two linked pickers, replacing Flowbite's own (broken,
+  // see above) showOnFocus/showOnClick/autohide triggers - same working pattern as the
+  // time_analytics plugin's My Time/My Team range pickers, ported here rather than duplicated
+  // per-view: one click handler per input (toggle this picker, always closing the sibling's
+  // first), Escape to close, and a document-level outside-click that closes both.
+  function bindManualRangeToggle() {
+    var from = byId('sla-filter-from');
+    var to = byId('sla-filter-to');
+
+    function bindToggle(input, sibling) {
+      if (!input || input.dataset.slaRangeToggleBound === '1') { return; }
+      input.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!input.datepicker) { return; }
+        if (sibling && sibling.datepicker && sibling.datepicker.active) { sibling.datepicker.hide(); }
+        if (input.datepicker.active) { input.datepicker.hide(); } else { input.datepicker.show(); }
+      });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && input.datepicker && input.datepicker.hide) {
+          input.datepicker.hide();
+          input.blur();
+        }
+      });
+      input.dataset.slaRangeToggleBound = '1';
+    }
+    bindToggle(from, to);
+    bindToggle(to, from);
+
+    // Neither input should open its picker just because the page loaded with focus already on
+    // it (autofocus, browser form-restore, tabbing through on page load before the user has
+    // actually clicked either field) - showOnFocus is already off, but this is a defensive
+    // belt-and-braces pass matching the time_analytics plugin's own suppressAutoOpen, run once
+    // synchronously and once after a short delay to also catch anything a slower-to-init browser
+    // extension/autofill triggers just after load.
+    function suppressAutoOpen() {
+      [from, to].forEach(function (input) {
+        if (input && document.activeElement === input) { input.blur(); }
+      });
+      hideRangePickers();
+    }
+    setTimeout(suppressAutoOpen, 0);
+    setTimeout(suppressAutoOpen, 120);
+
+    if (state.rangeOutsideCloseBound) { return; }
+    state.rangeOutsideCloseBound = true;
+    document.addEventListener('mousedown', function (e) {
+      var target = e.target;
+      var rangeEl = byId('sla-custom-range');
+      var insideRangeUi = (rangeEl && rangeEl.contains(target)) || !!(target.closest && target.closest('.datepicker'));
+      if (insideRangeUi) { return; }
+      hideRangePickers();
     });
   }
 
@@ -190,6 +293,10 @@
     jQuery(document).on('click', '[data-sla-preset-btn]', function (e) {
       e.preventDefault();
       selectDatePreset(this);
+    });
+    jQuery(document).on('click', '[data-sla-granularity-btn]', function (e) {
+      e.preventDefault();
+      selectGranularity(this);
     });
     jQuery(document).on('change', '[data-sla-auto-apply]', submitImmediately);
     jQuery(document).on('change', '[data-sla-auto-apply-debounced]', submitDebounced);

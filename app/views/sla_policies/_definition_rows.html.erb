@@ -1,38 +1,34 @@
-<%# One row per active priority for the selected tracker. Replaced via edit.js.erb when the %>
-<%# tracker changes. A priority with all three targets unset gets no SlaDefinition row (it is %>
-<%# excluded / unclassified). The admin-designated "unclassified" priority (Administration → %>
-<%# Plugins → SLA Compliance) is always excluded and rendered disabled — no SlaDefinition can be %>
-<%# saved for it (also enforced server-side, see SlaPoliciesController#replace_tracker_definitions!). %>
+<%# One row per active priority, for ONE tracker's table (see _definition_table). A priority with %>
+<%# all three targets unset gets no SlaDefinition row (it is excluded / unclassified). %>
+<%# %>
+<%# Field names are nested under the tracker id — definitions[rows][<tracker>][<priority>][<type>] %>
+<%# — so several trackers' tables can post together in one submit. %>
+<%# %>
+<%# The admin-designated "unclassified" priority (Administration → Plugins → SLA Compliance) gets %>
+<%# no row at all: no SlaDefinition can ever be saved for it (enforced server-side too, see %>
+<%# SlaPoliciesController#replace_tracker_definitions!), so it is called out once in the notice %>
+<%# above the table instead of occupying a permanently disabled row. %>
 <%# Locals: policy, tracker. %>
 <% definitions = sla_definition_map(policy, tracker) %>
 <% IssuePriority.active.each do |priority| %>
+  <% next if sla_unclassified_priority?(priority.id) %>
   <% definition = definitions[priority.id] %>
-  <% unclassified = sla_unclassified_priority?(priority.id) %>
-  <tr class="tw-border-b tw-border-gray-200 <%= 'tw-bg-gray-50' if unclassified %>">
-    <td class="tw-px-4 tw-py-2 tw-font-medium tw-text-gray-900">
-      <%= h priority.name %>
-      <% if unclassified %>
-        <span class="tw-ml-2 tw-inline-block tw-px-2 tw-py-0.5 tw-text-xs tw-font-medium tw-text-gray-600 tw-bg-gray-200 tw-rounded">
-          <%= l(:label_sla_unclassified_badge) %>
-        </span>
-      <% end %>
-    </td>
-    <% if unclassified %>
-      <td colspan="3" class="tw-px-4 tw-py-2 tw-text-sm tw-text-gray-500">
-        <%= l(:text_sla_unclassified_row_hint) %>
+  <tr class="tw-border-b tw-border-gray-200">
+    <%# Priority is rendered as its plain name. It deliberately carries NO severity colouring: any %>
+    <%# such scale would be a severity encoding baked into the plugin, which Global Rule 1 forbids %>
+    <%# ("no ... severity labels as constants or enums") — the priority's meaning and ordering %>
+    <%# belong to the site's Redmine configuration, not to this code. %>
+    <td class="tw-px-4 tw-py-2 tw-font-medium tw-text-gray-900"><%= h priority.name %></td>
+    <% { response: [definition&.response_seconds, definition&.best_effort?(:response)],
+         workaround: [definition&.workaround_seconds, definition&.best_effort?(:workaround)],
+         resolution: [definition&.resolution_seconds, definition&.best_effort?(:resolution)]
+       }.each do |target_type, (current_seconds, current_best_effort)| %>
+      <td class="tw-px-4 tw-py-2">
+        <%= select_tag "definitions[rows][#{tracker.id}][#{priority.id}][#{target_type}]",
+              sla_target_select_options(target_type, current_seconds, current_best_effort),
+              id: "sla-def-#{tracker.id}-#{priority.id}-#{target_type}", class: sla_input_classes,
+              data: { sla_select: true } %>
       </td>
-    <% else %>
-      <% { response: [definition&.response_seconds, definition&.best_effort?(:response)],
-           workaround: [definition&.workaround_seconds, definition&.best_effort?(:workaround)],
-           resolution: [definition&.resolution_seconds, definition&.best_effort?(:resolution)]
-         }.each do |target_type, (current_seconds, current_best_effort)| %>
-        <td class="tw-px-4 tw-py-2">
-          <%= select_tag "definitions[rows][#{priority.id}][#{target_type}]",
-                sla_target_select_options(target_type, current_seconds, current_best_effort),
-                id: "sla-def-#{priority.id}-#{target_type}", class: sla_input_classes,
-                data: { sla_select: true } %>
-        </td>
-      <% end %>
     <% end %>
   </tr>
 <% end %>

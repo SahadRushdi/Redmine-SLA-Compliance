@@ -1,6 +1,7 @@
 <% html_title(@project ? "#{l(:label_sla_compliance)} — #{@project.name}" : l(:label_sla_dashboard_all)) %>
 <%= render 'sla_compliance/assets' %>
 <% content_for :header_tags do %>
+  <%= javascript_include_tag 'sla_dashboard_tabs.js', plugin: 'redmine_sla_compliance' %>
   <%= javascript_include_tag 'sla_dashboard_filters.js', plugin: 'redmine_sla_compliance' %>
   <%= javascript_include_tag 'sla_dashboard_charts.js', plugin: 'redmine_sla_compliance' %>
   <%= javascript_include_tag 'sla_dashboard_detail_table.js', plugin: 'redmine_sla_compliance' %>
@@ -9,8 +10,31 @@
 <%# Shared template for both SlaDashboardController#index (project-level, @project set) and %>
 <%# #cross_project (top-level, @project nil). %>
 <div class="sla-plugin">
-  <%= render 'sla_dashboard/filter_bar' %>
-  <%= render 'sla_dashboard/summary_cards' %>
-  <%= render 'sla_dashboard/charts' %>
-  <%= render 'sla_dashboard/detail_table' %>
+  <%# tw-bg-gray-50: Redmine's own #content background is plain white (application.css), same as %>
+  <%# every card below (tw-bg-white) - without this, a white card separated only by a 1px %>
+  <%# border-gray-200 and a small shadow-sm has almost no contrast against the page, especially %>
+  <%# for the full-width chart/detail-table cards. The Figma reference's clear card look comes %>
+  <%# from its page canvas being a light gray behind white cards, not from a heavier border - this %>
+  <%# replicates that. A SEPARATE div from .sla-plugin itself, not extra classes tacked onto the %>
+  <%# same element - postcss-prefix-selector rewrites every rule as a DESCENDANT of .sla-plugin %>
+  <%# (`.sla-plugin .tw-bg-gray-50`, not `.sla-plugin.tw-bg-gray-50`), so a tw- utility placed on %>
+  <%# .sla-plugin itself can never match its own compiled selector - it has to sit on a child. %>
+  <div class="tw-bg-gray-50 tw-p-6">
+    <%# Header: title/subtitle + the tracker/priority/project filters that scope BOTH tabs. %>
+    <%= render 'sla_dashboard/filter_bar' %>
+    <%= render 'sla_dashboard/tabs' %>
+
+    <%# Tab 1 — Open Tickets (current live state): summary cards (with Stale in place of SLA Met) %>
+    <%# and the three-across analytics row (priority, donut, detail table + its expand modal). %>
+    <div data-sla-tab-panel="open">
+      <%= render 'sla_dashboard/summary_cards' %>
+      <%= render 'sla_dashboard/charts' %>
+    </div>
+
+    <%# Tab 2 — SLA Trend (date-scoped): date-range controls + the SLA Met card and the %>
+    <%# Created vs Resolved chart. Hidden until selected (client-side, sla_dashboard_tabs.js). %>
+    <div data-sla-tab-panel="trend" class="hidden">
+      <%= render 'sla_dashboard/trend_panel' %>
+    </div>
+  </div>
 </div>

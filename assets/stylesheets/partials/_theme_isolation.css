@@ -1,0 +1,195 @@
+/*
+ * Purplemine2 theme isolation — reusable, generic fixes for ANY interactive control in this
+ * plugin (CLAUDE.md rule 4: explicitly reset focus/ring/border rather than relying on Flowbite or
+ * Purplemine2 defaults to "just work together"). Nothing in this file targets a specific
+ * component — component-specific re-skins (datepicker, Tom Select) live in their own partials.
+ * postcss-prefix-selector scopes every rule below to `.sla-plugin ...` at build time.
+ */
+
+/* --- Focus/border resets -------------------------------------------------------------------- */
+
+select:focus,
+input:focus,
+textarea:focus,
+button:focus {
+  outline: none;
+}
+
+input[type='text']:focus,
+input[type='number']:focus,
+input[type='url']:focus,
+select:focus,
+textarea:focus {
+  border-color: #2563eb; /* primary-600 — the only intentional blue in UI chrome */
+  box-shadow: none;
+}
+
+/*
+ * Purplemine2's button "raised edge".
+ *
+ * Its base rule is `input[type=button], input[type=submit], input[type=reset], button { …
+ * background-color:#0065ff; border-color:#0065ff #0065ff #004dc2; box-shadow:0 1px 0 #004dc2 }`,
+ * with hover/focus/active variants swapping in darker blues. The colour properties are all beaten
+ * by this plugin's own `tw-bg-*` / `tw-border-*` utilities (a `.sla-plugin .tw-…` selector scores
+ * 0,2,0 against the theme's 0,0,1), but `box-shadow` is not: no button utility here sets a resting
+ * box-shadow, so the theme's 1px dark-blue underline survived on every neutral button — read as a
+ * stray blue border line under the Clone Policy "Load" button.
+ *
+ * The theme also colours the BORDER blue (`border: 1px solid` + `border-color: #0065ff #0065ff
+ * #004dc2`), which is why a button carrying no `tw-border-*` of its own still drew a blue edge.
+ *
+ * Reset both for every state, then state the focus treatment OUTRIGHT rather than leaving it to
+ * whichever stylesheet wins — CLAUDE.md rule 4. That last part is not optional here: measured in
+ * the browser, the theme's `button:focus` shadow was beating this plugin's own
+ * `focus:tw-ring-2 focus:tw-ring-gray-200` utilities on the neutral buttons (the ring never
+ * painted; only the blue line did), so simply deleting the theme's shadow would have left those
+ * buttons with NO focus indicator at all. The button helpers in SlaPoliciesHelper no longer carry
+ * ring utilities at all — this is the single definition.
+ *
+ * `:focus-visible`, not `:focus`, so the ring answers keyboard navigation without flashing on
+ * every mouse click. It is the primary colour — the one blue permitted in UI chrome, and only for
+ * a focus state. Element-level specificity (0,1,1) on the resting rule so any `tw-border-*` on the
+ * button still wins for colour.
+ *
+ * The ring is an `outline`, not a `box-shadow`: box-shadow on these buttons is contested by the
+ * theme, by Tailwind's ring variables and by the utilities, and was measured resolving to a fully
+ * transparent (invisible) value on the neutral buttons no matter which of those was expected to
+ * win. `outline` has exactly one other declaration anywhere in the plugin — the `outline: none`
+ * reset directly above, which this rule follows and so overrides on the tie — making the focus
+ * indicator deterministic instead of a cascade race.
+ */
+button,
+input[type='button'],
+input[type='submit'],
+input[type='reset'] {
+  box-shadow: none;
+  border-color: transparent;
+}
+
+button:hover,
+button:focus,
+button:active,
+input[type='button']:hover,
+input[type='button']:focus,
+input[type='button']:active,
+input[type='submit']:hover,
+input[type='submit']:focus,
+input[type='submit']:active {
+  /* box-shadow only. A `border-color` here would score 0,2,1 and beat the buttons' own
+     `tw-border-gray-300` (0,2,0), stripping the secondary button's outline on hover; the
+     element-level rule above handles the theme's border for these states too. */
+  box-shadow: none;
+}
+
+button:focus-visible,
+input[type='button']:focus-visible,
+input[type='submit']:focus-visible,
+input[type='reset']:focus-visible {
+  outline: 2px solid #2563eb; /* primary-600 */
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+/*
+ * Native form-control appearance reset (select / text-like inputs / radio / checkbox).
+ *
+ * Root cause of two reported bugs — "dropdown text is cut off" and "unchecked radios are
+ * invisible" — turned out to be the SAME class of problem CLAUDE.md warns about: Purplemine2
+ * styles that this plugin's build never actually overrides, because this Tailwind build has no
+ * forms-reset plugin installed (no @tailwindcss/forms) and Preflight is disabled. Utility
+ * classes like `tw-border-gray-300` / `tw-text-primary-600` have NO visual effect on a native,
+ * un-reset radio/checkbox — browsers ignore most box-model/color properties on native form
+ * widgets until `appearance: none` strips the OS-native look first. Only the CHECKED radio
+ * picked up a colour (via the browser's own `accent-color`/`color` fallback); the UNCHECKED
+ * state was pure OS-native rendering with no border this build ever styled.
+ *
+ * Height: Purplemine2's global `select, input[type=...] { height: 28px; padding: 3px 8px; }`
+ * (an *element* selector, so it wins wherever nothing here overrides it) combined with this
+ * plugin's own `tw-p-2.5` (10px) padding utility squeezed the visible text area of every
+ * select/url/number input down to a few pixels — the "clipped to dots" look in screenshots.
+ */
+select,
+input[type='text'],
+input[type='url'],
+input[type='number'] {
+  height: auto;
+  min-height: 2.625rem; /* 42px: matches tw-p-2.5 (10px) + tw-text-sm line-height once unclamped */
+}
+
+input[type='radio'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  border: 1px solid #d1d5db; /* gray-300 */
+  border-radius: 9999px;
+  background-color: #fff;
+  flex-shrink: 0;
+}
+
+input[type='radio']:checked {
+  border-color: #2563eb; /* primary-600 */
+  background-image: radial-gradient(circle, #2563eb 45%, transparent 50%);
+}
+
+input[type='radio']:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+
+/* :not(.tw-sr-only) excludes the visually-hidden checkbox inside the Flowbite toggle switch
+   (sla_compliance/_toggle.html.erb) — that one is already a fully custom, correctly-visible
+   component and must keep its screen-reader-only, zero-size native input untouched. */
+input[type='checkbox']:not(.tw-sr-only) {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 0.25rem;
+  background-color: #fff;
+  flex-shrink: 0;
+}
+
+input[type='checkbox']:not(.tw-sr-only):checked {
+  border-color: #2563eb;
+  background-color: #2563eb;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 0.75rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M13.28 4.72a.75.75 0 0 1 0 1.06l-5.5 5.5a.75.75 0 0 1-1.06 0l-2.5-2.5a.75.75 0 1 1 1.06-1.06L6.5 9.94l4.97-4.97a.75.75 0 0 1 1.06 0Z'/%3E%3C/svg%3E");
+}
+
+input[type='checkbox']:not(.tw-sr-only):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+
+/*
+ * Administration -> Plugins -> Configure bleed (Step 5.1 access-control section).
+ *
+ * Redmine core wraps every plugin settings partial in `<div class="box tabular settings">`
+ * (app/views/settings/plugin.html.erb) and application.css styles ANY <label>/<p> inside it
+ * unconditionally: `.tabular.settings label { float: left; margin-left: -300px; width: 295px;
+ * text-align: right; }` and `.tabular.settings p { padding-left: 300px; }`. Those rules don't
+ * check for our own classes, so they still win over plain `tw-block`-style utilities (which
+ * never set float/margin/width/padding-left) and shove the access-control labels 300px left
+ * (clipping them against the sidebar) and the hint paragraphs 300px right (overlapping the next
+ * grid column). Selectors below are pre-scoped (`.sla-plugin` written explicitly, ancestor-first)
+ * so postcss-prefix-selector leaves them as-is instead of nesting `.sla-plugin` the other way
+ * round, and are specific enough (0,3,1) to beat `.tabular.settings label`/`p` (0,2,1) outright.
+ */
+.tabular.settings .sla-plugin label {
+  float: none;
+  text-align: left;
+  margin-left: 0;
+  width: auto;
+}
+
+.tabular.settings .sla-plugin p {
+  padding-left: 0;
+  min-height: 0;
+  clear: none;
+}

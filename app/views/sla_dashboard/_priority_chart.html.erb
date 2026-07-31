@@ -18,7 +18,10 @@
   <h3 class="tw-text-base tw-font-semibold tw-text-gray-900 tw-mb-3"><%= l(:label_sla_chart_priority_breakdown) %></h3>
   <%# Height tracks the number of priority rows (slim bars capped at 26px in JS) so a single %>
   <%# priority no longer stretches to fill the whole card - ~72px for one row, ~176px for three. %>
-  <div class="tw-relative tw-w-full tw-flex-1" style="height: <%= [@priority_breakdown.size * 52 + 20, 96].max %>px;">
+  <%# Deliberately NOT tw-flex-1: when this card is stretched to match the taller detail/donut cards %>
+  <%# in the shared-height row, the bars keep their intended height and the extra space falls below %>
+  <%# the legend rather than inflating the chart into sparse, over-tall bars. %>
+  <div class="tw-relative tw-w-full" style="height: <%= [@priority_breakdown.size * 52 + 20, 96].max %>px;">
     <% if @priority_breakdown.empty? %>
       <p class="tw-text-sm tw-text-gray-400 tw-py-8 tw-text-center"><%= l(:text_sla_detail_table_empty_state) %></p>
     <% else %>
@@ -29,9 +32,20 @@
   <%# Same 4-color state mapping as the donut's legend - dot + label only (no counts) since the %>
   <%# per-segment value labels already drawn on the bars themselves (sla_dashboard_charts.js) %>
   <%# carry the numbers, avoiding a second place the same counts would need to stay in sync. %>
+  <%# priority_dataset_index matches priority_payload's own dataset order above (met=0, at_risk=1, %>
+  <%# breached=2, no_sla=3) - unlike the donut (one dataset, many arc indices), this chart has one %>
+  <%# dataset PER state, so highlighting is by dataset index, not data-point index. Kept as an %>
+  <%# explicit map rather than each_with_index so the legend's own display order (met, breached, %>
+  <%# at_risk, no_sla - matching the donut's) doesn't have to match the dataset construction order %>
+  <%# above. Click-to-highlight (dim the other datasets' bars, not hide any of them) is wired in %>
+  <%# sla_dashboard_charts.js - same behavior as the donut's and trend chart's legends. %>
+  <% priority_dataset_index = { met: 0, at_risk: 1, breached: 2, no_sla: 3 } %>
   <div id="sla-priority-chart-legend" class="tw-flex tw-flex-wrap tw-gap-x-4 tw-gap-y-1 tw-mt-3 tw-pt-3 tw-border-t tw-border-gray-100 tw-text-xs tw-text-gray-600">
     <% %i[met breached at_risk no_sla].each do |state| %>
-      <span class="tw-inline-flex tw-items-center tw-gap-1.5">
+      <%# sla-legend-item carries the click affordance AND the active pill the JS toggles — see %>
+      <%# partials/_chart_legend.css. %>
+      <span class="sla-legend-item tw-inline-flex tw-items-center tw-gap-1.5"
+            data-sla-legend-target="sla-priority-chart" data-sla-legend-dataset="<%= priority_dataset_index[state] %>">
         <span class="tw-w-2.5 tw-h-2.5 tw-rounded-full tw-inline-block" style="background-color: <%= sla_chart_color(state) %>"></span>
         <%= state == :at_risk ? l(:label_sla_card_at_risk) : sla_card_label(state) %>
       </span>

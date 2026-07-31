@@ -240,11 +240,80 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
     assert_response :success
     assert_select '#sla-card-total-value', text: '3'
-    assert_select '#sla-card-met-value', text: '1'
+    # SLA Met is no longer a summary card (it moved to the SLA Trend tab); the current-state row now
+    # carries Stale in its place. These three freshly-generated issues have a just-now updated_on, so
+    # none are stale under the default 7-day threshold.
+    assert_select '#sla-card-stale-value', text: '0'
     assert_select '#sla-card-breached-value', text: '1'
     assert_select '#sla-card-no-sla-value', text: '1'
     assert_select '#sla-card-not-tracked-value', text: '1'
     assert_select '#sla-card-not-configured-value', text: '0'
+  end
+
+  # --- Open-ticket semantics: "open" = not resolved, and the date range never touches it -------
+
+  test "a resolved ticket is excluded from every open-ticket card" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    list!(:viewer, @user.id)
+    issues = seed_reconciled_dataset
+    # Resolved per the engine's own resolved-role milestone, which is what sla_results records —
+    # NOT issues.closed_on.
+    SlaResult.find_by!(issue_id: issues[:breached].id).update!(resolved_at: 2.days.ago)
+
+    get :index, params: { project_id: @project.id }
+
+    # 4 open, and of the two breached rows only the live-breached one is left.
+    assert_select '#sla-card-total-value', text: '4'
+    assert_select '#sla-card-breached-value', text: '1'
+    assert_select "#sla-detail-row-#{issues[:breached].id}", 0
+    assert_equal 4, parse_chart_data('sla-donut-chart')['total']
+  end
+
+  test "the date range does not move any open-ticket card" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    list!(:viewer, @user.id)
+    seed_reconciled_dataset
+
+    %w[this_week last_month last_3_months].each do |preset|
+      get :index, params: { project_id: @project.id, date_preset: preset }
+
+      assert_select '#sla-card-total-value', text: '5'
+      assert_select '#sla-card-breached-value', text: '2'
+      assert_select '#sla-card-at-risk-value', text: '1'
+      assert_select '#sla-card-no-sla-value', text: '1'
+    end
+  end
+
+  test "the SLA Met card counts tickets resolved inside the window, excluding No SLA from its denominator" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    list!(:viewer, @user.id)
+    issues = seed_reconciled_dataset
+    in_window = Time.zone.local(2026, 7, 10, 9, 0, 0)
+    SlaResult.find_by!(issue_id: issues[:met].id).update!(resolved_at: in_window)
+    SlaResult.find_by!(issue_id: issues[:at_risk].id).update!(resolved_at: in_window)
+    SlaResult.find_by!(issue_id: issues[:breached].id).update!(resolved_at: in_window)
+    # A No-SLA ticket resolved in the window was never evaluated: it must not dilute the figure.
+    SlaResult.find_by!(issue_id: issues[:no_sla].id).update!(resolved_at: in_window)
+    # Resolved outside the window — must be ignored entirely.
+    SlaResult.find_by!(issue_id: issues[:live_breached].id)
+             .update!(breach_at: nil, resolved_at: Time.zone.local(2026, 6, 1, 9, 0, 0))
+
+    get :index, params: { project_id: @project.id, date_preset: 'custom',
+                          from: '07/01/2026', to: '07/31/2026' }
+
+    # 2 met of 3 evaluated (met, at_risk, breached) — the No-SLA row is not in the denominator.
+    assert_select '#sla-met-window-percentage', text: '66.7'
+  end
+
+  test "an open ticket never appears in the SLA Met card, whatever the window" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    list!(:viewer, @user.id)
+    seed_reconciled_dataset # every row is unresolved
+
+    get :index, params: { project_id: @project.id, date_preset: 'custom',
+                          from: '01/01/2026', to: '12/31/2026' }
+
+    assert_select '#sla-met-window-percentage', text: '0'
   end
 
   # --- Step 6.3/6.4 helpers --------------------------------------------------------------------
@@ -278,7 +347,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   # --- Step 6.3: charts --------------------------------------------------------------------------
 
-  test "renders exactly one donut and one priority bar canvas element" do
+  test "renders exactly one donut, one priority bar, and one trend canvas element" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
     list!(:viewer, @user.id)
     seed_reconciled_dataset
@@ -288,7 +357,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_response :success
     assert_select '#sla-donut-chart', 1
     assert_select '#sla-priority-chart', 1
-    assert_select '#sla-trend-chart', 0
+    assert_select '#sla-trend-chart', 1
   end
 
   test "the donut's embedded data sums to @counts.total, with at_risk as a separate field, not a fourth category" do
@@ -339,7 +408,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
     assert_select '#sla-detail-state-tabs' do
       assert_select 'a', text: /\AAll \(5\)\z/
-      assert_select 'a', text: /\ASLA Met \(2\)\z/
+      assert_select 'a', text: /\A#{Regexp.escape(I18n.t(:label_sla_card_met))} \(2\)\z/
       assert_select 'a', text: /\ASLA Breached \(2\)\z/
       assert_select 'a', text: /\AAt Risk \(1\)\z/
       assert_select 'a', text: /\ANo SLA \(1\)\z/
@@ -403,7 +472,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
     get :index, params: { project_id: @project.id }
 
     assert_select "#sla-detail-row-#{issues[:at_risk].id}" do
-      assert_select 'span', text: 'SLA Met'
+      assert_select 'span', text: I18n.t(:label_sla_card_met)
       assert_select 'span', text: 'At Risk'
     end
   end

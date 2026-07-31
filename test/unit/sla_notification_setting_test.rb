@@ -65,6 +65,61 @@ class SlaNotificationSettingTest < ActiveSupport::TestCase
     assert_nil second, 'a second caller racing the same window must not also claim it'
   end
 
+  # --- Step 7.1: Google Chat webhook resolution -----------------------------------------------
+
+  PROJECT_WEBHOOK = 'https://chat.googleapis.com/v1/spaces/AAA/messages?key=k'
+  GLOBAL_WEBHOOK  = 'https://chat.googleapis.com/v1/spaces/GLOBAL/messages?key=g'
+
+  def with_global_webhook(url)
+    original = Setting.plugin_redmine_sla_compliance
+    Setting.plugin_redmine_sla_compliance = { 'google_chat_webhook' => url }
+    yield
+  ensure
+    Setting.plugin_redmine_sla_compliance = original
+  end
+
+  test "google_chat_webhook_for prefers the project's own webhook" do
+    SlaNotificationSetting.create!(project_id: PROJECT_ID, google_chat_webhook: PROJECT_WEBHOOK)
+
+    with_global_webhook(GLOBAL_WEBHOOK) do
+      assert_equal PROJECT_WEBHOOK,
+                   SlaNotificationSetting.google_chat_webhook_for(Project.find(PROJECT_ID))
+    end
+  end
+
+  test "google_chat_webhook_for falls back to the global setting" do
+    with_global_webhook(GLOBAL_WEBHOOK) do
+      # No row at all, and a row with the field left blank, must behave identically.
+      assert_equal GLOBAL_WEBHOOK,
+                   SlaNotificationSetting.google_chat_webhook_for(Project.find(PROJECT_ID))
+
+      SlaNotificationSetting.create!(project_id: PROJECT_ID, google_chat_webhook: '')
+      assert_equal GLOBAL_WEBHOOK,
+                   SlaNotificationSetting.google_chat_webhook_for(Project.find(PROJECT_ID))
+    end
+  end
+
+  test "google_chat_webhook_for is nil when neither is configured" do
+    with_global_webhook(nil) do
+      assert_nil SlaNotificationSetting.google_chat_webhook_for(Project.find(PROJECT_ID))
+    end
+  end
+
+  test "a webhook must be blank or an https URL" do
+    setting = SlaNotificationSetting.new(project_id: PROJECT_ID, google_chat_webhook: 'not a url')
+    refute setting.valid?
+    assert_includes setting.errors.attribute_names, :google_chat_webhook
+
+    setting.google_chat_webhook = 'http://chat.googleapis.com/v1/spaces/AAA'
+    refute setting.valid?, 'plain http must be rejected'
+
+    setting.google_chat_webhook = PROJECT_WEBHOOK
+    assert setting.valid?
+
+    setting.google_chat_webhook = ''
+    assert setting.valid?, 'clearing the field must stay allowed'
+  end
+
   test "daily/monthly frequencies use their own interval" do
     make_setting(frequency: 'daily', last_at: 25.hours.ago)
     assert SlaNotificationSetting.claim_stale_digest_window!(PROJECT_ID, now: Time.current)

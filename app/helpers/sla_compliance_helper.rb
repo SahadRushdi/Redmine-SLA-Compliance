@@ -35,7 +35,11 @@ module SlaComplianceHelper
     met: 'tw-bg-green-50 tw-text-green-700 tw-border-green-300',
     breached: 'tw-bg-red-50 tw-text-red-700 tw-border-red-300',
     at_risk: 'tw-bg-amber-50 tw-text-amber-700 tw-border-amber-300',
-    no_sla: 'tw-bg-gray-50 tw-text-gray-700 tw-border-gray-300'
+    no_sla: 'tw-bg-gray-50 tw-text-gray-700 tw-border-gray-300',
+    # Stale gets its own orange tint - distinct from at_risk's amber (a met ticket nearing breach)
+    # and no_sla's neutral grey, since a stale ticket is a separate "nobody has touched this"
+    # attention signal, not an SLA state.
+    stale: 'tw-bg-orange-50 tw-text-orange-700 tw-border-orange-300'
   }.freeze
 
   def sla_card_color_classes(state)
@@ -60,7 +64,8 @@ module SlaComplianceHelper
     met: 'tw-bg-green-100 tw-text-green-700',
     breached: 'tw-bg-red-100 tw-text-red-700',
     at_risk: 'tw-bg-amber-100 tw-text-amber-700',
-    no_sla: 'tw-bg-gray-200 tw-text-gray-700'
+    no_sla: 'tw-bg-gray-200 tw-text-gray-700',
+    stale: 'tw-bg-orange-100 tw-text-orange-700'
   }.freeze
 
   def sla_card_icon_classes(state)
@@ -84,7 +89,10 @@ module SlaComplianceHelper
              '<line x1="12" y1="10" x2="12" y2="14" stroke-width="2" stroke-linecap="round"/>' \
              '<circle cx="12" cy="17" r="0.75" fill="currentColor" stroke="none"/>',
     no_sla: '<circle cx="12" cy="12" r="9" stroke-width="2"/>' \
-            '<line x1="6.5" y1="17.5" x2="17.5" y2="6.5" stroke-width="2" stroke-linecap="round"/>'
+            '<line x1="6.5" y1="17.5" x2="17.5" y2="6.5" stroke-width="2" stroke-linecap="round"/>',
+    # Clock — stale is a time-since-last-activity signal.
+    stale: '<circle cx="12" cy="12" r="9" stroke-width="2"/>' \
+           '<polyline points="12,7 12,12 15.5,14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
   }.freeze
 
   def sla_card_icon(state)
@@ -119,6 +127,19 @@ module SlaComplianceHelper
 
   def sla_date_preset_label(preset)
     l("label_sla_date_preset_#{preset}")
+  end
+
+  # --- Step 6.3: trend chart granularity ------------------------------------------------------
+
+  # Single source of truth for the valid granularity values, shared by the controller (validating
+  # params[:granularity]) and this helper (rendering the pill group) — see
+  # Sla::TrendSeries::GRANULARITIES.
+  def sla_granularities
+    Sla::TrendSeries::GRANULARITIES
+  end
+
+  def sla_granularity_label(granularity)
+    l("label_sla_granularity_#{granularity}")
   end
 
   # --- Step 6.4: detail table -----------------------------------------------------------------

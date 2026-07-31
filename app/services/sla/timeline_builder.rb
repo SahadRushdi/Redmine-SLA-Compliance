@@ -129,6 +129,14 @@ module Sla
         created_event&.to_status_id
       end
 
+      # The last thing that happened to this issue on the record — the newest journal entry, or
+      # creation for an issue that has none. Used by ResultClassifier#closed_at as the best
+      # available stand-in for a resolution instant when the issue sits in a resolved status with
+      # no transition into it recorded (imported, or resolved before that status was mapped).
+      def last_event_at
+        @events.last&.at
+      end
+
       # Per-status spans reconstructed from the transition sequence:
       #   [{ status_id:, started_at:, ended_at: }, ...]
       # The final span's `ended_at` is nil (the issue is still in that status). Built purely

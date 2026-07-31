@@ -21,6 +21,16 @@
         id: 'settings_unclassified_priority_id' %>
   <em class="info"><%= l(:text_sla_unclassified_priority_hint) %></em>
 </p>
+<%# Step 7.1 — instance-wide fallback for projects that haven't set their own webhook under %>
+<%# Project Settings → SLA Policy → Notifications. Plain Redmine admin markup like the rows %>
+<%# above; the .sla-plugin Tailwind scope starts at the access-control fieldset below. %>
+<p>
+  <label for="settings_google_chat_webhook"><%= l(:field_sla_global_google_chat_webhook) %></label>
+  <%= url_field_tag 'settings[google_chat_webhook]', settings['google_chat_webhook'],
+        id: 'settings_google_chat_webhook', size: 60,
+        placeholder: l(:text_sla_webhook_placeholder) %>
+  <em class="info"><%= l(:text_sla_global_google_chat_webhook_hint) %></em>
+</p>
 <p>
   <%= link_to l(:label_sla_target_options), sla_target_options_path %><br>
   <em class="info"><%= l(:text_sla_target_options_hint) %></em>

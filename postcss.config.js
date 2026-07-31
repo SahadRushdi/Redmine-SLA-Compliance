@@ -1,16 +1,11 @@
 // Build pipeline for the scoped plugin stylesheet.
 //
 // Order matters:
-//   1. postcss-import        — inline @import'd vendor CSS (Step 6.1: flowbite-datepicker's own
-//                                stylesheet, pulled in from tailwind.input.css) BEFORE scoping
-//                                runs, so it gets the exact same .sla-plugin treatment as
-//                                everything else. This matters: flowbite-datepicker's CSS ships
-//                                its own Tailwind-Preflight-style universal reset
-//                                (`*, ::before, ::after { ... }`) — loading that raw/unscoped
-//                                (the way tom-select.min.css is plain-copied) would silently
-//                                apply a global box-sizing/border/margin reset to every element
-//                                on every Redmine page. Routing it through this pipeline instead
-//                                turns that into `.sla-plugin *, .sla-plugin ::before, ...`.
+//   1. postcss-import        — inline this plugin's own @import'd partials (assets/stylesheets/
+//                                partials/*.css, pulled in from tailwind.input.css) BEFORE scoping
+//                                runs, so every rule in them gets the exact same .sla-plugin
+//                                treatment as everything else, rather than staying as separate
+//                                unscoped @import statements in the compiled output.
 //   2. tailwindcss           — generate utilities + Flowbite plugin's component/base CSS
 //   3. postcss-prefix-selector — wrap EVERY selector under `.sla-plugin` so nothing (not even
 //                                Flowbite's global `input`/`[type=checkbox]`/`::file-selector-button`
