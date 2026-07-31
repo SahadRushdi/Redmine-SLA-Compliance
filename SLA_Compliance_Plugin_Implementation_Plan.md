@@ -205,10 +205,13 @@ Concrete choices so the engine is unambiguous. Where a value is configurable, th
 - **Private notes count here** — deliberately unlike `Sla::FirstResponseDetector`, which excludes
   them. First response measures a customer-facing reply; this measures whether the ticket is being
   worked and reported on at all, and an internal note is a real status update.
-- **Non-human authors:** an authorless journal, Redmine's anonymous user, and any account an admin
-  lists under Administration → Plugins → SLA Compliance → **System accounts**. A REST-API
-  integration is an ordinary Redmine user account and is structurally indistinguishable from a
-  person, so the list has to be admin-managed (Global Rule 1) and stores user IDs (Global Rule 2).
+- **Non-human authors:** an authorless journal, and Redmine's own anonymous user. Nothing else, and
+  **no configuration**. A REST-API integration is an ordinary Redmine user row, structurally
+  identical to a person's, so excluding one would take an admin-maintained list of accounts — an
+  admin screen for it was built and then removed, because on this instance every ticket update is
+  written by a person and a setting nobody needs is one more thing to get wrong. If automated
+  posters are ever introduced, this is the decision to revisit (`Sla::PolicyContext
+  #non_human_author_ids` is the single place that answers "who isn't a person").
 
 ### Step 2A.3 — Engine
 - **Build:** `Sla::UpdateFrequencyEvaluator` (pure, no DB) takes the timeline, the target, the
@@ -227,7 +230,7 @@ Concrete choices so the engine is unambiguous. Where a value is configurable, th
   An ordinary issue save (no Update Frequency target for that priority) pays nothing; the sweep,
   which does hit it, resolves it once per `PolicyContext`.
 - **Done when:** unit tests over hand-crafted journal fixtures cover notes-only, details-only,
-  both-in-one, system-account and authorless journals; no-updates-since-creation; a well-paced
+  both-in-one, anonymous-authored and authorless journals; no-updates-since-creation; a well-paced
   ticket; breach → update → breach again; a gap spanning a pause; an unset target; **business-hours
   coverage** (a weekend of silence must not consume a working-hours cadence); and — in the
   classifier — breach ⇒ `primary_state = breached`, and approaching the cadence ⇒ at-risk.

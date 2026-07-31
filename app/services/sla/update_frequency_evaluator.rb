@@ -57,14 +57,14 @@ module Sla
     # @param to [Time] the window's end: the resolution instant for a resolved ticket, `now` for an
     #   open one. A resolved ticket's trailing silence still counts, for the same reason the other
     #   three milestones stop measuring at resolution rather than at `now`.
-    # @param system_user_ids [Array<Integer>] authors that are not real people (see #human_author?).
-    def initialize(timeline, target_seconds:, pause:, from:, to:, system_user_ids: [])
-      @timeline        = timeline
-      @target          = target_seconds
-      @pause           = pause
-      @from            = from
-      @to              = to
-      @system_user_ids = Array(system_user_ids)
+    # @param non_human_author_ids [Array<Integer>] authors that are not a person (see #human_author?).
+    def initialize(timeline, target_seconds:, pause:, from:, to:, non_human_author_ids: [])
+      @timeline             = timeline
+      @target               = target_seconds
+      @pause                = pause
+      @from                 = from
+      @to                   = to
+      @non_human_author_ids = Array(non_human_author_ids)
     end
 
     # @return [Result]
@@ -105,16 +105,17 @@ module Sla
                .sort
     end
 
-    # A real person, not a system/service/API account. Two exclusions, no hard-coded names or logins
-    # (Global Rule 1) and IDs only (Global Rule 2):
+    # A real person. Two exclusions, no hard-coded names or logins (Global Rule 1), IDs only
+    # (Global Rule 2):
     #   * no author at all — a journal Redmine wrote without a user;
-    #   * an author the admin listed as a system account under Administration → Plugins → SLA
-    #     Compliance, plus Redmine's own anonymous user (Sla::PluginSettings#non_human_author_user_ids).
-    # An integration posting through the REST API is an ordinary Redmine user account and is
-    # structurally indistinguishable from a person, so naming those accounts has to be an admin
-    # decision — there is nothing in the data to infer it from.
+    #   * a non-human author, which in practice means Redmine's own anonymous user
+    #     (Sla::PolicyContext#non_human_author_ids).
+    # There is deliberately no admin-managed list of service/API accounts: an integration posting
+    # through the REST API is an ordinary Redmine user row, indistinguishable from a person's, so
+    # excluding one would require naming it — and on this instance every ticket update is written
+    # by a person, which makes that a configuration surface with nothing to configure.
     def human_author?(event)
-      event.user_id.present? && !@system_user_ids.include?(event.user_id)
+      event.user_id.present? && !@non_human_author_ids.include?(event.user_id)
     end
   end
 end

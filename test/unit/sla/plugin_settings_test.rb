@@ -137,40 +137,6 @@ class Sla::PluginSettingsTest < ActiveSupport::TestCase
     assert_equal [], Sla::PluginSettings.viewer_users.to_a
   end
 
-  # --- system / service accounts (the Update Frequency target) ---------------------------------
-  #
-  # Same list mechanics as the two above (it reuses `user_ids_setting`), so these only pin what is
-  # specific to it: it is a SEPARATE list from the access grants, and the non-human set it feeds
-  # always includes Redmine's anonymous user without anyone having to list it.
-
-  test "system accounts default to empty and are independent of the access lists" do
-    Setting.plugin_redmine_sla_compliance = { 'sla_manager_user_ids' => %w[2] }
-
-    assert_equal [], Sla::PluginSettings.system_account_user_ids
-    assert_equal [], Sla::PluginSettings.system_account_users.to_a
-  end
-
-  test "system_account_users resolves the configured ids to User records" do
-    Setting.plugin_redmine_sla_compliance = { 'sla_system_account_user_ids' => ['', '3'] }
-
-    assert_equal [3], Sla::PluginSettings.system_account_user_ids
-    assert_equal [3], Sla::PluginSettings.system_account_users.map(&:id)
-  end
-
-  test "non_human_author_user_ids adds Redmine's anonymous user to the configured accounts" do
-    Setting.plugin_redmine_sla_compliance = { 'sla_system_account_user_ids' => %w[3] }
-    ids = Sla::PluginSettings.non_human_author_user_ids
-
-    assert_includes ids, 3
-    assert_includes ids, User.anonymous.id, 'anonymous is never a person and needs no listing'
-    assert_equal ids.uniq, ids
-  end
-
-  test "granting a user SLA access does not make them a system account" do
-    Setting.plugin_redmine_sla_compliance = { 'sla_viewer_user_ids' => %w[3] }
-
-    refute_includes Sla::PluginSettings.non_human_author_user_ids, 3
-  end
 
   # --- Step 7.1: global Google Chat webhook ---------------------------------------------------
 

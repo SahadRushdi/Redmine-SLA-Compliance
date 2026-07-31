@@ -25,9 +25,9 @@ class Sla::UpdateFrequencyEvaluatorTest < ActiveSupport::TestCase
   setup do
     User.current = User.find(2)
     # Monday 2026-06-01 09:00 — a fixed anchor so every timestamp is deterministic.
-    @base   = Time.zone.local(2026, 6, 1, 9, 0, 0)
-    @user   = User.find(2) # jsmith — a person
-    @system = User.find(3) # dlopper — standing in for an admin-listed service/API account
+    @base      = Time.zone.local(2026, 6, 1, 9, 0, 0)
+    @user      = User.find(2) # jsmith — a person
+    @anonymous = User.anonymous # the only author Redmine produces that is not a person
   end
 
   # --- helpers ---------------------------------------------------------------------------
@@ -67,13 +67,13 @@ class Sla::UpdateFrequencyEvaluatorTest < ActiveSupport::TestCase
 
   # Evaluate one issue exactly as Sla::ResultClassifier does: same timeline, same pause calculator.
   def evaluate(issue, target: FOUR_HOURS, from: @base, to:, pause_status_ids: [WAITING],
-               system_user_ids: [], calculator: Sla::CalendarTimeCalculator.new)
+               non_human_author_ids: [], calculator: Sla::CalendarTimeCalculator.new)
     timeline = Sla::TimelineBuilder.new(issue.reload).build
     pause    = Sla::PauseCalculator.new(timeline, pause_status_ids: pause_status_ids,
                                                   calculator: calculator)
     Sla::UpdateFrequencyEvaluator.new(timeline, target_seconds: target, pause: pause,
                                                 from: from, to: to,
-                                                system_user_ids: system_user_ids).evaluate
+                                                non_human_author_ids: non_human_author_ids).evaluate
   end
 
   # --- what counts as a qualifying update ------------------------------------------------
@@ -110,17 +110,17 @@ class Sla::UpdateFrequencyEvaluatorTest < ActiveSupport::TestCase
     assert_equal 3 * 3600, result.max_gap_seconds
   end
 
-  test "a journal from a system/service account with notes does NOT count" do
+  test "a journal from a non-human author with notes does NOT count" do
     issue = make_issue
-    add_comment(issue, at: at(2), notes: 'Automated sync completed', user: @system)
+    add_comment(issue, at: at(2), notes: 'Logged anonymously', user: @anonymous)
 
-    result = evaluate(issue, to: at(5), system_user_ids: [@system.id])
+    result = evaluate(issue, to: at(5), non_human_author_ids: [@anonymous.id])
 
     assert result.breached?
     assert_equal 5 * 3600, result.max_gap_seconds
 
     # The same journal from a person is a real update — the author is the only difference.
-    assert_equal 'met', evaluate(issue, to: at(5), system_user_ids: []).state
+    assert_equal 'met', evaluate(issue, to: at(5), non_human_author_ids: []).state
   end
 
   # `journals.user_id` is NOT NULL in this schema, so an authorless journal cannot be created here
@@ -280,9 +280,9 @@ class Sla::UpdateFrequencyEvaluatorTest < ActiveSupport::TestCase
     add_comment(issue, at: at(2))
     assert_equal at(2), evaluate(issue, to: at(3)).current_gap_started_at
 
-    # A system account's post is not an update, so it does not start a new silence either.
-    add_comment(issue, at: at(2.5), user: @system)
-    assert_equal at(2), evaluate(issue, to: at(3), system_user_ids: [@system.id])
+    # A non-human author's post is not an update, so it does not start a new silence either.
+    add_comment(issue, at: at(2.5), user: @anonymous)
+    assert_equal at(2), evaluate(issue, to: at(3), non_human_author_ids: [@anonymous.id])
                         .current_gap_started_at
   end
 

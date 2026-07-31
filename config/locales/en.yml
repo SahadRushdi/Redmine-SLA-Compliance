@@ -140,12 +140,6 @@ en:
   text_sla_manager_users_hint: "Everything a viewer can do, plus the Project Settings → SLA Policy tab (edit the policy and notification settings). Changes take effect immediately, with no restart."
   label_sla_no_users_added: "No users added yet."
 
-  # --- System / service accounts (Update Frequency target) ---------------------------------
-  label_sla_system_accounts: "System accounts"
-  text_sla_system_accounts_hint: "Accounts that post automatically — integrations, REST API users, service accounts. Their comments are ignored by the Update Frequency target, which only counts an update written by a person."
-  field_sla_system_account_users: "System / service accounts"
-  text_sla_system_account_users_hint: "Search by name, login or email. A ticket whose only recent comments came from these accounts is treated as having gone quiet. Redmine's anonymous user is always excluded and does not need listing."
-
   # --- SLA Policy tab (Phase 4) ------------------------------------------------------------
   label_sla_policy: "SLA Policy"
 

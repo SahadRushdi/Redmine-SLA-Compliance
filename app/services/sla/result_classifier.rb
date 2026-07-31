@@ -54,11 +54,11 @@ module Sla
     # @param status_roles [Hash] {created:, work_started:, resolved:, pause:} => [status_id, ...].
     # @param current_status_id [Integer, nil] the issue's status RIGHT NOW — see #closed_at rung 2.
     # @param fallback_resolved_at [Time, nil] the issue's own `closed_on` — see #closed_at rungs 2/3.
-    # @param system_user_ids [Array<Integer>, #call] journal authors that are not real people; only
-    #   the Update Frequency target consults them (Sla::UpdateFrequencyEvaluator#human_author?).
+    # @param non_human_author_ids [Array<Integer>, #call] journal authors that are not a real person;
+    #   only the Update Frequency target consults them (Sla::UpdateFrequencyEvaluator#human_author?).
     #   Pass a callable to defer the lookup until a cadence target actually needs it.
     def initialize(timeline:, policy:, definition:, tracker_configured:, status_roles:,
-                   current_status_id: nil, fallback_resolved_at: nil, system_user_ids: [],
+                   current_status_id: nil, fallback_resolved_at: nil, non_human_author_ids: [],
                    now: Time.current)
       @timeline             = timeline
       @policy               = policy
@@ -67,7 +67,7 @@ module Sla
       @roles                = status_roles || {}
       @current_status_id    = current_status_id
       @fallback_resolved_at = fallback_resolved_at
-      @system_user_ids      = system_user_ids
+      @non_human_author_ids = non_human_author_ids
       @now                  = now
     end
 
@@ -139,7 +139,7 @@ module Sla
 
       gaps = UpdateFrequencyEvaluator.new(
         @timeline, target_seconds: target, pause: pause, from: clock_start,
-        to: closed_at || @now, system_user_ids: system_user_ids
+        to: closed_at || @now, non_human_author_ids: non_human_author_ids
       ).evaluate
 
       { kind: :update_frequency, target: target, elapsed: gaps.max_gap_seconds,
@@ -152,9 +152,9 @@ module Sla
     # callable that produces them, which is what `IssueEvaluator` passes: the lookup is a query, and
     # an issue whose priority has no cadence target (the common case, and every issue in a project
     # that uses none) returns above without ever paying it. Global Rule 4 — don't slow issue saves.
-    def system_user_ids
-      @resolved_system_user_ids ||=
-        Array(@system_user_ids.respond_to?(:call) ? @system_user_ids.call : @system_user_ids)
+    def non_human_author_ids
+      @resolved_non_human_author_ids ||=
+        Array(@non_human_author_ids.respond_to?(:call) ? @non_human_author_ids.call : @non_human_author_ids)
     end
 
     # A Best Effort milestone (target nil, best_effort true) is still evaluated — it has an

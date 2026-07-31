@@ -36,7 +36,7 @@ module Sla
         # authors are not real people, but that lookup is a query and most issues never reach it
         # (no cadence target for their priority). Deferring it means an ordinary issue save pays
         # nothing, while the sweep — which does hit it — resolves it once per project context.
-        system_user_ids:      -> { @context.system_user_ids },
+        non_human_author_ids: -> { @context.non_human_author_ids },
         now:                  @now
       ).classify
     end

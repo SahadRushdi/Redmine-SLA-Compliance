@@ -82,30 +82,6 @@ module Sla
         users_for(manager_user_ids)
       end
 
-      # --- Update Frequency: which accounts are not people -------------------------------------
-      #
-      # The Update Frequency target only counts a comment as a status update when a HUMAN wrote it
-      # (Sla::UpdateFrequencyEvaluator). An integration posting through the REST API is an ordinary
-      # Redmine user account — there is nothing in the data that distinguishes it from a person — so
-      # naming those accounts has to be an admin decision. Stored as user IDs in the same settings
-      # hash as the lists above (Global Rule 2: references, never logins or display names).
-      def system_account_user_ids
-        user_ids_setting('sla_system_account_user_ids')
-      end
-
-      def system_account_users
-        users_for(system_account_user_ids)
-      end
-
-      # The full non-human set: the admin's list plus Redmine's own anonymous user, which authors
-      # journals created by anonymous API/mail-handler submissions and is never a person either.
-      #
-      # Queried by STI type rather than through `User.anonymous`, which CREATES the anonymous user
-      # when it is missing — this runs inside issue classification, and a read path must not write.
-      def non_human_author_user_ids
-        (system_account_user_ids + User.where(type: 'AnonymousUser').ids).uniq
-      end
-
       private
 
       # The settings form posts a blank sentinel entry (so the `[]` param still arrives when every

@@ -42,8 +42,8 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
 
   ROLES = { created: [OPEN], work_started: [WORK], resolved: [RESOLVED], pause: [PAUSED] }.freeze
 
-  HUMAN  = 7  # a person's user id
-  SYSTEM = 8  # an admin-listed system/service account (Sla::PluginSettings#system_account_user_ids)
+  HUMAN     = 7 # a person's user id
+  ANONYMOUS = 8 # Redmine's anonymous user (Sla::PolicyContext#non_human_author_ids)
 
   setup do
     @base   = ActiveSupport::TimeZone['UTC'].local(2026, 6, 1, 9, 0, 0)
@@ -56,8 +56,8 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
   end
 
   # Comment entries are [at, private_note, user_id]; the author defaults to a human, since that is
-  # what a real journal always has and what the Update Frequency target requires (SYSTEM is passed
-  # explicitly by the tests that need a non-human author).
+  # what a real journal always has and what the Update Frequency target requires (ANONYMOUS is
+  # passed explicitly by the tests that need a non-human author).
   def timeline(changes = [], comments: [], initial: OPEN)
     events = [Event.new(type: :created, at: @base, to_status_id: initial)]
     changes.each do |from, to, at|
@@ -72,12 +72,12 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
 
   def classify(tl, definition:, now:, policy: @policy, tracker_configured: true,
                status_roles: ROLES, current_status_id: nil, fallback_resolved_at: nil,
-               system_user_ids: [SYSTEM])
+               non_human_author_ids: [ANONYMOUS])
     Sla::ResultClassifier.new(
       timeline: tl, policy: policy, definition: definition,
       tracker_configured: tracker_configured, status_roles: status_roles,
       current_status_id: current_status_id, fallback_resolved_at: fallback_resolved_at,
-      system_user_ids: system_user_ids, now: now
+      non_human_author_ids: non_human_author_ids, now: now
     ).classify
   end
 
@@ -434,14 +434,14 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
     assert_nil r.deviation_seconds
   end
 
-  test "a comment from a system account does not reset the cadence" do
+  test "a comment from a non-human author does not reset the cadence" do
     d = Definition.new(update_frequency_seconds: FOUR_HOURS)
-    tl = timeline(comments: [[at(2), false, SYSTEM]])
+    tl = timeline(comments: [[at(2), false, ANONYMOUS]])
 
     r = classify(tl, definition: d, now: at(5))
 
     assert_equal 'breached', r.primary_state
-    assert_equal 5 * 3600, r.update_frequency_seconds, 'the automated post was not an update'
+    assert_equal 5 * 3600, r.update_frequency_seconds, 'anonymous is not a person reporting work'
   end
 
   test "approaching the update frequency target flags at risk with a projected breach_at" do
@@ -533,24 +533,24 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
 
   # --- the non-human-author lookup is deferred until a cadence target needs it ---------------
 
-  test "the system-account lookup is never performed when no cadence target is configured" do
+  test "the non-human-author lookup is never performed when no cadence target is configured" do
     calls = 0
-    resolver = -> { calls += 1; [SYSTEM] }
+    resolver = -> { calls += 1; [ANONYMOUS] }
     d = Definition.new(response_seconds: 3600, resolution_seconds: 36_000)
 
     classify(timeline(comments: [[at(0.5), false]]), definition: d, now: at(1),
-             system_user_ids: resolver)
+             non_human_author_ids: resolver)
 
     assert_equal 0, calls, 'an issue with no Update Frequency target must not pay the query'
   end
 
-  test "the system-account lookup is performed once when a cadence target is configured" do
+  test "the non-human-author lookup is performed once when a cadence target is configured" do
     calls = 0
-    resolver = -> { calls += 1; [SYSTEM] }
+    resolver = -> { calls += 1; [ANONYMOUS] }
     d = Definition.new(update_frequency_seconds: FOUR_HOURS)
 
-    r = classify(timeline(comments: [[at(2), false, SYSTEM]]), definition: d, now: at(5),
-                 system_user_ids: resolver)
+    r = classify(timeline(comments: [[at(2), false, ANONYMOUS]]), definition: d, now: at(5),
+                 non_human_author_ids: resolver)
 
     assert_equal 1, calls
     assert_equal 'breached', r.primary_state, 'and the resolved list is actually applied'

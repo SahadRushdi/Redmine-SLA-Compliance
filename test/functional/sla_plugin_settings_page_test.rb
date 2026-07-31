@@ -41,18 +41,12 @@ class SlaPluginSettingsPageTest < ActionController::TestCase
     assert_select 'select#sla-manager-users[multiple]', 0
   end
 
-  test "the system-account picker renders and saves, separately from the access lists" do
+  test "the settings page offers exactly the two access lists and no others" do
     get_settings_page
+
     assert_response :success
-    # Same list component as the two access pickers (data-sla-access-list drives the JS), so it
-    # gets the search endpoint for free — assert it, since a missing endpoint degrades silently.
-    assert_select "select#sla-system_account-users[data-sla-user-search='#{sla_access_users_path}']", 1
-
-    post :plugin, params: { id: 'redmine_sla_compliance',
-                            settings: { 'sla_system_account_user_ids' => ['', '3'] } }
-
-    assert_equal [3], Sla::PluginSettings.system_account_user_ids
-    assert_equal [], Sla::PluginSettings.viewer_user_ids, 'not an access grant'
+    assert_select '[data-sla-access-list]', 2,
+                  'the user pickers are the access grants only — there is no system-account list'
   end
 
   test "the scoped assets and picker JS reach the page" do
