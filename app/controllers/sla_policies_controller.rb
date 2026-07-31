@@ -29,7 +29,7 @@ class SlaPoliciesController < ApplicationController
   # allow-list and the set copied when a section other than General creates the row
   # (see #seed_scalars_from!). The two must not drift apart.
   POLICY_ATTRIBUTES = %i[enabled coverage_hours business_calendar_id first_response_rule
-                         at_risk_threshold pause_enabled].freeze
+                         at_risk_threshold stale_threshold_days pause_enabled].freeze
 
   # Milestone roles owned by each section; roles NOT listed for the posted section are left
   # untouched. Every role in SlaStatusMapping::ROLES must appear in exactly one entry.

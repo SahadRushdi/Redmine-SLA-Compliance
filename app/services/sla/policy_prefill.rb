@@ -37,6 +37,7 @@ module Sla
         business_calendar_id: @source.business_calendar_id,
         first_response_rule: @source.first_response_rule,
         at_risk_threshold: @source.at_risk_threshold,
+        stale_threshold_days: @source.stale_threshold_days,
         pause_enabled: @source.pause_enabled
       )
       build_status_mappings(policy)

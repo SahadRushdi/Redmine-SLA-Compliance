@@ -241,13 +241,54 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_response :success
     assert_select '#sla-card-total-value', text: '3'
     # SLA Met is no longer a summary card (it moved to the SLA Trend tab); the current-state row now
-    # carries Stale in its place. These three freshly-generated issues have a just-now updated_on, so
-    # none are stale under the default 7-day threshold.
-    assert_select '#sla-card-stale-value', text: '0'
+    # carries Stale in its place. No inactivity threshold is configured in this test, and there is no
+    # built-in one, so the card reports "not configured" rather than a count (see the Stale tests
+    # below).
+    assert_select '#sla-card-stale-value', text: '—'
     assert_select '#sla-card-breached-value', text: '1'
     assert_select '#sla-card-no-sla-value', text: '1'
     assert_select '#sla-card-not-tracked-value', text: '1'
     assert_select '#sla-card-not-configured-value', text: '0'
+  end
+
+  # --- the Stale card: admin-configured, and honest when it isn't ----------------------------
+
+  def seed_idle_ticket(idle_days, stale_threshold_days: nil)
+    SlaPolicy.create!(project_id: @project.id, enabled: true,
+                      stale_threshold_days: stale_threshold_days)
+    list!(:viewer, @user.id)
+    issue = Issue.generate!(project: @project, tracker_id: @project.trackers.first.id, priority_id: 4)
+    issue.update_columns(updated_on: idle_days.days.ago)
+    SlaResult.find_by!(issue_id: issue.id).update!(resolved_at: nil)
+    issue
+  end
+
+  test "with no threshold configured the Stale card shows a dash and tells you where to set one" do
+    seed_idle_ticket(400) # idle over a year: still not "stale", because nobody has defined stale
+
+    get :index, params: { project_id: @project.id }
+
+    assert_response :success
+    assert_select '#sla-card-stale-value', text: '—', count: 1
+    assert_select '#sla-card-stale-hint', text: I18n.t(:text_sla_card_stale_unset_hint)
+  end
+
+  test "the project's own threshold counts its idle open tickets" do
+    seed_idle_ticket(3, stale_threshold_days: 2)
+
+    get :index, params: { project_id: @project.id }
+
+    assert_response :success
+    assert_select '#sla-card-stale-value', text: '1'
+    assert_select '#sla-card-stale-hint', text: I18n.t(:text_sla_card_stale_hint)
+  end
+
+  test "a ticket idle for less than the project's threshold is not stale" do
+    seed_idle_ticket(1, stale_threshold_days: 2)
+
+    get :index, params: { project_id: @project.id }
+
+    assert_select '#sla-card-stale-value', text: '0', count: 1
   end
 
   # --- Open-ticket semantics: "open" = not resolved, and the date range never touches it -------

@@ -15,14 +15,19 @@
   </div>
 
   <%# Stale replaces the SLA Met card on this current-state row (SLA Met now lives on the SLA Trend %>
-  <%# tab). Count comes from Sla::StaleSummary: open tickets with no updates past their project's %>
-  <%# inactivity threshold. %>
+  <%# tab). Count comes from Sla::StaleSummary: open tickets with no updates past the inactivity %>
+  <%# threshold an admin configured. %>
+  <%# %>
+  <%# With no threshold configured the card shows an em dash, NOT 0 — "nobody has defined stale %>
+  <%# here" and "nothing is stale" are different statements, and printing 0 would assert the second %>
+  <%# while meaning the first. The hint doubles as the instruction for fixing it. %>
   <div class="tw-rounded-xl tw-border tw-p-4 tw-flex tw-items-start tw-gap-3 tw-shadow-sm tw-transition-shadow hover:tw-shadow-md <%= sla_card_color_classes(:stale) %>">
     <span class="tw-inline-flex tw-items-center tw-justify-center tw-w-10 tw-h-10 tw-rounded-full tw-flex-shrink-0 <%= sla_card_icon_classes(:stale) %>"><%= sla_card_icon(:stale) %></span>
     <div class="tw-min-w-0">
       <p class="tw-text-sm tw-font-medium"><%= sla_card_label(:stale) %></p>
-      <p class="tw-text-3xl tw-font-bold tw-mt-1" id="sla-card-stale-value"><%= @stale_count %></p>
-      <p class="tw-text-xs tw-opacity-70 tw-mt-1"><%= l(:text_sla_card_stale_hint) %></p>
+      <%# Kept on one line each: these carry ids the functional tests match on exact text. %>
+      <p class="tw-text-3xl tw-font-bold tw-mt-1" id="sla-card-stale-value"><%= @stale.configured? ? @stale.count : '—' %></p>
+      <p class="tw-text-xs tw-opacity-70 tw-mt-1" id="sla-card-stale-hint"><%= @stale.configured? ? l(:text_sla_card_stale_hint) : l(:text_sla_card_stale_unset_hint) %></p>
     </div>
   </div>
 

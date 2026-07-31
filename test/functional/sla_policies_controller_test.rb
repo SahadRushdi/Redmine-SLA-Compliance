@@ -454,6 +454,38 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_equal 3600, definition.response_seconds, 'the rest of the row still saves'
   end
 
+  # --- Step 6.2a: the Stale threshold, per project and clearable --------------------------------
+
+  test "the stale threshold saves with the rest of the Measurement Rules section" do
+    put :update, params: measurement_params(sla_policy: { stale_threshold_days: '2' })
+
+    assert_equal 2, policy.stale_threshold_days
+  end
+
+  test "clearing the stale threshold stores nothing, so the project inherits again" do
+    put :update, params: measurement_params(sla_policy: { stale_threshold_days: '2' })
+    assert_equal 2, policy.stale_threshold_days
+
+    put :update, params: measurement_params(sla_policy: { stale_threshold_days: '' })
+
+    assert_nil policy.reload.stale_threshold_days, 'an empty field must clear the override'
+  end
+
+  test "a nonsensical stale threshold is refused rather than stored" do
+    put :update, params: measurement_params(sla_policy: { stale_threshold_days: '0' })
+
+    assert_nil SlaPolicy.find_by(project_id: @project.id)&.stale_threshold_days
+    assert flash[:error].present?, 'the save must report why it did not take'
+  end
+
+  test "saving another section leaves the stale threshold alone" do
+    put :update, params: measurement_params(sla_policy: { stale_threshold_days: '2' })
+
+    put :update, params: general_params
+
+    assert_equal 2, policy.reload.stale_threshold_days
+  end
+
   test "saving replaces only the posted tracker's definitions" do
     saved_policy = SlaPolicy.create!(project_id: @project.id, enabled: true)
     priority = @priorities.first

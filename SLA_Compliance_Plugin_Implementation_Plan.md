@@ -70,7 +70,7 @@ Concrete choices so the engine is unambiguous. Where a value is configurable, th
 - **Sweep interval** (time-driven re-evaluation): every 15 minutes, configurable.
 - **Google Chat webhook**: per-project setting, with a global fallback.
 - **Email recipients**: a configurable list of email addresses per project.
-- **"Stale" definition**: a ticket excluded from SLA with no comment or status change for a configurable period; digest sent on a configurable schedule (default weekly).
+- **"Stale" definition**: no comment, status change or edit for a configurable period. Two surfaces, two thresholds, deliberately: the **dashboard's Stale card** uses one instance-wide setting (Administration → Plugins → SLA Compliance) that is **empty by default and has no fallback** — see Step 6.2 — while the **email digest** keeps its own per-project threshold on `sla_notification_settings` and its own schedule (default weekly), and covers only tickets excluded from SLA.
 - **At-risk email frequency**: per project, either real-time (immediate on crossing the threshold) or digest (batched at a configurable interval, default hourly).
 - **Time zone**: the Redmine instance time zone.
 - **Historical recalculation** on policy save is optional (a checkbox) and unbounded by default.
@@ -433,8 +433,43 @@ minute — no app restart, no dynamic Rufus job rescheduling.
 ### Step 6.2 — Summary cards
 The dashboard is split into two tabs because it answers two different questions, and mixing them was the defect this step now guards against.
 
-- **Open Tickets tab — the current backlog, at all times.** Population: every **open** ticket (not resolved, per §2), scoped by Project/Tracker/Priority only. Cards: **Total Open Tickets**, **Stale** (open tickets with no activity past their project's inactivity threshold), **SLA Breached**, **At Risk**, **No SLA** (not-configured vs not-tracked breakdown). Reconcile as `Total Open = Within Target + SLA Breached + No SLA`; at-risk is a subset of Within Target, shown alongside it and never added to the total. A breach is a live problem regardless of when the ticket was raised, which is why no date filter reaches this tab.
+- **Open Tickets tab — the current backlog, at all times.** Population: every **open** ticket (not resolved, per §2), scoped by Project/Tracker/Priority only. Cards: **Total Open Tickets**, **Stale** (open tickets with no activity past the configured inactivity threshold — see 6.2a), **SLA Breached**, **At Risk**, **No SLA** (not-configured vs not-tracked breakdown). Reconcile as `Total Open = Within Target + SLA Breached + No SLA`; at-risk is a subset of Within Target, shown alongside it and never added to the total. A breach is a live problem regardless of when the ticket was raised, which is why no date filter reaches this tab.
 - **SLA Trend tab — closed-loop compliance over a period.** The **SLA Met** card: of the tickets **resolved** inside the selected window, the share that met their target. Denominator is the evaluated tickets (met + breached) only. Open tickets never appear here.
+### Step 6.2a — The Stale threshold is configured, never assumed ✅Done
+- **The gap:** the card had no configuration surface of its own. It read
+  `sla_notification_settings.stale_threshold_days` — a per-project field living inside the
+  **Stale-Ticket Email Digest** card, whose own hint says it governs the digest — and fell back to a
+  hard-coded 7 days for the (many) projects with no notification row. Nobody had ever chosen a
+  number, so the card was reporting a default as if it were a decision: 250 of 269 open tickets
+  "stale" on a real instance.
+- **Build:** `sla_policies.stale_threshold_days` (migration 008, nullable), edited in the **Measurement
+  Rules** section of the project's SLA Policy tab beside the at-risk threshold — the two answer the
+  same shape of question ("at what point do we say something is wrong with this ticket"), so the
+  existing card + number-input pattern is reused rather than a new one invented.
+- **Resolution order** (`SlaPolicy.stale_threshold_days_for`): the project's own value → the nearest
+  **ancestor** that set one → nil. There is deliberately no instance-wide setting: the threshold is a
+  per-customer answer, and one global number applying to projects that never chose it is the defect
+  this step exists to fix (an admin-level field was built and removed for that reason). So setting
+  it once on a root project covers every subproject beneath it, which is the point of putting it on
+  this table rather than in the settings hash: inheritance, the lightweight tri-state row, the
+  clone/prefill copiers and fork-on-save all already work here and needed no second mechanism.
+- **Empty is a real state, not a missing value:** it means "inherit", and it is how an override is
+  removed. The field's placeholder shows the number that would apply if left blank and the line
+  under it names where that number comes from ("Currently inheriting 4 days from Acme"), so clearing
+  the box is never a leap in the dark.
+- **No default of any kind.** Nothing configured on a project or its ancestors ⇒ `Sla::StaleSummary` reports
+  `configured? == false` and the card renders an em dash, because "nobody has defined stale here"
+  and "nothing is stale" are different statements and 0 asserts the second.
+- `Sla::StaleThresholds` resolves the whole dashboard scope in **two queries** (parent links and
+  configured values loaded once, chains walked in memory) instead of the per-project branch walk
+  `SlaPolicy.stale_threshold_days_for` does for one. Both are asserted against each other in the
+  tests so they cannot drift.
+- The per-project `sla_notification_settings` field is untouched and still drives the email digest
+  (Step 8.3) — its hint now says so explicitly.
+- **Done when:** a root project's value applies to its subprojects; a subproject can override it and
+  clear the override to inherit again; the card counts each project in scope against its own
+  threshold; with nothing configured anywhere it shows "—".
+
 - **Done when:** the Open Tickets cards reconcile to Total Open and do not move when the date preset changes; a resolved ticket leaves every open-ticket card and the detail table; the SLA Met card counts only tickets resolved in the window and excludes No SLA from its denominator; no label reads "SLA Met" over the open population.
 
 ### Step 6.3 — Charts
