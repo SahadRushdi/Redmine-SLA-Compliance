@@ -12,7 +12,11 @@ module Sla
     # record       — the persisted SlaResult
     # was_at_risk  — the at_risk value in the cache BEFORE this recompute (false when no prior row)
     # now_at_risk  — the at_risk value AFTER this recompute
-    Outcome = Struct.new(:record, :was_at_risk, :now_at_risk, keyword_init: true) do
+    # result       — the classifier's own Result, passed through rather than re-derived. It carries
+    #                the at-risk dedup key (`at_risk_target` / `at_risk_since`) that the sweep needs
+    #                and the cache has no column for; keeping it here avoids both a migration and a
+    #                second classification pass.
+    Outcome = Struct.new(:record, :was_at_risk, :now_at_risk, :result, keyword_init: true) do
       # A fresh at-risk transition — the trigger for a one-time notification.
       def newly_at_risk?
         now_at_risk && !was_at_risk
@@ -37,6 +41,7 @@ module Sla
         response_seconds:   result.response_seconds,
         workaround_seconds: result.workaround_seconds,
         resolution_seconds: result.resolution_seconds,
+        update_frequency_seconds: result.update_frequency_seconds,
         deviation_seconds:  result.deviation_seconds,
         cycle_started_at:   result.cycle_started_at,
         resolved_at:        result.resolved_at,
@@ -44,7 +49,8 @@ module Sla
       )
       record.save!
 
-      Outcome.new(record: record, was_at_risk: was_at_risk, now_at_risk: record.at_risk?)
+      Outcome.new(record: record, was_at_risk: was_at_risk, now_at_risk: record.at_risk?,
+                  result: result)
     end
   end
 end

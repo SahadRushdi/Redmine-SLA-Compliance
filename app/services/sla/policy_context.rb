@@ -58,6 +58,14 @@ module Sla
       priority_id.present? && priority_id == PluginSettings.unclassified_priority_id
     end
 
+    # Journal authors that are not real people (admin-listed system/service accounts plus Redmine's
+    # anonymous user) — consumed by the Update Frequency target, which only counts a comment as a
+    # status update when a human wrote it. Memoised for the same reason everything else here is:
+    # the sweep classifies thousands of issues against one context.
+    def system_user_ids
+      @system_user_ids ||= PluginSettings.non_human_author_user_ids
+    end
+
     private
 
     # {created: [id, ...], work_started: [...], resolved: [...], pause: [...]} from one query.

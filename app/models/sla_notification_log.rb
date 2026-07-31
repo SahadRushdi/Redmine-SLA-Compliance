@@ -8,7 +8,7 @@ class SlaNotificationLog < ActiveRecord::Base
   # Plugin-internal enums. `target` is '' (not nil — see migration 002) for ticket-level
   # notification types (at_risk, stale) that aren't about one specific milestone.
   TYPES   = %w[at_risk stale google_chat_created].freeze
-  TARGETS = %w[response workaround resolution].freeze
+  TARGETS = %w[response workaround resolution update_frequency].freeze
   NO_TARGET = ''
   NO_CYCLE = ''
 

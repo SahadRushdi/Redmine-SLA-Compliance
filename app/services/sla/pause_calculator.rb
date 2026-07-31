@@ -4,9 +4,9 @@ module Sla
   # Phase 2 · Step 2.4 — Pause/exclusion handling.
   #
   # Subtracts time spent in configured pause statuses from a milestone's elapsed time
-  # (Response / Workaround / Resolution). Pause statuses are the `pause`-role status IDs from
-  # the policy (SlaStatusMapping); the elapsed math is delegated to whichever calculator the
-  # policy's coverage mode selects — Sla::CalendarTimeCalculator (24x7) or
+  # (Response / Workaround / Resolution, and each Update Frequency gap). Pause statuses are the
+  # `pause`-role status IDs from the policy (SlaStatusMapping); the elapsed math is delegated to
+  # whichever calculator the policy's coverage mode selects — Sla::CalendarTimeCalculator (24x7) or
   # Sla::BusinessHoursCalculator (business hours).
   #
   # Because paused time is measured with the SAME calculator as the milestone, the subtraction

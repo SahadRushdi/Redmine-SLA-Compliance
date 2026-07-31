@@ -146,6 +146,21 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     end
   end
 
+  test "every configured target type gets its own column, header and dropdown per priority" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+    assert_response :success
+
+    tracker_id = @project.trackers.sorted.first.id
+    priority   = IssuePriority.active.first
+    SlaDefinition::TARGET_TYPES.each do |target_type|
+      assert_select "select[name='definitions[rows][#{tracker_id}][#{priority.id}][#{target_type}]']", 1,
+                    "#{target_type} must have a dropdown on every priority row"
+      # Title case from the i18n value, never an uppercase CSS transform (CLAUDE.md).
+      assert_select "#sla-definitions-table-#{tracker_id} thead th",
+                    text: I18n.t("label_sla_target_#{target_type}"), count: 1
+    end
+  end
+
   # A disabled alert card collapses to just its switch, but its fields stay in the DOM and keep
   # posting — otherwise turning an alert off and on again would silently drop the recipients the
   # project had already saved.

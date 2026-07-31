@@ -1,5 +1,5 @@
 <%# One row per active priority, for ONE tracker's table (see _definition_table). A priority with %>
-<%# all three targets unset gets no SlaDefinition row (it is excluded / unclassified). %>
+<%# every target unset gets no SlaDefinition row (it is excluded / unclassified). %>
 <%# %>
 <%# Field names are nested under the tracker id — definitions[rows][<tracker>][<priority>][<type>] %>
 <%# — so several trackers' tables can post together in one submit. %>
@@ -19,10 +19,12 @@
     <%# ("no ... severity labels as constants or enums") — the priority's meaning and ordering %>
     <%# belong to the site's Redmine configuration, not to this code. %>
     <td class="tw-px-4 tw-py-2 tw-font-medium tw-text-gray-900"><%= h priority.name %></td>
-    <% { response: [definition&.response_seconds, definition&.best_effort?(:response)],
-         workaround: [definition&.workaround_seconds, definition&.best_effort?(:workaround)],
-         resolution: [definition&.resolution_seconds, definition&.best_effort?(:resolution)]
-       }.each do |target_type, (current_seconds, current_best_effort)| %>
+    <%# One dropdown per target type, from the model's own list — Response, Workaround, Resolution %>
+    <%# and Update Frequency are configured identically, so the column set follows the constant %>
+    <%# rather than being re-typed here. Options come from the admin lookup in every case. %>
+    <% SlaDefinition::TARGET_TYPES.each do |target_type| %>
+      <% current_seconds     = definition&.public_send("#{target_type}_seconds") %>
+      <% current_best_effort = definition&.best_effort?(target_type) %>
       <td class="tw-px-4 tw-py-2">
         <%= select_tag "definitions[rows][#{tracker.id}][#{priority.id}][#{target_type}]",
               sla_target_select_options(target_type, current_seconds, current_best_effort),

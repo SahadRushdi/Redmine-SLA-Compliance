@@ -424,6 +424,36 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_equal 86_400, definition.resolution_seconds
   end
 
+  test "the Update Frequency target persists like the other three, from the same lookup" do
+    cadence = SlaTargetOption.create!(target_type: 'update_frequency', code: '8h',
+                                      label: 'Every 8 hours', seconds: 28_800)
+    priority = @priorities.first
+    put :update, params: targets_params(
+      definitions: { tracker_ids: [@trackers.first.id.to_s],
+                     rows: { @trackers.first.id.to_s =>
+                               { priority.id.to_s => { response: '3600',
+                                                       update_frequency: cadence.seconds.to_s } } } }
+    )
+    definition = policy.sla_definitions.find_by(tracker_id: @trackers.first.id,
+                                                priority_id: priority.id)
+    assert_equal 28_800, definition.update_frequency_seconds
+    assert_equal 3600, definition.response_seconds
+  end
+
+  test "an Update Frequency value not in the lookup is rejected, like every other target" do
+    priority = @priorities.first
+    put :update, params: targets_params(
+      definitions: { tracker_ids: [@trackers.first.id.to_s],
+                     rows: { @trackers.first.id.to_s =>
+                               { priority.id.to_s => { response: '3600',
+                                                       update_frequency: '61' } } } }
+    )
+    definition = policy.sla_definitions.find_by(tracker_id: @trackers.first.id,
+                                                priority_id: priority.id)
+    assert_nil definition.update_frequency_seconds, 'a forged duration is not written'
+    assert_equal 3600, definition.response_seconds, 'the rest of the row still saves'
+  end
+
   test "saving replaces only the posted tracker's definitions" do
     saved_policy = SlaPolicy.create!(project_id: @project.id, enabled: true)
     priority = @priorities.first

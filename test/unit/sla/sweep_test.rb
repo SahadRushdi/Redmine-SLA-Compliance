@@ -81,6 +81,11 @@ class Sla::SweepTest < ActiveSupport::TestCase
     issue.update_column(:status_id, to)
   end
 
+  # A plain comment journal — the only thing that resets the Update Frequency cadence.
+  def add_comment(issue, at:, notes: 'status update', user: User.current)
+    Journal.create!(journalized: issue, user: user, notes: notes, created_on: at)
+  end
+
   def sweep(now:, notifier: FakeNotifier.new, stale_notifier: FakeStaleNotifier.new)
     summary = Sla::Sweep.new(now: now, notifier: notifier, stale_notifier: stale_notifier).run
     [summary, notifier, stale_notifier]
@@ -150,6 +155,73 @@ class Sla::SweepTest < ActiveSupport::TestCase
     cycle_keys = SlaNotificationLog.where(issue_id: issue.id, notification_type: 'at_risk')
                                    .pluck(:cycle_key)
     assert_equal 2, cycle_keys.uniq.size, 'each cycle must claim its own dedup key'
+  end
+
+  # --- a RECURRING target re-notifies per silence, not once per cycle ------------------------
+  #
+  # Update Frequency breaks the assumption the three one-shot targets satisfied: that at-risk is a
+  # one-way door inside a measurement cycle. Keying the dedup claim on the cycle alone would let the
+  # first silence claim the slot and silently suppress every later warning until the ticket is
+  # reopened — the ticket could go quiet indefinitely, repeatedly, and never be flagged again.
+
+  def configure_update_frequency_only(seconds)
+    @policy.sla_definitions.update_all(response_seconds: nil, update_frequency_seconds: seconds)
+  end
+
+  test "going quiet again in the SAME cycle queues a second at-risk notification" do
+    configure_update_frequency_only(8 * 3600) # at-risk from 6.4h of silence
+    issue = make_issue
+
+    # First silence: 7h with nobody saying anything -> warned once.
+    _, first = sweep(now: at(7))
+    assert_equal [issue.id], first.calls
+    assert_equal 1, at_risk_logs(issue)
+
+    # A person comments, so the cadence resets and the ticket is no longer at risk.
+    add_comment(issue, at: at(7.5))
+    _, after_comment = sweep(now: at(8))
+    assert_empty after_comment.calls
+    refute SlaResult.find_by(issue_id: issue.id).at_risk, 'the silence was broken'
+
+    # Second silence, same measurement cycle: a genuinely new warning.
+    _, second = sweep(now: at(15))
+    assert_equal [issue.id], second.calls, 'each silence is its own at-risk episode'
+    assert_equal 2, at_risk_logs(issue)
+
+    logs = SlaNotificationLog.where(issue_id: issue.id, notification_type: 'at_risk')
+    assert_equal ['update_frequency'], logs.pluck(:target).uniq,
+                 'claimed per target, per the plan Step 8.2 "once per ticket+target"'
+    assert_equal 2, logs.pluck(:cycle_key).uniq.size, 'each silence claims its own key'
+    cycle = SlaResult.find_by(issue_id: issue.id).cycle_started_at.to_i.to_s
+    assert_equal 1, logs.where(cycle_key: cycle).count,
+                 'both warnings sit inside ONE measurement cycle — a per-cycle key would have ' \
+                 'claimed it on the first silence and suppressed the second'
+  end
+
+  test "the same silence is never queued twice, however often the sweep runs" do
+    configure_update_frequency_only(8 * 3600)
+    issue = make_issue
+
+    _, first  = sweep(now: at(7))
+    _, again  = sweep(now: at(7.2))
+    _, again2 = sweep(now: at(7.4))
+
+    assert_equal [issue.id], first.calls
+    assert_empty again.calls, 'still the same silence — must not re-queue'
+    assert_empty again2.calls
+    assert_equal 1, at_risk_logs(issue)
+  end
+
+  test "a one-shot target claims under its own name, so targets cannot collide" do
+    issue = make_issue # the default definition is response-only
+
+    _, notifier = sweep(now: at(50.0 / 60))
+
+    assert_equal [issue.id], notifier.calls
+    log = SlaNotificationLog.find_by(issue_id: issue.id, notification_type: 'at_risk')
+    assert_equal 'response', log.target
+    # For a one-shot target the episode key IS the measurement cycle, exactly as before this change.
+    assert_equal SlaResult.find_by(issue_id: issue.id).cycle_started_at.to_i.to_s, log.cycle_key
   end
 
   # --- idempotency even when re-run at the exact same instant --------------------------------

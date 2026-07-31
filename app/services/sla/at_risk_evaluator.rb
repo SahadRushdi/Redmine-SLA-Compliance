@@ -21,13 +21,20 @@ module Sla
       @now        = now
     end
 
-    # @param milestones [Array<Hash>] each {target:, elapsed:} — the pending, not-yet-achieved
-    #   milestones (with elapsed measured to `now` in the coverage mode).
-    # @return [Array(Boolean, Time|nil)] [at_risk, breach_at]
+    # @param milestones [Array<Hash>] each {target:, elapsed:, kind:} — the pending, not-yet-achieved
+    #   milestones (with elapsed measured to `now` in the coverage mode). `kind` is optional and only
+    #   used to report which target drove the flag.
+    # @return [Array(Boolean, Time|nil, Symbol|nil)] [at_risk, breach_at, at_risk_kind]
+    #   `at_risk_kind` is the flagged milestone closest to breaching — the same one `breach_at`
+    #   projects — so a caller can say WHICH target is at risk (Step 8.2 notifies per ticket+target).
+    #   Deliberately a third array element rather than a new return type: existing two-value
+    #   destructuring keeps working untouched.
     def evaluate(milestones)
       candidates = milestones.reject { |m| m[:elapsed] > m[:target] } # exclude already-breached
-      at_risk    = candidates.any? { |m| m[:elapsed] >= m[:target] * @fraction }
-      [at_risk, earliest_breach_at(candidates)]
+      flagged    = candidates.select { |m| m[:elapsed] >= m[:target] * @fraction }
+      urgent     = flagged.min_by { |m| m[:target] - m[:elapsed] }
+
+      [flagged.any?, earliest_breach_at(candidates), urgent && urgent[:kind]]
     end
 
     private

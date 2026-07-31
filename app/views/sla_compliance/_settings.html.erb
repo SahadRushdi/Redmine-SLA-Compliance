@@ -56,64 +56,28 @@
     <p class="tw-text-sm tw-text-gray-500 tw-mb-4"><%= l(:text_sla_access_control_hint) %></p>
     <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-4">
       <% { viewer: :field_sla_viewer_users, manager: :field_sla_manager_users }.each do |list, label_key| %>
-        <% users = Sla::PluginSettings.public_send(:"#{list}_users").to_a %>
-        <%# data-sla-users seeds sla_access_form.js's in-memory state (add/sort/paginate/delete); %>
-        <%# everything server-rendered below is the no-JS-safe fallback the JS then replaces. %>
-        <div data-sla-access-list="<%= list %>"
-             data-sla-users="<%= users.map { |u| { id: u.id, name: u.name, login: u.login, mail: u.mail } }.to_json %>">
-          <label for="sla-<%= list %>-users" class="<%= sla_label_classes %>"><%= l(label_key) %></label>
-          <%# Search-only: picking a result adds a row to the table below instead of showing a %>
-          <%# chip here -- the table is the single place a granted user is shown. %>
-          <%= content_tag :select, '', id: "sla-#{list}-users",
-                data: { sla_user_search: sla_access_users_path } %>
-          <p class="tw-mt-1 tw-text-xs tw-text-gray-500"><%= l(:"text_sla_#{list}_users_hint") %></p>
-
-          <%# Sentinel: guarantees the [] param is still posted once every row is removed, so %>
-          <%# clearing a list persists as empty instead of leaving the old list untouched. %>
-          <%= hidden_field_tag "settings[sla_#{list}_user_ids][]", '', id: nil %>
-          <%# Server-rendered so the form still submits the current grants unchanged even if JS %>
-          <%# never runs; sla_access_form.js fully replaces this container's contents on every %>
-          <%# add/remove once it boots. %>
-          <div data-sla-hidden-inputs>
-            <% users.each do |user| %>
-              <%= hidden_field_tag "settings[sla_#{list}_user_ids][]", user.id, id: nil %>
-            <% end %>
-          </div>
-
-          <%# Deliberately a bare table, not a Flowbite component. Server-rendered as a %>
-          <%# read-only, unsorted, unpaginated fallback; sla_access_form.js replaces the body %>
-          <%# with a sortable, paginated, delete-capable version once it boots. %>
-          <table class="tw-mt-2 tw-w-full tw-text-sm tw-border tw-border-gray-200">
-            <thead>
-              <tr class="tw-border-b tw-border-gray-200 tw-text-left tw-text-gray-500">
-                <% [[:name, :label_user], [:login, :field_login], [:mail, :field_mail]].each do |key, header_label_key| %>
-                  <th class="tw-p-1.5 tw-cursor-pointer tw-select-none" data-sla-sort="<%= key %>">
-                    <%= l(header_label_key) %> <span data-sla-sort-indicator></span>
-                  </th>
-                <% end %>
-                <th class="tw-p-1.5"></th>
-              </tr>
-            </thead>
-            <tbody data-sla-rows>
-              <% users.each do |user| %>
-                <tr class="tw-border-b tw-border-gray-100 last:tw-border-0">
-                  <td class="tw-p-1.5"><%= h user.name %></td>
-                  <td class="tw-p-1.5"><%= h user.login %></td>
-                  <td class="tw-p-1.5"><%= h user.mail %></td>
-                  <td class="tw-p-1.5"></td>
-                </tr>
-              <% end %>
-            </tbody>
-          </table>
-          <p class="tw-mt-2 tw-text-xs tw-text-gray-400<%= ' hidden' if users.present? %>" data-sla-empty>
-            <%= l(:label_sla_no_users_added) %>
-          </p>
-          <%# Same markup/classes as Redmine::Pagination::Helper#pagination_links_full (see e.g. %>
-          <%# the Users admin list) so Purplemine2's own .pagination/.pages/.icon-del CSS styles %>
-          <%# it identically -- sla_access_form.js only swaps real page links for click handlers. %>
-          <span class="pagination" data-sla-pagination></span>
-        </div>
+        <%= render 'sla_compliance/user_list', list: list, label_key: label_key %>
       <% end %>
+    </div>
+  </div>
+</fieldset>
+
+<%# --- Update Frequency: system / service accounts ------------------------------------------- %>
+<%# NOT an access grant, which is why it is its own fieldset rather than a third column above: %>
+<%# these are the accounts whose comments the Update Frequency target must NOT treat as a human %>
+<%# status update (Sla::UpdateFrequencyEvaluator). A REST-API integration is an ordinary Redmine %>
+<%# user account, so only an admin can say which accounts those are — nothing in the data infers %>
+<%# it, and nothing here is hard-coded (Global Rule 1). Same list component as above. %>
+<fieldset class="box">
+  <legend><%= l(:label_sla_system_accounts) %></legend>
+  <div class="sla-plugin">
+    <p class="tw-text-sm tw-text-gray-500 tw-mb-4"><%= l(:text_sla_system_accounts_hint) %></p>
+    <%# The same two-column grid as the access lists above, with one cell filled: it keeps this %>
+    <%# list the same width as those, and uses only utilities the scoped stylesheet already ships %>
+    <%# (no Tailwind rebuild needed to render it). %>
+    <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-4">
+      <%= render 'sla_compliance/user_list', list: :system_account,
+                 label_key: :field_sla_system_account_users %>
     </div>
   </div>
 </fieldset>

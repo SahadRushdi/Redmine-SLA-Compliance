@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Admin CRUD for the Response/Workaround/Resolution duration lookup that populates the
+# Admin CRUD for the Response/Workaround/Resolution/Update Frequency duration lookup that populates the
 # target dropdowns in the SLA policy form (Step 4.4). Global Rule 1: target option lists are
 # admin-managed data, never code constants.
 class SlaTargetOptionsController < ApplicationController

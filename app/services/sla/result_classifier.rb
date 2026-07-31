@@ -13,9 +13,13 @@ module Sla
   # thing is unit-testable without a database.
   #
   # Milestones (each skipped when neither a numeric target nor Best Effort is set):
-  #   * response   — clock start → first response (per policy.first_response_rule, 2.5)
-  #   * workaround — clock start → first transition into a `work_started`-role status
-  #   * resolution — clock start → first transition into a `resolved`-role status
+  #   * response         — clock start → first response (per policy.first_response_rule, 2.5)
+  #   * workaround       — clock start → first transition into a `work_started`-role status
+  #   * resolution       — clock start → first transition into a `resolved`-role status
+  #   * update_frequency — the longest quiet gap between human status comments (Sla::UpdateFrequency-
+  #     Evaluator). A recurring cadence rather than a one-shot event, but a target of EQUAL standing:
+  #     breaching it makes the ticket `breached` exactly as breaching Resolution does, and it is
+  #     at-risk-evaluated on the same threshold.
   # A Best Effort milestone (B4) has no numeric target — it never breaches and is never at-risk,
   # but its elapsed time is still tracked and reported.
   #
@@ -28,9 +32,19 @@ module Sla
     # per measurement cycle rather than per issue for life: a reopened ticket gets a new
     # clock_start, and so must be eligible for a fresh at-risk notification. nil for no_sla
     # results, which never reach the at-risk path.
+    # at_risk_target / at_risk_since — WHICH target is at risk, and when the at-risk episode's own
+    # clock started. Together they are the notification dedup key (Sla::Sweep#queue_at_risk): the
+    # plan's "send once per ticket+target" (Step 8.2), and for Update Frequency once per SILENCE.
+    # That target is recurring — quiet → warned → updated → quiet again is one measurement cycle but
+    # two genuine warnings — so `cycle_started_at` alone would claim the slot on the first silence
+    # and suppress every later one for the life of the cycle. `at_risk_since` is the clock start for
+    # the three one-shot targets (identical to the old key) and the current gap's start for
+    # Update Frequency. Both nil when the ticket is not at risk.
     Result = Struct.new(:primary_state, :no_sla_reason, :at_risk, :breach_at,
+                        :at_risk_target, :at_risk_since,
                         :response_seconds, :workaround_seconds, :resolution_seconds,
-                        :deviation_seconds, :cycle_started_at, :resolved_at, keyword_init: true)
+                        :update_frequency_seconds, :deviation_seconds, :cycle_started_at,
+                        :resolved_at, keyword_init: true)
 
     # @param policy [#business_hours?, #business_calendar, #first_response_rule,
     #   #at_risk_threshold, #pause_enabled, nil] the effective SlaPolicy (nil ⇒ not configured).
@@ -40,8 +54,12 @@ module Sla
     # @param status_roles [Hash] {created:, work_started:, resolved:, pause:} => [status_id, ...].
     # @param current_status_id [Integer, nil] the issue's status RIGHT NOW — see #closed_at rung 2.
     # @param fallback_resolved_at [Time, nil] the issue's own `closed_on` — see #closed_at rungs 2/3.
+    # @param system_user_ids [Array<Integer>, #call] journal authors that are not real people; only
+    #   the Update Frequency target consults them (Sla::UpdateFrequencyEvaluator#human_author?).
+    #   Pass a callable to defer the lookup until a cadence target actually needs it.
     def initialize(timeline:, policy:, definition:, tracker_configured:, status_roles:,
-                   current_status_id: nil, fallback_resolved_at: nil, now: Time.current)
+                   current_status_id: nil, fallback_resolved_at: nil, system_user_ids: [],
+                   now: Time.current)
       @timeline             = timeline
       @policy               = policy
       @definition           = definition
@@ -49,6 +67,7 @@ module Sla
       @roles                = status_roles || {}
       @current_status_id    = current_status_id
       @fallback_resolved_at = fallback_resolved_at
+      @system_user_ids      = system_user_ids
       @now                  = now
     end
 
@@ -59,16 +78,20 @@ module Sla
       milestones = evaluated_milestones
       breached   = milestones.any? { |m| m[:breached] }
       primary    = breached ? 'breached' : 'met'
-      at_risk, breach_at = risk(primary, milestones)
+      at_risk, breach_at, at_risk_kind = risk(primary, milestones)
 
       Result.new(
         primary_state:      primary,
         no_sla_reason:      nil,
         at_risk:            at_risk,
         breach_at:          breach_at,
+        at_risk_target:     at_risk_kind&.to_s,
+        at_risk_since:      at_risk_kind && risk_since(milestones, at_risk_kind),
         response_seconds:   elapsed_for(milestones, :response),
         workaround_seconds: elapsed_for(milestones, :workaround),
         resolution_seconds: elapsed_for(milestones, :resolution),
+        # The longest quiet gap, not a span from the clock start — see #update_frequency_milestone.
+        update_frequency_seconds: elapsed_for(milestones, :update_frequency),
         deviation_seconds:  breached ? max_overage(milestones) : nil,
         cycle_started_at:   clock_start,
         resolved_at:        closed_at
@@ -91,8 +114,47 @@ module Sla
       [
         milestone(:response,   @definition.response_seconds,   response_at,   @definition.response_best_effort?),
         milestone(:workaround, @definition.workaround_seconds, workaround_at, @definition.workaround_best_effort?),
-        milestone(:resolution, @definition.resolution_seconds, resolution_at, @definition.resolution_best_effort?)
+        milestone(:resolution, @definition.resolution_seconds, resolution_at, @definition.resolution_best_effort?),
+        update_frequency_milestone
       ].compact
+    end
+
+    # Update Frequency joins the three above as an equal — same skip rule (no target and not Best
+    # Effort ⇒ not evaluated), same breach consequence, same at-risk treatment — but it cannot use
+    # #milestone, because it is not a span from the clock start to one event:
+    #
+    #   * `elapsed` is the LARGEST quiet gap so far, which is what a breach is judged on and what
+    #     the deviation is measured from. It is not monotonic in the way the other three are: a
+    #     ticket that goes quiet, is updated, then goes quiet again is re-judged on whichever
+    #     silence was longest.
+    #   * `risk_elapsed` is the gap running RIGHT NOW, which is what the at-risk warning must use.
+    #     Feeding the max gap to the at-risk check would leave a ticket flagged "about to breach"
+    #     forever after one long-but-recovered silence, even seconds after a fresh update.
+    #   * `pending` is simply "still open": the cadence clock never stops running while it is, so
+    #     there is no achieved-at instant to compare against.
+    def update_frequency_milestone
+      target      = @definition.update_frequency_seconds
+      best_effort = @definition.update_frequency_best_effort?
+      return nil if target.nil? && !best_effort
+
+      gaps = UpdateFrequencyEvaluator.new(
+        @timeline, target_seconds: target, pause: pause, from: clock_start,
+        to: closed_at || @now, system_user_ids: system_user_ids
+      ).evaluate
+
+      { kind: :update_frequency, target: target, elapsed: gaps.max_gap_seconds,
+        risk_elapsed: gaps.current_gap_seconds, risk_since: gaps.current_gap_started_at,
+        breached: best_effort ? false : gaps.breached?,
+        pending: open?, best_effort: best_effort }
+    end
+
+    # Resolved on FIRST USE, and only from here — the sole consumer. Accepts either the ids or a
+    # callable that produces them, which is what `IssueEvaluator` passes: the lookup is a query, and
+    # an issue whose priority has no cadence target (the common case, and every issue in a project
+    # that uses none) returns above without ever paying it. Global Rule 4 — don't slow issue saves.
+    def system_user_ids
+      @resolved_system_user_ids ||=
+        Array(@system_user_ids.respond_to?(:call) ? @system_user_ids.call : @system_user_ids)
     end
 
     # A Best Effort milestone (target nil, best_effort true) is still evaluated — it has an
@@ -110,13 +172,29 @@ module Sla
     end
 
     def risk(primary, milestones)
-      return [false, nil] unless primary == 'met' && open?
+      return [false, nil, nil] unless primary == 'met' && open?
 
       pending = milestones.select { |m| m[:pending] && !m[:best_effort] }
-      return [false, nil] if pending.empty?
+      return [false, nil, nil] if pending.empty?
 
       AtRiskEvaluator.new(threshold_percent: @policy.at_risk_threshold,
-                          calculator: calculator, now: @now).evaluate(pending)
+                          calculator: calculator, now: @now).evaluate(pending.map { |m| risk_input(m) })
+    end
+
+    # What the at-risk check measures for a milestone. For the three one-shot milestones that is
+    # just their elapsed time; Update Frequency supplies its own (`risk_elapsed` — the gap running
+    # now rather than the longest one ever seen). See #update_frequency_milestone.
+    def risk_input(milestone)
+      { kind: milestone[:kind], target: milestone[:target],
+        elapsed: milestone[:risk_elapsed] || milestone[:elapsed] }
+    end
+
+    # When the at-risk episode being reported began — the dedup key's second half (see Result).
+    # The clock start for a one-shot milestone, whose at-risk window opens once per cycle and never
+    # reopens; the running gap's start for Update Frequency, which opens a new one per silence.
+    def risk_since(milestones, kind)
+      milestone = milestones.find { |m| m[:kind] == kind }
+      (milestone && milestone[:risk_since]) || clock_start
     end
 
     def elapsed_for(milestones, kind)

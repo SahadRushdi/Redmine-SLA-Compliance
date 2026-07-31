@@ -66,7 +66,7 @@ Concrete choices so the engine is unambiguous. Where a value is configurable, th
 - **Reopened tickets restart the SLA clock from zero** (Re-opened is a "ticket created" status).
 - **At-risk threshold is per-project configurable, expressed as a percentage of the target elapsed** (e.g. 80% = flag once 80% of the target time is used). This scales across short response targets and long resolution targets from a single setting.
 - **First-response rule** is configurable per project: first comment, first status change, or whichever comes first. Private/internal notes do **not** count as a response.
-- **Target option lists** (Response/Workaround/Resolution durations) are an admin-managed lookup, not code constants.
+- **Target option lists** (Response/Workaround/Resolution/Update Frequency durations) are an admin-managed lookup, not code constants.
 - **Sweep interval** (time-driven re-evaluation): every 15 minutes, configurable.
 - **Google Chat webhook**: per-project setting, with a global fallback.
 - **Email recipients**: a configurable list of email addresses per project.
@@ -116,7 +116,7 @@ Concrete choices so the engine is unambiguous. Where a value is configurable, th
 - **Goal:** Tables and ActiveRecord models for the whole feature. All tables use an `sla_` prefix; all references to Redmine objects are stored as integer IDs.
 - **Build:** Migrations for:
   - `sla_policies` — project_id, enabled, coverage_hours, business_calendar_id, first_response_rule, at_risk_threshold, pause flags.
-  - `sla_definitions` — policy_id, tracker_id, priority_id, response/workaround/resolution targets (nullable = skipped).
+  - `sla_definitions` — policy_id, tracker_id, priority_id, response/workaround/resolution/update_frequency targets (nullable = skipped; the fourth added by migration 007, see Phase 2A).
   - `sla_status_mappings` — policy_id, role (created/work_started/resolved/pause), status_id.
   - `sla_business_calendars` — working days, hours, holidays.
   - `sla_results` — cache per issue: primary_state (met/breached/no_sla), at_risk (boolean), breach_at (projected breach time), response_seconds, resolution_seconds, deviation_seconds, calculated_at.
@@ -175,6 +175,88 @@ Concrete choices so the engine is unambiguous. Where a value is configurable, th
 
 ---
 
+# PHASE 2A — Update Frequency: a fourth, recurring target ✅Done
+
+> Extends Phase 2's engine, Step 1.1's data model and Step 4.4's UI rather than sitting after them
+> in build order — the amendments are folded into those steps above; the reasoning lives here.
+
+### Step 2A.1 — The target
+- **Goal:** "Someone must post a real status comment on this ticket at least every N hours, for as
+  long as it is open." A **recurring cadence**, not a one-shot milestone: a ticket comfortably
+  inside its Resolution target still breaches this by going quiet, and one that breached, was
+  updated, then went quiet again breaches again. What is measured is therefore the **largest quiet
+  gap**, not an elapsed span to a single event.
+- **Granularity is per Tracker × Priority**, identical to the other three — a fourth column in the
+  Step 4.4 table, a fourth `sla_target_options.target_type`, a nullable
+  `sla_definitions.update_frequency_seconds` (+ `_best_effort`) from migration 007. Nothing about
+  its configuration is special-cased, which is why the model's `TARGET_TYPES` list carries it and
+  the copiers, validations, clone/prefill and controller whitelisting picked it up unchanged.
+
+### Step 2A.2 — What counts as a qualifying update
+- A Journal whose **`notes` are present** AND whose **author is a real person**. Nothing else.
+- Redmine records comments and field changes as the same object and shows them in one feed, but a
+  journal can carry `journal_details` and **no notes** — a tracker switch, a % Done bump. That is
+  not a status update and must not reset the clock. A journal carrying **both** a field change and
+  notes does count: typed text is the whole test. There is no separate "comment" vs "status change"
+  journal type in Redmine to filter on, and treating them as separate kinds would be a defect.
+- The notes half is free: `Sla::TimelineBuilder` already emits a `:comment` event for exactly the
+  journals with notes present, so the evaluator reads the timeline it is given and never re-queries
+  journals. It applies only the author half.
+- **Private notes count here** — deliberately unlike `Sla::FirstResponseDetector`, which excludes
+  them. First response measures a customer-facing reply; this measures whether the ticket is being
+  worked and reported on at all, and an internal note is a real status update.
+- **Non-human authors:** an authorless journal, Redmine's anonymous user, and any account an admin
+  lists under Administration → Plugins → SLA Compliance → **System accounts**. A REST-API
+  integration is an ordinary Redmine user account and is structurally indistinguishable from a
+  person, so the list has to be admin-managed (Global Rule 1) and stores user IDs (Global Rule 2).
+
+### Step 2A.3 — Engine
+- **Build:** `Sla::UpdateFrequencyEvaluator` (pure, no DB) takes the timeline, the target, the
+  classifier's own `Sla::PauseCalculator` and the window `[clock start, resolution-or-now]`, and
+  returns `{state, deviation_seconds, max_gap_seconds, current_gap_seconds}`. Gaps: start → first
+  qualifying update, each consecutive pair, last → the window's end, **paused time removed from
+  every one** (so a ticket parked in "Waiting on Client" is not going quiet on the team).
+- **Equal standing in `Sla::ResultClassifier` and `Sla::AtRiskEvaluator`:** breaching it sets
+  `primary_state` to breached exactly as breaching Resolution does, contributes to `deviation`, and
+  gets the same at-risk threshold treatment. Best Effort behaves as it does everywhere else.
+- **The one genuine difference:** the breach is judged on the **largest** gap, but the at-risk check
+  reads the gap running **now** (`risk_elapsed`). Feeding the max gap to at-risk would leave a
+  ticket flagged "about to breach" forever after a single long-but-recovered silence.
+- **Cost control:** the non-human-author list is a query, so it is resolved **lazily** — the
+  classifier takes a callable and only calls it once a cadence target is actually being measured.
+  An ordinary issue save (no Update Frequency target for that priority) pays nothing; the sweep,
+  which does hit it, resolves it once per `PolicyContext`.
+- **Done when:** unit tests over hand-crafted journal fixtures cover notes-only, details-only,
+  both-in-one, system-account and authorless journals; no-updates-since-creation; a well-paced
+  ticket; breach → update → breach again; a gap spanning a pause; an unset target; **business-hours
+  coverage** (a weekend of silence must not consume a working-hours cadence); and — in the
+  classifier — breach ⇒ `primary_state = breached`, and approaching the cadence ⇒ at-risk.
+
+### Step 2A.4 — At-risk notification dedup: per episode, not per cycle
+- **The gap (found reviewing 2A.3):** the sweep claimed its at-risk slot with
+  `(issue, 'at_risk', target: '', cycle_key: clock_start)`. That was exactly right while at-risk was
+  a **one-way door inside a measurement cycle** — true of the three one-shot targets, whose elapsed
+  only grows. Update Frequency is recurring: quiet → warned → updated → quiet again is ONE cycle but
+  **two genuine warnings**, and the second claim collided with the first, silently suppressing every
+  later warning for the life of that cycle. Verified before the fix: the flag really does go
+  false→true→false→true under one unchanged `cycle_started_at`, and the second `claim!` returns false.
+- **Build:** the engine now reports **which** target is at risk and **when that episode began**.
+  `Sla::AtRiskEvaluator` returns a third value — the flagged milestone closest to breaching, the same
+  one `breach_at` projects — and `ResultClassifier::Result` carries `at_risk_target` /
+  `at_risk_since`. The sweep keys its claim on both:
+  - **per target**, which is Step 8.2's own wording ("send once per ticket+target") — a ticket at
+    risk on Response and later on Resolution has two things to say, not one;
+  - **per episode** rather than per cycle: `at_risk_since` is the clock start for a one-shot target
+    (the old key exactly, and a reopen still yields a fresh one) and the **running gap's start** for
+    Update Frequency, so each silence claims its own slot.
+- Carried on `ResultStore::Outcome` rather than persisted: the cache has no column for it and the
+  sweep already holds the classifier's Result — no migration, no second classification pass.
+- **Done when:** a ticket that goes quiet, is updated, and goes quiet again inside one cycle is
+  queued twice under two distinct keys; the same silence swept repeatedly is still queued exactly
+  once; a one-shot target's claim keeps its old key and now carries its own target name.
+
+---
+
 # PHASE 3 — Precompute, Caching & the Time-Driven Sweep ✅Done
 
 ### Step 3.1 — Event-driven recompute
@@ -211,7 +293,7 @@ Concrete choices so the engine is unambiguous. Where a value is configurable, th
 - **Done when:** Selections persist as status IDs; the threshold persists.
 
 ### Step 4.4 — SLA definitions per Tracker × Priority
-- **Build:** Tracker **multi-select** (existing trackers only). Each selected tracker gets its own Priority Targets table — a target row per active priority with Response/Workaround/Resolution dropdowns (values from the admin lookup) — and one Save writes them all. Unset = skipped. Priority "None" is excluded and shown once as an unclassified notice above the tables, never as a row with inputs.
+- **Build:** Tracker **multi-select** (existing trackers only). Each selected tracker gets its own Priority Targets table — a target row per active priority with a dropdown per target type (values from the admin lookup) — and one Save writes them all. Unset = skipped. The column set is driven by `SlaDefinition::TARGET_TYPES`, which is how Update Frequency (Phase 2A) became a fourth column rather than a new form. Priority "None" is excluded and shown once as an unclassified notice above the tables, never as a row with inputs.
 - Field names nest under the tracker (`definitions[rows][<tracker>][<priority>][<type>]`) and the posted `definitions[tracker_ids][]` list is the authority for what may be written: rows for a tracker not in that list are ignored, and a tracker absent from the submit keeps its stored targets untouched. **The picker chooses what is on screen and therefore editable, not which trackers have an SLA** — clearing a tracker's targets is done by setting its rows to "not tracked", so hiding one can never be a silent delete.
 - Adding a tracker fetches only that tracker's table and inserts it, rather than re-rendering the section, so targets already entered for the other selected trackers survive.
 - **Done when:** several trackers can be configured and saved in one action; targets persist per tracker×priority; an unselected tracker's saved targets are unaffected.
@@ -536,6 +618,8 @@ The dashboard is split into two tabs because it answers two different questions,
 1.1 → 1.2
    ↓
 2.1 → 2.2 → 2.3 → 2.4 → 2.5 → 2.6 → 2.7 → 2.8   (engine, fully tested)
+   ↓                                      ↓
+2A.1 → 2A.2 → 2A.3 → 2A.4  (Update Frequency: needs 2.1/2.4/2.6/2.7; amends 1.1, 3.3 and 4.4)
                                           ↓
 3.1 → 3.2 → 3.3   (3.3 = time-driven sweep, needs 2.7 / 2.8)
    ↓
