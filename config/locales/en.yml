@@ -240,8 +240,8 @@ en:
   field_sla_clone_source: "Project"
   label_sla_clone_source_blank: "— Select a project —"
   button_sla_clone_load: "Load"
-  text_sla_clone_hint: "Pre-fills this section from the selected project's policy, including targets for all its trackers. Nothing is saved until you press Save Policy."
-  text_sla_clone_confirm_overwrite: "Loading will replace everything currently entered in this form. Continue?"
+  text_sla_clone_hint: "Pre-fills every section from the selected project's policy — General, SLA Targets for all its trackers, Measurement Rules, Exclusions and Notifications. Review them in the sidebar, then press Save Policy to apply the whole set."
+  text_sla_clone_confirm_overwrite: "Loading will replace everything currently entered in every section of this policy, not just this one. Continue?"
 
   button_sla_save_policy: "Save Policy"
   button_sla_save_general: "Save General Settings"
@@ -271,6 +271,8 @@ en:
   label_sla_recalculate_historical: "Recalculate historical tickets"
   text_sla_forward_only_hint: "By default, saving applies to new activity only. Tick to re-evaluate all existing tickets against the new policy in the background."
   notice_sla_recalculation_queued: "Historical recalculation has been queued."
+  notice_sla_clone_applied: "The full SLA policy was copied from %{project}."
+  warning_sla_clone_notifications_skipped: "Notification settings were not copied — you do not have permission to manage notifications on %{project}. Everything else was copied."
 
   # --- Notification settings (4.6) ----------------------------------------------------------
   label_sla_notifications_section: "Notification Settings"

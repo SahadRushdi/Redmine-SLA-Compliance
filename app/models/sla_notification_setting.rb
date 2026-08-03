@@ -9,6 +9,19 @@ class SlaNotificationSetting < ActiveRecord::Base
   AT_RISK_FREQUENCIES = %w[realtime digest].freeze
   STALE_FREQUENCIES   = %w[daily weekly monthly].freeze
 
+  # Everything a clone carries from one project's notification setup to another's — the same
+  # "name the copied slice once" convention as SlaDefinition::COPY_ATTRIBUTES, so a new column
+  # cannot be remembered in the form and forgotten in the copier.
+  #
+  # `last_stale_digest_at` is deliberately absent. It is the digest SCHEDULE's claim (see
+  # .claim_stale_digest_window!), not configuration: copying it would hand the target project the
+  # source's already-claimed window and swallow its first digest.
+  COPY_ATTRIBUTES = %w[google_chat_webhook
+                       at_risk_email_enabled at_risk_email_recipients at_risk_email_frequency
+                       at_risk_digest_interval_minutes
+                       stale_email_enabled stale_email_recipients stale_email_frequency
+                       stale_threshold_days].freeze
+
   belongs_to :project
 
   serialize :at_risk_email_recipients, JSON
@@ -37,6 +50,26 @@ class SlaNotificationSetting < ActiveRecord::Base
 
     own = find_by(project_id: project.id)&.google_chat_webhook
     own.presence || Sla::PluginSettings.default_google_chat_webhook
+  end
+
+  # --- Step 4.7: clone ------------------------------------------------------------------------
+  # An UNSAVED setting for +project+ mirroring +source+ — the form-population vehicle for a clone
+  # load, exactly as Sla::PolicyPrefill is for the policy itself. Unlike a policy there is nothing
+  # to filter out: every attribute here is a plain value, not a reference that could be invalid in
+  # another project. Returns the project's own setting untouched when there is no source.
+  def self.prefill_for(project, source)
+    setting = find_by(project_id: project.id) || new(project_id: project.id)
+    setting.assign_attributes(source.attributes.slice(*COPY_ATTRIBUTES)) if source
+    setting
+  end
+
+  # The save half of the same operation. Upserts, so cloning onto a project that already has
+  # notification settings replaces them rather than erroring on the unique project_id index.
+  def self.copy_to!(project, source)
+    setting = find_or_initialize_by(project_id: project.id)
+    setting.assign_attributes(source.attributes.slice(*COPY_ATTRIBUTES))
+    setting.save!
+    setting
   end
 
   FREQUENCY_INTERVALS = { 'daily' => 1.day, 'weekly' => 1.week, 'monthly' => 1.month }.freeze

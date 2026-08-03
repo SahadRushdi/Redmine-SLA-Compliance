@@ -1,0 +1,18 @@
+<%# The Notifications panel as its own replaceable region, mirroring _nav_slot. Locals: project, %>
+<%# current. %>
+<%# %>
+<%# It sits OUTSIDE #sla-policy-tab-body because it belongs to a different controller and its own %>
+<%# save button, so an ordinary policy re-render must not throw away text typed into it. A CLONE %>
+<%# load is the one case that does replace it (edit.js.erb), because a clone copies the source's %>
+<%# notification setup too and the user has to see what is about to be written — the plugin's %>
+<%# standing rule that no field is saved from a value nobody was shown (Step 6A.3). %>
+<%# %>
+<%# The panel is permission-gated here rather than at the call site so both the first render and %>
+<%# the AJAX replacement go through the same check. %>
+<div id="sla-policy-notifications-slot">
+  <% if User.current.allowed_to?(:manage_sla_notifications, project) %>
+    <%= render layout: 'sla_policies/panel', locals: { key: 'notifications', current: current } do %>
+      <%= render 'sla_notification_settings/form', project: project %>
+    <% end %>
+  <% end %>
+</div>

@@ -727,6 +727,153 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     Setting.plugin_redmine_sla_compliance = {}
   end
 
+  # A clone means the WHOLE policy, not the section hosting the button. This used to hold only for
+  # a project with no policy of its own (which took the inherited-fork path); a project that
+  # already had one copied its targets and silently kept everything else.
+  def build_full_clone_source
+    source = build_clone_source
+    source.update!(coverage_hours: '24x7', first_response_rule: 'first_comment',
+                   at_risk_threshold: 65, stale_threshold_days: 9, pause_enabled: false)
+    { created: @status_ids.first, work_started: @status_ids.second,
+      resolved: @status_ids.first, pause: @status_ids.second }.each do |role, status_id|
+      source.sla_status_mappings.create!(role: role.to_s, status_id: status_id)
+    end
+    source
+  end
+
+  test "cloning onto a project that ALREADY has its own policy copies every section" do
+    source = build_full_clone_source
+    # Give the target a complete policy of its own first, deliberately different in every field.
+    put :update, params: general_params(sla_policy: { enabled: '0', coverage_hours: '24x7' })
+    put :update, params: measurement_params(
+      { sla_policy: { first_response_rule: 'first_status_change', at_risk_threshold: '95',
+                      stale_threshold_days: '3' },
+        status_mappings: { created: [@status_ids.second.to_s] } }
+    )
+    put :update, params: exclusions_params(sla_policy: { pause_enabled: '1' })
+    assert_equal 95, policy.at_risk_threshold, 'precondition: the target owns a different policy'
+
+    # The posted section carries what the prefilled form showed for the tracker on screen; the
+    # source's other tracker rides along on the clone.
+    put :update, params: targets_params(
+      { clone_source_id: '2',
+        definitions: { tracker_ids: [@trackers.first.id.to_s],
+                       rows: { @trackers.first.id.to_s =>
+                                 { @priorities.first.id.to_s => { response: '3600' } } } } }
+    )
+
+    saved = policy
+    # General
+    assert saved.enabled?, 'the source is enabled; the clone carries that (its General panel showed it)'
+    # Measurement Rules
+    assert_equal 'first_comment', saved.first_response_rule
+    assert_equal 65, saved.at_risk_threshold
+    assert_equal 9, saved.stale_threshold_days
+    assert_equal [@status_ids.second], saved.status_ids_for(:work_started)
+    assert_equal [@status_ids.first], saved.status_ids_for(:created),
+                 "the target's own created-status must be replaced by the source's"
+    # Exclusions
+    refute saved.pause_enabled?
+    assert_equal [@status_ids.second], saved.status_ids_for(:pause)
+    # SLA Targets — both the tracker that was on screen and the one that was only in the source.
+    assert_equal source.sla_definitions.count, saved.sla_definitions.count
+    assert_equal 14_400, saved.sla_definitions
+                              .find_by(tracker_id: @trackers.second.id).response_seconds,
+                 'a tracker absent from the posted form still comes across with the clone'
+  end
+
+  test "cloning copies the source project's notification settings" do
+    source = build_full_clone_source
+    @role.add_permission!(:manage_sla_notifications)
+    SlaNotificationSetting.create!(project_id: source.project_id,
+                                   google_chat_webhook: 'https://chat.example.com/hook',
+                                   at_risk_email_enabled: true,
+                                   at_risk_email_recipients: ['ops@example.com'],
+                                   at_risk_email_frequency: 'digest',
+                                   at_risk_digest_interval_minutes: 30,
+                                   stale_email_enabled: true,
+                                   stale_email_frequency: 'daily', stale_threshold_days: 4,
+                                   last_stale_digest_at: Time.zone.now)
+
+    put :update, params: targets_params(clone_source_id: '2')
+
+    copied = SlaNotificationSetting.find_by(project_id: @project.id)
+    assert_not_nil copied, 'the clone must carry the notification setup across'
+    assert_equal 'https://chat.example.com/hook', copied.google_chat_webhook
+    assert copied.at_risk_email_enabled?
+    assert_equal ['ops@example.com'], copied.at_risk_email_recipients
+    assert_equal 'digest', copied.at_risk_email_frequency
+    assert_equal 30, copied.at_risk_digest_interval_minutes
+    assert copied.stale_email_enabled?
+    assert_equal 'daily', copied.stale_email_frequency
+    assert_equal 4, copied.stale_threshold_days
+    assert_nil copied.last_stale_digest_at,
+               'the digest SCHEDULE is per-project state — copying it would swallow the first digest'
+  end
+
+  test "cloning REPLACES notification settings the target already had" do
+    source = build_full_clone_source
+    @role.add_permission!(:manage_sla_notifications)
+    SlaNotificationSetting.create!(project_id: source.project_id,
+                                   google_chat_webhook: 'https://chat.example.com/source')
+    SlaNotificationSetting.create!(project_id: @project.id,
+                                   google_chat_webhook: 'https://chat.example.com/target')
+
+    put :update, params: targets_params(clone_source_id: '2')
+
+    assert_equal 'https://chat.example.com/source',
+                 SlaNotificationSetting.find_by(project_id: @project.id).google_chat_webhook
+  end
+
+  # The webhook is effectively a secret, so :edit_sla_policy on the source — all a clone otherwise
+  # needs — must not be enough to pull it into a project the user does control.
+  test "cloning does NOT copy notifications without the notification permission, and says so" do
+    source = build_full_clone_source
+    SlaNotificationSetting.create!(project_id: source.project_id,
+                                   google_chat_webhook: 'https://chat.example.com/secret')
+
+    put :update, params: targets_params(clone_source_id: '2')
+
+    assert_nil SlaNotificationSetting.find_by(project_id: @project.id),
+               'the notification setup must not cross a permission boundary'
+    assert flash[:warning].present?, 'a skipped copy has to be stated, not left to be assumed'
+    assert_equal 1, policy.sla_status_mappings.where(role: 'pause').count,
+                 'the rest of the policy still clones'
+  end
+
+  # Redmine renders flash content as RAW HTML (ApplicationHelper#render_flash_messages does
+  # `content_tag('div', v.html_safe, ...)`) and Project#name has no format validation — only
+  # presence and a 255-char limit. So a project name interpolated unescaped into a flash is stored
+  # XSS: anyone who can rename a project that an SLA admin may clone from gets script execution in
+  # that admin's session.
+  test "a source project's name is escaped before it reaches the clone flash" do
+    build_clone_source
+    Project.find(2).update_column(:name, '<img src=x onerror=alert(1)>')
+
+    put :update, params: targets_params(clone_source_id: '2')
+
+    refute_includes flash[:notice].to_s, '<img src=x',
+                    'the raw tag must never survive into a flash Redmine will mark html_safe'
+    assert_includes flash[:notice].to_s, '&lt;img src=x'
+  end
+
+  test "clone load prefills the Notifications panel only when the copy would be allowed" do
+    source = build_full_clone_source
+    SlaNotificationSetting.create!(project_id: source.project_id,
+                                   google_chat_webhook: 'https://chat.example.com/secret')
+
+    get :edit, params: { project_id: @project.id, clone_from: '2' }, format: 'js', xhr: true
+    assert_response :success
+    refute_includes @response.body, 'chat.example.com/secret',
+                    'the panel must never preview values the save would refuse to write'
+
+    @role.add_permission!(:manage_sla_notifications)
+    get :edit, params: { project_id: @project.id, clone_from: '2' }, format: 'js', xhr: true
+    assert_response :success
+    assert_includes @response.body, 'sla-policy-notifications-slot'
+    assert_includes @response.body, 'chat.example.com/secret'
+  end
+
   test "an unauthorized clone source is ignored on save" do
     source_project = Project.find(3) # jsmith is not a member
     SlaPolicy.create!(project_id: source_project.id, enabled: true)
