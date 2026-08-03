@@ -1,18 +1,19 @@
-<%# Step 6.3 — Created vs Resolved trend (dual line, Daily/Weekly/Monthly). Colors are now %>
-<%# hand-picked (red Created / green Resolved) rather than left to chartjs-plugin-colorschemes: %>
+<%# Step 6.3 — Created vs Resolved trend (dual line, Daily/Weekly/Monthly). Colors are hand-picked: %>
 <%# Created reuses the breached red (incoming/backlog) and Resolved the met green (cleared), so the %>
 <%# two lines read at a glance and stay visually consistent with the rest of the plugin's palette. %>
-<%# sla_dashboard_charts.js reads these per-dataset colors (no colorschemes for this chart) and %>
-<%# draws larger points so each data point is clearly visible. %>
+<%# sla_dashboard_charts.js reads these per-dataset colors and draws larger points so each data %>
+<%# point is clearly visible. pointBorderColor is pinned to white here (as well as in the JS %>
+<%# elements.point defaults) so no globally-registered Chart.js plugin can ever fill it in — that %>
+<%# is exactly how the blue rings around every point got there before. %>
 <% trend_payload = {
      labels: @trend_series.map(&:bucket_label),
      datasets: [
        { label: l(:label_sla_created), data: @trend_series.map(&:created),
          borderColor: sla_chart_color(:breached), backgroundColor: sla_chart_color(:breached),
-         pointBackgroundColor: sla_chart_color(:breached) },
+         pointBackgroundColor: sla_chart_color(:breached), pointBorderColor: '#ffffff' },
        { label: l(:label_sla_resolved), data: @trend_series.map(&:resolved),
          borderColor: sla_chart_color(:met), backgroundColor: sla_chart_color(:met),
-         pointBackgroundColor: sla_chart_color(:met) }
+         pointBackgroundColor: sla_chart_color(:met), pointBorderColor: '#ffffff' }
      ]
    } %>
 <div class="tw-flex tw-flex-col">
@@ -22,11 +23,10 @@
     <div class="tw-flex tw-items-center tw-gap-4 tw-flex-wrap">
       <%# ERB-rendered legend (Chart.js's own native legend/onClick is disabled in %>
       <%# sla_dashboard_charts.js) - same data-sla-legend-target/-dataset click pattern the %>
-      <%# priority chart's legend uses, for the same click-to-highlight-not-hide behavior. Swatch %>
-      <%# colors can't be filled in here: Created/Resolved get their colors from %>
-      <%# chartjs-plugin-colorschemes at construction time, not a fixed sla_chart_color(state) the %>
-      <%# way every other legend on this dashboard is - sla_dashboard_charts.js sets each %>
-      <%# .sla-legend-swatch's background-color once it knows what colorschemes actually assigned. %>
+      <%# priority chart's legend uses, for the same click-to-highlight-not-hide behavior. The %>
+      <%# swatch colors are painted by sla_dashboard_charts.js (populateLegendSwatches) from the %>
+      <%# chart's own baseColors rather than inlined here, so the legend dot and the line it stands %>
+      <%# for can never drift apart. %>
       <% unless @trend_series.empty? %>
         <div id="sla-trend-chart-legend" class="tw-flex tw-items-center tw-gap-x-4 tw-text-xs tw-text-gray-600">
           <% [[l(:label_sla_created), 0], [l(:label_sla_resolved), 1]].each do |label, index| %>

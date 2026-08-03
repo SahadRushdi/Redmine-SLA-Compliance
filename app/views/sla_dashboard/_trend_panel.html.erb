@@ -47,10 +47,13 @@
 </div>
 
 <div class="tw-grid tw-grid-cols-1 lg:tw-grid-cols-12 tw-gap-6 tw-mb-6 lg:tw-items-stretch">
-  <div class="lg:tw-col-span-3">
+  <%# 2/10 rather than 3/9: the SLA Met card holds only a label, one percentage and one caption — %>
+  <%# there is no second metric to fill a wider column — so the extra width read as dead space next %>
+  <%# to the chart. Give the reclaimed width to the trend chart, which always uses it. %>
+  <div class="lg:tw-col-span-2">
     <%= render 'sla_dashboard/sla_met_card' %>
   </div>
-  <div class="lg:tw-col-span-9 tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-shadow-sm tw-p-5">
+  <div class="lg:tw-col-span-10 tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-shadow-sm tw-p-5">
     <%= render 'sla_dashboard/trend_chart' %>
   </div>
 </div>
