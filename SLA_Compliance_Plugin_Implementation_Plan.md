@@ -47,7 +47,9 @@ Every SLA-tracked ticket resolves to one **primary state** plus an optional **at
 
 **Reconciliation:** `Total = SLA met + SLA breached + No SLA`. At-risk is a subset of SLA met, reported alongside it — not added to the total.
 
-**Open vs resolved.** A ticket is **open** until it enters one of the policy's configured `resolved`-role statuses — the same milestone that stops the SLA clock. This is deliberately *not* Redmine's `is_closed` flag: a "Resolved" status is commonly not `is_closed`, and a status Redmine calls closed may never have been mapped to the `resolved` role. The engine persists the resolution instant on every result (`sla_results.resolved_at`, nil ⇒ open, set for No-SLA tickets too) and that column is the single definition every reader uses — the dashboard's open-ticket population, the Stale card, and the sweep's "which tickets still need re-evaluating". Where no policy exists at all, and only there, Redmine's own `closed_on` is the fallback.
+**Open vs resolved.** A ticket is **open** whenever it is **not currently sitting in** one of the policy's configured `resolved`-role statuses — that status set is the milestone that stops the SLA clock, and *leaving* it starts the clock running again. Resolution is a **state, not an event**: having once passed through a resolved status is not enough, because a ticket routinely re-enters the working set (`Waiting on Client → In progress`) and is plainly not resolved while someone is working it. Where the ticket has sat in the resolved set across several statuses without leaving, the resolution instant is the moment it **entered** that set, not the last hop inside it — the clock stopped when the ticket stopped consuming SLA time. See Step 6A.6 for the defect that established this wording.
+
+This is deliberately *not* Redmine's `is_closed` flag: a "Resolved" status is commonly not `is_closed`, and a status Redmine calls closed may never have been mapped to the `resolved` role. The engine persists the resolution instant on every result (`sla_results.resolved_at`, nil ⇒ open, set for No-SLA tickets too) and that column is the single definition every reader uses — the dashboard's open-ticket population, the Stale card, and the sweep's "which tickets still need re-evaluating". Where no policy exists at all, and only there, Redmine's own `closed_on` is the fallback.
 
 **Labelling.** The two questions the dashboard asks are not the same figure and must never share a word:
 - Over the **open** population, "met" means *still inside its target* — it is a snapshot of the backlog, not an achievement. It is labelled **Within Target**.
@@ -485,9 +487,11 @@ The dashboard is split into two tabs because it answers two different questions,
 
 # PHASE 6A — Open-Ticket Semantics & Subproject Enablement ✅Done
 
-> A second client pass on the built dashboard and settings tab. Two defects, both of which
-> changed what the numbers *mean* rather than how they render, so §1, §2 and Steps 6.1/6.2
-> above were amended rather than annotated here.
+> A second client pass on the built dashboard and settings tab, plus (in Step 6A.6) a later
+> requirement-conformance review. These are defects that changed what the numbers *mean* rather
+> than how they render, so §1, §2 and Steps 6.1/6.2 above were amended rather than annotated here.
+> §2's "Open vs resolved" paragraph in particular is the shared definition Steps 6A.2 and 6A.6 both
+> rewrote — read it before touching either.
 
 ### Step 6A.1 — Tri-state SLA on/off for a subproject
 - **The gap:** the only way for a child project to switch SLA off was **Override for this
@@ -514,10 +518,12 @@ The dashboard is split into two tabs because it answers two different questions,
   "of tickets created in this window, how many are currently within target", not a compliance
   figure.
 - **Build:** `resolved_at` becomes the single definition of open (§2). The engine's `closed_at`
-  walks an explicit ladder — a recorded transition into a `resolved`-role status, else the
-  ticket sitting in one now (falling back to Redmine's `closed_on`, then to the last recorded
-  activity, never to `now`, which would drift on every sweep), else Redmine's `closed_on` alone
-  where no policy exists — and No-SLA results now carry it too. `Sla::DashboardScope` replaces
+  walks an explicit ladder — **not in a resolved-role status right now ⇒ open**; else the first
+  transition of the current unbroken resolved run; else (no transition bounds that run) Redmine's
+  `closed_on`, then the last recorded activity, never `now`, which would drift on every sweep;
+  else Redmine's `closed_on` alone where no policy exists — and No-SLA results now carry it too.
+  *(The first rung originally read "a recorded transition into a `resolved`-role status", which
+  made resolution permanent once entered; corrected in Step 6A.6.)* `Sla::DashboardScope` replaces
   its generic `date_range` with two purpose-named filters, `open_only` and `resolved_range`;
   `Sla::StaleSummary` moves onto the same definition. The sweep re-scopes off `Issue.open` for
   the same reason: a ticket Redmine calls closed but the policy never mapped to `resolved` still
@@ -591,6 +597,60 @@ The dashboard is split into two tabs because it answers two different questions,
 - `POLICY_SECTIONS` is an allow-list of section keys a submit may name; `SECTIONS` decides which
   are offered and in what order. The test pinning them together asserts **membership, not order**,
   so the sidebar can be reordered without touching the controller.
+
+### Step 6A.6 — Resolved means *currently* resolved ✅Done
+> Found in a requirement-conformance review of the built plugin (see
+> `SLA_REQUIREMENT_CONFORMANCE_REVIEW_2026-08-03.md`). Amends §2's "Open vs resolved" paragraph and
+> Step 6A.2's ladder above, which are the definitions this corrects.
+
+- **The gap:** `Sla::ResultClassifier#closed_at` took the **first** transition into a
+  `resolved`-role status after the clock started and treated it as final. It never checked whether
+  the ticket was still there. "Waiting on Client" is a `resolved`-role status on a typical policy
+  (the client spec's own §3 mapping), so `New → Waiting on Client → In progress` recorded a ticket
+  as resolved two hours after creation and left it that way while it was **actively being worked** —
+  gone from Total Open Tickets, the Stale card, the donut, the priority bar and the detail table;
+  its resolution time frozen at the moment it entered the holding status; and counted in the SLA Met
+  percentage for a period in which it had not resolved. Reproduced against the real classifier
+  before the fix: `resolved_at` = +2h on a ticket still open ten days later.
+- **Why it was invisible.** The clock restarts on entry to a `created`-role status, which pushes
+  `clock_start` past the stale transition and self-heals the row. The instance this was found on
+  happens to route returning tickets through "New" (traced on issue #15131:
+  `New → Closed → New → Implementation`), so every affected ticket healed by accident. The
+  `Waiting on Client → In progress` path — the one the spec's §4.1(d) actually describes — did not.
+- **It was also a divergence, not just a bug.** `Sla::Sweep#open_issues` already selected
+  `issues.where.not(status_id: resolved_status_ids)` — *currently* not resolved, the right
+  definition. The sweep had been faithfully re-evaluating these tickets all along while the
+  classifier wrote `resolved_at` straight back. This closes that disagreement rather than opening
+  one.
+- **Build:** the ladder keeps its shape; only the "is it resolved" test changes. Rung 1 becomes
+  "not in a resolved-role status right now ⇒ nil (open)". Two small private helpers carry it:
+  `current_status_id` (the issue's live status when supplied — it is the authority, which is why
+  the `closed_on` rung exists at all — else the timeline's last recorded status, read off the
+  existing `Timeline#status_intervals`) and `resolved_span_start`, which walks the transitions
+  **backwards** while they keep landing in the resolved set and returns the first one of that
+  trailing run.
+- **Two decisions, both stakeholder-visible:**
+  - **The instant is entry into the set, not the last hop inside it.** `Waiting on Client → Closed`
+    resolves at Waiting on Client. Moving between two resolved statuses neither restarts nor
+    advances it. This is what the code already did for that shape, so no correct number changed.
+  - **The clock re-arms on bounce-back.** Resolved at +2h, returned to In progress, finally
+    resolved at +50h reports **50h**. This required unifying `#resolution_at` into `closed_at` —
+    it had the identical "first transition, ever" bug, and without the unification a bounced-back
+    ticket would reappear in the open population carrying a Resolution target that could never
+    breach again. `#first_transition_into` survives for `#workaround_at` only: work genuinely
+    starts once, and re-entering a work status does not un-start it.
+- **Watch out for:** the span start must be anchored on a **transition**, not on
+  `status_intervals`' `started_at`. A ticket created directly into a resolved status has a trailing
+  run reaching back to its creation event, and creation time is not a trustworthy resolution
+  instant for it — that case must keep falling through to `closed_on`. Same for a run starting at or
+  before `clock_start` (only reachable if a status is mapped to both the created and resolved roles).
+- **No migration.** Existing `sla_results` rows heal on their next sweep or issue save; a one-off
+  `rake redmine_sla_compliance:recalculate_all` makes the correction immediate.
+- **Done when:** a ticket that leaves the resolved set for a non-`created` status is open again with
+  a running resolution clock that can breach; returning via a `created` status still works (the path
+  that used to mask this); two resolved statuses in a row report the first; bounce-then-resolve
+  reports the second; the issue's live status wins when it disagrees with the journal history; and
+  every pre-existing rung of the ladder still passes unchanged.
 
 ---
 

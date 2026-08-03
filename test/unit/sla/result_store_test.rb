@@ -159,6 +159,25 @@ class Sla::ResultStoreTest < ActiveSupport::TestCase
     assert_nil row.reload.resolved_at
   end
 
+  # Step 6A.6 — the same must hold when the ticket leaves the resolved set for a status that is
+  # NOT a `created`-role one (Waiting on Client -> In progress). That path restarts nothing, so
+  # before the fix the cached resolved_at survived and the ticket stayed out of the open
+  # population for life. This also proves stale rows heal on the next sweep/save: no migration.
+  test "leaving a resolved status for a work status clears the cached resolved_at" do
+    issue = make_issue
+    add_status_change(issue, from: NEW, to: RESOLVED, at: at(1))
+    recalc(issue, now: at(2))
+    row = SlaResult.find_by(issue_id: issue.id)
+    assert_not_nil row.resolved_at, 'precondition: cached as resolved'
+
+    add_status_change(issue, from: RESOLVED, to: WORK, at: at(3))
+    recalc(issue, now: at(10))
+
+    assert_nil row.reload.resolved_at, 'it is being worked again — it belongs in the open population'
+    assert_equal 'breached', row.primary_state,
+                 'and its resolution clock is running again (10h > the 2h target)'
+  end
+
   # --- at-risk transition reporting (drives the sweep's one-time queue) ------------------
 
   test "Outcome reports the false->true at-risk transition exactly on the crossing recompute" do

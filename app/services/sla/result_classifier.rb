@@ -15,7 +15,8 @@ module Sla
   # Milestones (each skipped when neither a numeric target nor Best Effort is set):
   #   * response         — clock start → first response (per policy.first_response_rule, 2.5)
   #   * workaround       — clock start → first transition into a `work_started`-role status
-  #   * resolution       — clock start → first transition into a `resolved`-role status
+  #   * resolution       — clock start → the instant the ticket became resolved (#closed_at, which
+  #     means SITTING in a `resolved`-role status, not merely having once entered one)
   #   * update_frequency — the longest quiet gap between human status comments (Sla::UpdateFrequency-
   #     Evaluator). A recurring cadence rather than a one-shot event, but a target of EQUAL standing:
   #     breaching it makes the ticket `breached` exactly as breaching Resolution does, and it is
@@ -114,7 +115,12 @@ module Sla
       [
         milestone(:response,   @definition.response_seconds,   response_at,   @definition.response_best_effort?),
         milestone(:workaround, @definition.workaround_seconds, workaround_at, @definition.workaround_best_effort?),
-        milestone(:resolution, @definition.resolution_seconds, resolution_at, @definition.resolution_best_effort?),
+        # The Resolution milestone is achieved at exactly the instant the ticket stopped being open
+        # — one rule, `closed_at`, not a second "first transition into a resolved status" that could
+        # disagree with it. Without this a ticket that came back out of a resolved status would
+        # reappear in the open population still carrying a permanently-satisfied Resolution target
+        # that could never breach again.
+        milestone(:resolution, @definition.resolution_seconds, closed_at, @definition.resolution_best_effort?),
         update_frequency_milestone
       ].compact
     end
@@ -211,29 +217,40 @@ module Sla
                            .detect(since: clock_start)
     end
 
+    # Work genuinely starts once. Unlike resolution (below), re-entering a `work_started` status
+    # does not un-start it, so the FIRST transition is the right answer here and stays that way.
     def workaround_at
       first_transition_into(role(:work_started))
-    end
-
-    def resolution_at
-      first_transition_into(role(:resolved))
     end
 
     # When this ticket stopped being OPEN. "Open" means not resolved — the plugin's own configured
     # `resolved`-role statuses, the same milestone that stops the SLA clock, not Redmine's
     # is_closed flag (a "Resolved" status is commonly not is_closed).
     #
+    # RESOLVED MEANS *CURRENTLY* RESOLVED (Step 6A.6). This used to take the first transition into a
+    # resolved-role status and treat it as final, which was wrong the moment a ticket came back out.
+    # "Waiting on Client" is a resolved-role status on a typical policy, so `New → Waiting on Client
+    # → In progress` recorded a ticket as resolved two hours after creation and left it that way
+    # while it was actively being worked — gone from every open-ticket figure, with an understated
+    # resolution time, counted in the SLA Met percentage for a period it had not resolved in. It was
+    # masked only where the workflow happened to route returns through a `created`-role status,
+    # which restarts `clock_start` and self-heals the row by accident, not by design.
+    #
     # A journal transition is the accurate answer but is not always available, so this walks an
     # explicit ladder:
-    #   1. the first transition into a `resolved`-role status after the clock started — the normal
-    #      case, and the only one that gives a true resolution instant;
-    #   2. otherwise, if the ticket is SITTING in a resolved-role status right now with no such
-    #      transition recorded (created directly in it, imported, or resolved before the status was
-    #      mapped to the role), fall back to Redmine's own `closed_on`, and failing that to the last
-    #      recorded activity — a stable timestamp, unlike `now`, which would drift on every sweep;
-    #   3. otherwise, when NO resolved-role statuses are configured at all (no policy — the
-    #      `not_configured` case), fall back to Redmine's `closed_on` alone, so those tickets can
-    #      still leave the open population.
+    #   1. the ticket is NOT in a resolved-role status right now ⇒ nil, it is open. This is the test
+    #      that makes leaving the resolved set restart the clock, and it matches what
+    #      `Sla::Sweep#open_issues` has always selected on;
+    #   2. it IS in one ⇒ the first transition of the CURRENT unbroken resolved run. Moving between
+    #      two resolved statuses (Waiting on Client → Closed) neither restarts nor advances the
+    #      instant: the clock stopped when the ticket stopped consuming SLA time, which is the entry
+    #      into the set, not the last hop inside it;
+    #   3. it IS in one but no transition bounds that run (created directly in it, imported, or
+    #      resolved before the status was mapped to the role) ⇒ Redmine's own `closed_on`, failing
+    #      that the last recorded activity — a stable timestamp, unlike `now`, which would drift on
+    #      every sweep;
+    #   4. NO resolved-role statuses are configured at all (no policy — the `not_configured` case)
+    #      ⇒ Redmine's `closed_on` alone, so those tickets can still leave the open population.
     def closed_at
       return @closed_at if defined?(@closed_at)
 
@@ -241,11 +258,39 @@ module Sla
       @closed_at =
         if resolved_ids.empty?
           @fallback_resolved_at
-        elsif (transition = first_transition_into(resolved_ids))
-          transition
-        elsif resolved_ids.include?(@current_status_id)
-          @fallback_resolved_at || @timeline.last_event_at || @now
+        elsif !resolved_ids.include?(current_status_id)
+          nil
+        else
+          resolved_span_start(resolved_ids) ||
+            @fallback_resolved_at || @timeline.last_event_at || @now
         end
+    end
+
+    # Where the ticket IS right now. The issue's live status wins when we have it — that is why
+    # rung 3 exists at all, since the journal history can be missing the transition that put it
+    # there — falling back to the last status the timeline recorded.
+    def current_status_id
+      @current_status_id || @timeline.status_intervals.last[:status_id]
+    end
+
+    # The first transition of the unbroken TRAILING run of resolved-role statuses: walk the
+    # transitions backwards while they keep landing in the resolved set, and stop at the first that
+    # does not.
+    #
+    # Anchored on a transition rather than on `status_intervals`' `started_at` deliberately: a
+    # ticket created directly INTO a resolved status has a trailing run reaching back to its
+    # creation event, and creation time is not a trustworthy resolution instant for it (rung 3's
+    # `closed_on` is). Returning nil in that case, and when the run starts at or before the current
+    # measurement cycle (a status mapped to both the created and resolved roles), hands those to the
+    # rung-3 fallback rather than inventing an instant.
+    def resolved_span_start(resolved_ids)
+      span_start = nil
+      @timeline.status_changes.sort_by(&:at).reverse_each do |change|
+        break unless resolved_ids.include?(change.to_status_id)
+
+        span_start = change.at
+      end
+      span_start if span_start && span_start > clock_start
     end
 
     def open?

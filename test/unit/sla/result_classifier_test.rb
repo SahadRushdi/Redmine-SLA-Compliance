@@ -37,10 +37,12 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
   OPEN     = 1
   WORK     = 2
   RESOLVED = 3
+  CLOSED   = 4 # a SECOND resolved-role status — the "Waiting on Client then Closed" shape
   DONE     = 5 # a neutral status in no role
   PAUSED   = 9
 
-  ROLES = { created: [OPEN], work_started: [WORK], resolved: [RESOLVED], pause: [PAUSED] }.freeze
+  ROLES = { created: [OPEN], work_started: [WORK], resolved: [RESOLVED, CLOSED],
+            pause: [PAUSED] }.freeze
 
   HUMAN     = 7 # a person's user id
   ANONYMOUS = 8 # Redmine's anonymous user (Sla::PolicyContext#non_human_author_ids)
@@ -391,6 +393,82 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
     assert_equal 'not_tracked', r.no_sla_reason
     assert_equal at(6), r.resolved_at
     assert_nil r.cycle_started_at, 'no_sla never reaches the at-risk path that consumes it'
+  end
+
+  # --- Step 6A.6: resolved means CURRENTLY resolved -------------------------------------
+  #
+  # `closed_at` used to take the FIRST transition into a resolved-role status and treat it as
+  # final. "Waiting on Client" is a resolved-role status on a typical policy, so a ticket that
+  # went New -> Waiting on Client -> In progress was recorded as resolved two hours after
+  # creation and stayed that way while it was actively being worked: gone from every open-ticket
+  # figure, resolution time understated, and counted in the SLA Met percentage for a period it
+  # had not resolved in.
+
+  test "a ticket that came back OUT of a resolved status is open again, not resolved forever" do
+    d = Definition.new(resolution_seconds: 36_000)
+    # The exact defect shape: resolved-role status entered at +2h, LEFT at +26h for a work status
+    # that is not a `created`-role status, so nothing restarts the clock and hides the bug.
+    tl = timeline([[OPEN, RESOLVED, at(2)], [RESOLVED, WORK, at(26)]])
+
+    r = classify(tl, definition: d, now: at(240), current_status_id: WORK)
+
+    assert_nil r.resolved_at, 'it is sitting in a work status — it has not resolved'
+  end
+
+  test "returning via a created-role status also stays open (the path that used to mask this)" do
+    d  = Definition.new(resolution_seconds: 36_000)
+    tl = timeline([[OPEN, RESOLVED, at(2)], [RESOLVED, OPEN, at(3)], [OPEN, WORK, at(4)]])
+
+    r = classify(tl, definition: d, now: at(10), current_status_id: WORK)
+
+    assert_nil r.resolved_at
+  end
+
+  test "moving between two resolved statuses keeps the instant it ENTERED the resolved set" do
+    d = Definition.new(resolution_seconds: 36_000)
+    # Waiting on Client at +2h, then formally Closed three days later, never leaving the set.
+    # The SLA clock stopped at +2h; the later hop inside the set must not advance it.
+    tl = timeline([[OPEN, RESOLVED, at(2)], [RESOLVED, CLOSED, at(74)]])
+
+    r = classify(tl, definition: d, now: at(100), current_status_id: CLOSED)
+
+    assert_equal at(2), r.resolved_at
+    assert_equal 7200, r.resolution_seconds
+  end
+
+  test "bounced back out and resolved again reports the SECOND resolution" do
+    d = Definition.new(resolution_seconds: 36_000) # 10h
+    tl = timeline([[OPEN, RESOLVED, at(2)], [RESOLVED, WORK, at(5)], [WORK, CLOSED, at(50)]])
+
+    r = classify(tl, definition: d, now: at(60), current_status_id: CLOSED)
+
+    assert_equal at(50), r.resolved_at, 'the clock re-armed when it left the resolved set'
+    assert_equal 180_000, r.resolution_seconds, '50h, not the 2h of the first resolution'
+    assert_equal 'breached', r.primary_state
+  end
+
+  test "while bounced back out, the Resolution target can breach again" do
+    d = Definition.new(resolution_seconds: 36_000) # 10h
+    tl = timeline([[OPEN, RESOLVED, at(2)], [RESOLVED, WORK, at(3)]])
+
+    r = classify(tl, definition: d, now: at(40), current_status_id: WORK)
+
+    assert_nil r.resolved_at
+    assert_equal 'breached', r.primary_state,
+                 'the milestone re-armed — it must not stay satisfied by the first resolution'
+    assert_equal 144_000 - 36_000, r.deviation_seconds
+  end
+
+  test "the issue's live status wins when it disagrees with the journal history" do
+    d = Definition.new(resolution_seconds: 36_000)
+    # Timeline's last recorded transition lands in a resolved status, but the issue is really in a
+    # work status (a transition Redmine never journalled). The live status is the authority on
+    # WHERE the ticket is; the timeline only says when it got there.
+    tl = timeline([[OPEN, RESOLVED, at(2)]])
+
+    r = classify(tl, definition: d, now: at(40), current_status_id: WORK)
+
+    assert_nil r.resolved_at
   end
 
   # --- Update Frequency: a fourth target of equal standing ------------------------------
