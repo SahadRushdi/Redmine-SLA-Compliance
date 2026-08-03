@@ -742,14 +742,10 @@
  * result/deviation are shown, and the search + per-page controls are hidden. Clicking the card's
  * expand button MOVES the exact same #sla-detail-table node into the modal (single rendered row
  * set - rows are never duplicated) and adds `.sla-detail-expanded`, which reveals every extra
- * column and lets the wide table scroll horizontally INSIDE the modal only (the compact card itself
- * never scrolls sideways - CLAUDE.md/no inline scroll). Column visibility is a class toggle rather
- * than a JS style loop so the two states can never drift out of sync with the markup.
- *
- * The search box + per-page dropdown are a separate case: the same script MOVES that one node onto
- * the modal's state-pill row (into [data-sla-modal-controls-slot]) instead of leaving it inside the
- * table, so the modal spends no band of its own on them. Their visibility therefore keys off where
- * the node is parked, not off `.sla-detail-expanded` - which no longer contains them once expanded.
+ * column, the search box, the per-page dropdown, and lets the wide table scroll horizontally
+ * INSIDE the modal only (the compact card itself never scrolls sideways - CLAUDE.md/no inline
+ * scroll). Column visibility is a class toggle rather than a JS style loop so the two states can
+ * never drift out of sync with the markup.
  */
 .sla-plugin .sla-detail-col-extra { display: none; }
 .sla-plugin [data-sla-detail-controls] { display: none; }
@@ -2284,6 +2280,12 @@
   }
 }
 @media (min-width: 1024px) {
+  .sla-plugin .lg\:tw-col-span-10 {
+    grid-column: span 10 / span 10;
+  }
+  .sla-plugin .lg\:tw-col-span-2 {
+    grid-column: span 2 / span 2;
+  }
   .sla-plugin .lg\:tw-col-span-3 {
     grid-column: span 3 / span 3;
   }
@@ -2292,9 +2294,6 @@
   }
   .sla-plugin .lg\:tw-col-span-5 {
     grid-column: span 5 / span 5;
-  }
-  .sla-plugin .lg\:tw-col-span-9 {
-    grid-column: span 9 / span 9;
   }
   .sla-plugin .lg\:tw-w-72 {
     width: 18rem;

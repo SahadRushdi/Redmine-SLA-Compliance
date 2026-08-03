@@ -13,8 +13,8 @@ module Sla
   # more than one app-server process, and must NEVER double-send. Both notification paths rely on
   # a real DB constraint rather than an app-level check-then-act:
   #   * at-risk — `SlaNotificationLog.claim!` is guarded by a unique index on
-  #     (issue_id, notification_type, target); only one caller anywhere can ever win it for a
-  #     given issue.
+  #     (issue_id, notification_type, target, cycle_key); only one caller anywhere can ever win a
+  #     given at-risk episode (see #queue_at_risk for what an episode is).
   #   * stale digest — `SlaNotificationSetting.claim_stale_digest_window!` is an atomic
   #     conditional UPDATE keyed on the project's `last_stale_digest_at`; only one caller can win
   #     a given project's digest window, and it naturally re-opens once the configured frequency
@@ -55,7 +55,7 @@ module Sla
 
           if outcome.newly_at_risk?
             newly += 1
-            queued += 1 if queue_at_risk(issue, outcome.record)
+            queued += 1 if queue_at_risk(issue, outcome)
           elsif track_stale && excluded_not_tracked?(outcome.record)
             stale_candidates << issue if stale?(issue, notification_setting.stale_threshold_days)
           end
@@ -69,19 +69,33 @@ module Sla
 
     private
 
-    # Queue the at-risk notification exactly once PER MEASUREMENT CYCLE. `claim!` is an atomic
+    # Queue the at-risk notification exactly once PER AT-RISK EPISODE. `claim!` is an atomic
     # DB-level guard (a real unique index, not a check-then-act query), so this is safe even when
     # multiple app-server processes run their own copy of the sweep concurrently — only one of
-    # them will ever get `true` back for a given (issue, cycle). The cycle_key is the engine's
-    # clock_start for this result: a reopened ticket gets a new clock_start and therefore a fresh
-    # cycle_key, so it can be notified again rather than being silently blocked by its previous
-    # cycle's already-claimed row.
-    def queue_at_risk(issue, result)
-      cycle_key = result.cycle_started_at&.to_i&.to_s || SlaNotificationLog::NO_CYCLE
-      return false unless SlaNotificationLog.claim!(issue_id: issue.id, notification_type: 'at_risk',
-                                                    cycle_key: cycle_key)
+    # them will ever get `true` back for a given claim.
+    #
+    # What identifies an episode is the engine's `at_risk_target` + `at_risk_since` (see
+    # Sla::ResultClassifier::Result), which generalises the previous key in two steps:
+    #   * per TARGET, the plan's Step 8.2 wording ("send once per ticket+target") — a ticket at risk
+    #     on Response and later on Resolution has two things to say, not one;
+    #   * per EPISODE rather than per measurement cycle. For the three one-shot targets these are the
+    #     same thing (`at_risk_since` is the clock start, exactly the old key, and a reopen still
+    #     yields a fresh one). Update Frequency is recurring: quiet → warned → updated → quiet again
+    #     is ONE cycle but two real warnings, and keying on the cycle would have claimed the slot on
+    #     the first silence and suppressed every later one for the life of that cycle.
+    # Falls back to the ticket-level key if the engine reported no target, so a result predating
+    # these fields still de-dupes rather than notifying on every sweep.
+    def queue_at_risk(issue, outcome)
+      result  = outcome.result
+      target  = result&.at_risk_target.presence || SlaNotificationLog::NO_TARGET
+      episode = result&.at_risk_since || result&.cycle_started_at
 
-      @notifier.enqueue_at_risk(issue, result)
+      return false unless SlaNotificationLog.claim!(
+        issue_id: issue.id, notification_type: 'at_risk', target: target,
+        cycle_key: episode&.to_i&.to_s || SlaNotificationLog::NO_CYCLE
+      )
+
+      @notifier.enqueue_at_risk(issue, outcome.record)
       true
     end
 

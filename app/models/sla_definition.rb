@@ -1,13 +1,17 @@
 # frozen_string_literal: true
 
-# A per tracker x priority target set within a policy. Any of the three targets may be nil,
+# A per tracker x priority target set within a policy. Any of the targets may be nil,
 # meaning that milestone is not evaluated for this tracker/priority. Targets are stored as
 # absolute seconds (a snapshot of the chosen sla_target_options value) so SLA math is stable
 # even if the admin later edits the lookup.
 class SlaDefinition < ActiveRecord::Base
   self.table_name = 'sla_definitions'
 
-  TARGET_TYPES = %w[response workaround resolution].freeze
+  # `update_frequency` is a recurring cadence target rather than a one-shot milestone (see
+  # Sla::UpdateFrequencyEvaluator), but it is CONFIGURED identically — same seconds snapshot, same
+  # Best Effort flag, same nullable "not tracked" — so it belongs in this list and every generic
+  # path below picks it up for free.
+  TARGET_TYPES = %w[response workaround resolution update_frequency].freeze
 
   # Everything that makes up one definition, minus its own identity and owning policy — the exact
   # slice copied when a policy is cloned or prefilled from an ancestor (Sla::PolicyPrefill,
@@ -22,6 +26,7 @@ class SlaDefinition < ActiveRecord::Base
   validates :priority_id, presence: true
   validates :tracker_id, uniqueness: { scope: [:sla_policy_id, :priority_id] }
   validates :response_seconds, :workaround_seconds, :resolution_seconds,
+            :update_frequency_seconds,
             numericality: { only_integer: true, greater_than: 0 }, allow_nil: true
   # A "1 Business Day"-style ('business'-basis) target option's stored seconds value is only a
   # correct answer when the policy measures elapsed time in working seconds (Coverage Hours =

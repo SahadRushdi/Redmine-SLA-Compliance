@@ -20,34 +20,32 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
     end
   end
 
-  Definition = Struct.new(:response_seconds, :workaround_seconds, :resolution_seconds,
-                          :response_best_effort, :workaround_best_effort, :resolution_best_effort,
-                          keyword_init: true) do
+  # Duck-typed stand-in for SlaDefinition, built from the model's own target list so a new target
+  # (Update Frequency) can't be measured by the classifier without this stub answering for it.
+  Definition = Struct.new(*SlaDefinition::TARGET_TYPES.flat_map { |type|
+                            [:"#{type}_seconds", :"#{type}_best_effort"]
+                          }, keyword_init: true) do
     def any_target?
-      [response_seconds, workaround_seconds, resolution_seconds,
-       response_best_effort, workaround_best_effort, resolution_best_effort].any?
+      to_h.values.any?
     end
 
-    def response_best_effort?
-      !!response_best_effort
-    end
-
-    def workaround_best_effort?
-      !!workaround_best_effort
-    end
-
-    def resolution_best_effort?
-      !!resolution_best_effort
+    SlaDefinition::TARGET_TYPES.each do |type|
+      define_method(:"#{type}_best_effort?") { !!public_send(:"#{type}_best_effort") }
     end
   end
 
   OPEN     = 1
   WORK     = 2
   RESOLVED = 3
+  CLOSED   = 4 # a SECOND resolved-role status — the "Waiting on Client then Closed" shape
   DONE     = 5 # a neutral status in no role
   PAUSED   = 9
 
-  ROLES = { created: [OPEN], work_started: [WORK], resolved: [RESOLVED], pause: [PAUSED] }.freeze
+  ROLES = { created: [OPEN], work_started: [WORK], resolved: [RESOLVED, CLOSED],
+            pause: [PAUSED] }.freeze
+
+  HUMAN     = 7 # a person's user id
+  ANONYMOUS = 8 # Redmine's anonymous user (Sla::PolicyContext#non_human_author_ids)
 
   setup do
     @base   = ActiveSupport::TimeZone['UTC'].local(2026, 6, 1, 9, 0, 0)
@@ -59,23 +57,29 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
     @base + hours * 3600
   end
 
+  # Comment entries are [at, private_note, user_id]; the author defaults to a human, since that is
+  # what a real journal always has and what the Update Frequency target requires (ANONYMOUS is
+  # passed explicitly by the tests that need a non-human author).
   def timeline(changes = [], comments: [], initial: OPEN)
     events = [Event.new(type: :created, at: @base, to_status_id: initial)]
     changes.each do |from, to, at|
       events << Event.new(type: :status_change, at: at, from_status_id: from, to_status_id: to)
     end
-    comments.each do |at, private_note|
-      events << Event.new(type: :comment, at: at, private_note: private_note)
+    comments.each do |at, private_note, user_id|
+      events << Event.new(type: :comment, at: at, private_note: private_note,
+                          user_id: user_id || HUMAN)
     end
     Timeline.new(events.sort_by(&:at))
   end
 
   def classify(tl, definition:, now:, policy: @policy, tracker_configured: true,
-               status_roles: ROLES, current_status_id: nil, fallback_resolved_at: nil)
+               status_roles: ROLES, current_status_id: nil, fallback_resolved_at: nil,
+               non_human_author_ids: [ANONYMOUS])
     Sla::ResultClassifier.new(
       timeline: tl, policy: policy, definition: definition,
       tracker_configured: tracker_configured, status_roles: status_roles,
-      current_status_id: current_status_id, fallback_resolved_at: fallback_resolved_at, now: now
+      current_status_id: current_status_id, fallback_resolved_at: fallback_resolved_at,
+      non_human_author_ids: non_human_author_ids, now: now
     ).classify
   end
 
@@ -389,6 +393,283 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
     assert_equal 'not_tracked', r.no_sla_reason
     assert_equal at(6), r.resolved_at
     assert_nil r.cycle_started_at, 'no_sla never reaches the at-risk path that consumes it'
+  end
+
+  # --- Step 6A.6: resolved means CURRENTLY resolved -------------------------------------
+  #
+  # `closed_at` used to take the FIRST transition into a resolved-role status and treat it as
+  # final. "Waiting on Client" is a resolved-role status on a typical policy, so a ticket that
+  # went New -> Waiting on Client -> In progress was recorded as resolved two hours after
+  # creation and stayed that way while it was actively being worked: gone from every open-ticket
+  # figure, resolution time understated, and counted in the SLA Met percentage for a period it
+  # had not resolved in.
+
+  test "a ticket that came back OUT of a resolved status is open again, not resolved forever" do
+    d = Definition.new(resolution_seconds: 36_000)
+    # The exact defect shape: resolved-role status entered at +2h, LEFT at +26h for a work status
+    # that is not a `created`-role status, so nothing restarts the clock and hides the bug.
+    tl = timeline([[OPEN, RESOLVED, at(2)], [RESOLVED, WORK, at(26)]])
+
+    r = classify(tl, definition: d, now: at(240), current_status_id: WORK)
+
+    assert_nil r.resolved_at, 'it is sitting in a work status — it has not resolved'
+  end
+
+  test "returning via a created-role status also stays open (the path that used to mask this)" do
+    d  = Definition.new(resolution_seconds: 36_000)
+    tl = timeline([[OPEN, RESOLVED, at(2)], [RESOLVED, OPEN, at(3)], [OPEN, WORK, at(4)]])
+
+    r = classify(tl, definition: d, now: at(10), current_status_id: WORK)
+
+    assert_nil r.resolved_at
+  end
+
+  test "moving between two resolved statuses keeps the instant it ENTERED the resolved set" do
+    d = Definition.new(resolution_seconds: 36_000)
+    # Waiting on Client at +2h, then formally Closed three days later, never leaving the set.
+    # The SLA clock stopped at +2h; the later hop inside the set must not advance it.
+    tl = timeline([[OPEN, RESOLVED, at(2)], [RESOLVED, CLOSED, at(74)]])
+
+    r = classify(tl, definition: d, now: at(100), current_status_id: CLOSED)
+
+    assert_equal at(2), r.resolved_at
+    assert_equal 7200, r.resolution_seconds
+  end
+
+  test "bounced back out and resolved again reports the SECOND resolution" do
+    d = Definition.new(resolution_seconds: 36_000) # 10h
+    tl = timeline([[OPEN, RESOLVED, at(2)], [RESOLVED, WORK, at(5)], [WORK, CLOSED, at(50)]])
+
+    r = classify(tl, definition: d, now: at(60), current_status_id: CLOSED)
+
+    assert_equal at(50), r.resolved_at, 'the clock re-armed when it left the resolved set'
+    assert_equal 180_000, r.resolution_seconds, '50h, not the 2h of the first resolution'
+    assert_equal 'breached', r.primary_state
+  end
+
+  test "while bounced back out, the Resolution target can breach again" do
+    d = Definition.new(resolution_seconds: 36_000) # 10h
+    tl = timeline([[OPEN, RESOLVED, at(2)], [RESOLVED, WORK, at(3)]])
+
+    r = classify(tl, definition: d, now: at(40), current_status_id: WORK)
+
+    assert_nil r.resolved_at
+    assert_equal 'breached', r.primary_state,
+                 'the milestone re-armed — it must not stay satisfied by the first resolution'
+    assert_equal 144_000 - 36_000, r.deviation_seconds
+  end
+
+  test "the issue's live status wins when it disagrees with the journal history" do
+    d = Definition.new(resolution_seconds: 36_000)
+    # Timeline's last recorded transition lands in a resolved status, but the issue is really in a
+    # work status (a transition Redmine never journalled). The live status is the authority on
+    # WHERE the ticket is; the timeline only says when it got there.
+    tl = timeline([[OPEN, RESOLVED, at(2)]])
+
+    r = classify(tl, definition: d, now: at(40), current_status_id: WORK)
+
+    assert_nil r.resolved_at
+  end
+
+  # --- Update Frequency: a fourth target of equal standing ------------------------------
+  #
+  # The evaluator's own gap/qualifying-update rules are covered in
+  # test/unit/sla/update_frequency_evaluator_test.rb. What matters HERE is that the classifier
+  # treats it exactly like the other three: same skip rule, same breach consequence, same at-risk
+  # threshold — plus the one thing that is genuinely different, the at-risk check reading the gap
+  # running now rather than the longest gap ever seen.
+
+  FOUR_HOURS = 4 * 3600
+
+  test "update frequency not configured -> not evaluated, however quiet the ticket goes" do
+    d = Definition.new(resolution_seconds: 360_000) # only Resolution is tracked
+    r = classify(timeline, definition: d, now: at(50)) # 50h of total silence
+
+    assert_equal 'met', r.primary_state
+    assert_nil r.update_frequency_seconds, 'a nil target means the milestone is skipped entirely'
+    assert_nil r.deviation_seconds
+  end
+
+  test "no qualifying update since creation past the target -> breached, like a late resolution" do
+    d = Definition.new(update_frequency_seconds: FOUR_HOURS)
+    r = classify(timeline, definition: d, now: at(5))
+
+    assert_equal 'breached', r.primary_state
+    assert_equal 5 * 3600, r.update_frequency_seconds, 'the largest quiet gap so far'
+    assert_equal 3600, r.deviation_seconds, 'one hour past the cadence'
+    refute r.at_risk, 'a breached ticket is past at-risk, exactly as for the other targets'
+    assert_nil r.breach_at
+  end
+
+  test "qualifying updates spaced under the target -> met" do
+    d = Definition.new(update_frequency_seconds: FOUR_HOURS)
+    tl = timeline(comments: [[at(2), false], [at(5), false]])
+
+    r = classify(tl, definition: d, now: at(6))
+
+    assert_equal 'met', r.primary_state
+    assert_equal 3 * 3600, r.update_frequency_seconds # the +2h -> +5h gap, the largest
+    assert_nil r.deviation_seconds
+  end
+
+  test "a comment from a non-human author does not reset the cadence" do
+    d = Definition.new(update_frequency_seconds: FOUR_HOURS)
+    tl = timeline(comments: [[at(2), false, ANONYMOUS]])
+
+    r = classify(tl, definition: d, now: at(5))
+
+    assert_equal 'breached', r.primary_state
+    assert_equal 5 * 3600, r.update_frequency_seconds, 'anonymous is not a person reporting work'
+  end
+
+  test "approaching the update frequency target flags at risk with a projected breach_at" do
+    d = Definition.new(update_frequency_seconds: FOUR_HOURS)
+    now = @base + 12_600 # 87.5% of the cadence used, threshold is 80%
+
+    r = classify(timeline, definition: d, now: now)
+
+    assert_equal 'met', r.primary_state
+    assert r.at_risk, 'same warn-before-breach treatment as Response/Workaround/Resolution'
+    assert_equal now + 1800, r.breach_at
+  end
+
+  test "a long silence that has since been broken is not at risk" do
+    # 3h54m of silence — 97% of the cadence — but a human commented a moment ago, so the ticket is
+    # nowhere near breaching. The breach judgement still uses the largest gap; only the at-risk
+    # check switches to the gap running now.
+    d = Definition.new(update_frequency_seconds: FOUR_HOURS)
+    tl = timeline(comments: [[@base + 14_040, false]])
+
+    r = classify(tl, definition: d, now: @base + 14_400)
+
+    assert_equal 'met', r.primary_state
+    assert_equal 14_040, r.update_frequency_seconds
+    refute r.at_risk, 'the current gap is 6 minutes, not the 3h54m it recovered from'
+  end
+
+  test "paused time is excluded from an update frequency gap" do
+    d = Definition.new(update_frequency_seconds: FOUR_HOURS)
+    # Parked in a pause status from +1h to +5h: 6h of wall-clock silence, 2h of it on the team.
+    # It comes back to WORK rather than OPEN — returning to a `created`-role status would be a
+    # reopen and restart the clock, which is a different test.
+    tl = timeline([[OPEN, PAUSED, at(1)], [PAUSED, WORK, at(5)]])
+
+    r = classify(tl, definition: d, now: at(6))
+
+    assert_equal 'met', r.primary_state
+    assert_equal 2 * 3600, r.update_frequency_seconds
+
+    unpaused = Policy.new(business_hours: false, business_calendar: nil,
+                          first_response_rule: 'either', at_risk_threshold: 80, pause_enabled: false)
+    r = classify(tl, definition: d, now: at(6), policy: unpaused)
+    assert_equal 'breached', r.primary_state, 'with pauses off the same silence breaches'
+  end
+
+  # --- the at-risk dedup key: which target, and which episode --------------------------------
+
+  test "at-risk reports the target and, for a one-shot milestone, the clock start as its episode" do
+    d = Definition.new(response_seconds: 3600)
+    r = classify(timeline, definition: d, now: @base + 3000) # 83% of the response target
+
+    assert r.at_risk
+    assert_equal 'response', r.at_risk_target
+    assert_equal @base, r.at_risk_since, 'a one-shot target has one at-risk window per cycle'
+    assert_equal r.cycle_started_at, r.at_risk_since
+  end
+
+  test "at-risk on the cadence reports the RUNNING silence as its episode, not the cycle" do
+    d = Definition.new(update_frequency_seconds: FOUR_HOURS)
+    # Quiet 3h (inside the cadence), a comment at +3h, then quiet again — this second silence is
+    # the one running now, and it is what the warning is about.
+    tl = timeline(comments: [[at(3), false]])
+
+    r = classify(tl, definition: d, now: at(6.6)) # 3h36m of the 4h cadence used = 90%
+
+    assert r.at_risk
+    assert_equal 'update_frequency', r.at_risk_target
+    assert_equal at(3), r.at_risk_since, 'the episode is this silence, keyed on when it began'
+    assert_equal @base, r.cycle_started_at, 'while the measurement cycle is unchanged'
+  end
+
+  test "a ticket that is not at risk reports no target or episode" do
+    d = Definition.new(update_frequency_seconds: FOUR_HOURS)
+    r = classify(timeline, definition: d, now: at(1))
+
+    refute r.at_risk
+    assert_nil r.at_risk_target
+    assert_nil r.at_risk_since
+  end
+
+  test "a breached ticket reports no at-risk target" do
+    d = Definition.new(update_frequency_seconds: FOUR_HOURS)
+    r = classify(timeline, definition: d, now: at(5))
+
+    assert_equal 'breached', r.primary_state
+    assert_nil r.at_risk_target
+    assert_nil r.at_risk_since
+  end
+
+  # --- the non-human-author lookup is deferred until a cadence target needs it ---------------
+
+  test "the non-human-author lookup is never performed when no cadence target is configured" do
+    calls = 0
+    resolver = -> { calls += 1; [ANONYMOUS] }
+    d = Definition.new(response_seconds: 3600, resolution_seconds: 36_000)
+
+    classify(timeline(comments: [[at(0.5), false]]), definition: d, now: at(1),
+             non_human_author_ids: resolver)
+
+    assert_equal 0, calls, 'an issue with no Update Frequency target must not pay the query'
+  end
+
+  test "the non-human-author lookup is performed once when a cadence target is configured" do
+    calls = 0
+    resolver = -> { calls += 1; [ANONYMOUS] }
+    d = Definition.new(update_frequency_seconds: FOUR_HOURS)
+
+    r = classify(timeline(comments: [[at(2), false, ANONYMOUS]]), definition: d, now: at(5),
+                 non_human_author_ids: resolver)
+
+    assert_equal 1, calls
+    assert_equal 'breached', r.primary_state, 'and the resolved list is actually applied'
+  end
+
+  # --- business-hours coverage ---------------------------------------------------------------
+
+  test "business hours: a weekend of silence does not consume the cadence" do
+    # Fri 2026-06-05 15:00, 4 WORKING-hour cadence, calendar Mon-Fri 09:00-17:00.
+    friday   = ActiveSupport::TimeZone['UTC'].local(2026, 6, 5, 15, 0, 0)
+    calendar = Calendar.new(working_days: [1, 2, 3, 4, 5], work_start_time: '09:00',
+                            work_end_time: '17:00', holidays: [])
+    policy = Policy.new(business_hours: true, business_calendar: calendar,
+                        first_response_rule: 'either', at_risk_threshold: 80, pause_enabled: true)
+    events = [Event.new(type: :created, at: friday, to_status_id: OPEN)]
+    tl = Timeline.new(events)
+    d  = Definition.new(update_frequency_seconds: FOUR_HOURS)
+
+    # Monday 09:30: 2h working elapsed (Fri 15:00-17:00) + 0.5h = 2.5h — the weekend is not counted.
+    monday = ActiveSupport::TimeZone['UTC'].local(2026, 6, 8, 9, 30, 0)
+    r = classify(tl, definition: d, now: monday, policy: policy)
+
+    assert_equal 'met', r.primary_state, 'a weekend of silence is not silence on the team'
+    assert_equal 2.5 * 3600, r.update_frequency_seconds
+    refute r.at_risk, '62% of the cadence used, below the 80% threshold'
+
+    # Monday 11:00 — 4h working elapsed, exactly at target; 11:01 is past it.
+    breached = classify(tl, definition: d, policy: policy,
+                        now: ActiveSupport::TimeZone['UTC'].local(2026, 6, 8, 11, 1, 0))
+    assert_equal 'breached', breached.primary_state
+  end
+
+  test "a Best Effort update frequency never breaches but still reports its largest gap" do
+    d = Definition.new(update_frequency_best_effort: true)
+
+    r = classify(timeline, definition: d, now: at(100))
+
+    assert_equal 'met', r.primary_state
+    assert_equal 100 * 3600, r.update_frequency_seconds
+    refute r.at_risk
+    assert_nil r.deviation_seconds
   end
 
   test "a reopened ticket is open again: the resolution instant is cleared" do

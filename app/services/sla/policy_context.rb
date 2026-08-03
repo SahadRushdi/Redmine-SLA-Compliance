@@ -58,6 +58,22 @@ module Sla
       priority_id.present? && priority_id == PluginSettings.unclassified_priority_id
     end
 
+    # Journal authors that are not a real person — consumed by the Update Frequency target, which
+    # only counts a comment as a status update when a human wrote it.
+    #
+    # That is Redmine's own anonymous user, and nothing else: an integration or REST-API account is
+    # an ordinary user row, structurally identical to a person's, so identifying one would take an
+    # admin-maintained list. There is deliberately no such list — this instance has no automated
+    # posters, and a configuration surface nobody needs is one more thing to get wrong.
+    #
+    # Queried by STI type rather than through `User.anonymous`, which CREATES the anonymous user
+    # when it is missing — this runs inside issue classification, and a read path must not write.
+    # Memoised for the same reason everything else here is: the sweep classifies thousands of
+    # issues against one context.
+    def non_human_author_ids
+      @non_human_author_ids ||= User.where(type: 'AnonymousUser').ids
+    end
+
     private
 
     # {created: [id, ...], work_started: [...], resolved: [...], pause: [...]} from one query.

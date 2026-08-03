@@ -60,7 +60,9 @@ class SlaDashboardController < ApplicationController
     @scope  = Sla::DashboardScope.call(project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
                                         priority_ids: @filters[:priority_ids], open_only: true)
     @counts = Sla::ResultSummary.call(scope: @scope)
-    @stale_count = Sla::StaleSummary.call(scope: @scope)
+    # Carries `configured?` as well as the count: with no threshold set on any project in scope the
+    # card renders "not configured" rather than a 0 (Sla::StaleSummary).
+    @stale = Sla::StaleSummary.call(scope: @scope)
 
     # Step 6.3 — charts. Reads the same current-state @scope; no live SLA computation, only
     # aggregation over the sla_results cache (Global Rule 4).

@@ -137,6 +137,7 @@ class Sla::PluginSettingsTest < ActiveSupport::TestCase
     assert_equal [], Sla::PluginSettings.viewer_users.to_a
   end
 
+
   # --- Step 7.1: global Google Chat webhook ---------------------------------------------------
 
   test "default_google_chat_webhook is nil when unset or blank" do

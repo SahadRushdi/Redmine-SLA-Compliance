@@ -41,6 +41,14 @@ class SlaPluginSettingsPageTest < ActionController::TestCase
     assert_select 'select#sla-manager-users[multiple]', 0
   end
 
+  test "the settings page offers exactly the two access lists and no others" do
+    get_settings_page
+
+    assert_response :success
+    assert_select '[data-sla-access-list]', 2,
+                  'the user pickers are the access grants only — there is no system-account list'
+  end
+
   test "the scoped assets and picker JS reach the page" do
     # Without these the pickers still render, but as bare unstyled multi-selects with no search
     # and no chips — a silent degradation the other assertions here would not catch.

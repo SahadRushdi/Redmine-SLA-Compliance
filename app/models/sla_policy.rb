@@ -13,6 +13,10 @@ class SlaPolicy < ActiveRecord::Base
   # Plugin-internal enums (modes/rules) — NOT Redmine domain data.
   COVERAGE_HOURS      = %w[24x7 business_hours].freeze
   FIRST_RESPONSE_RULES = %w[first_comment first_status_change either].freeze
+  # Accepted range for the Stale card's inactivity threshold. One definition, shared by the
+  # validation below and the number input's min/max in the Measurement Rules form — a form that
+  # accepts what the model rejects is just a save that fails for no visible reason.
+  STALE_THRESHOLD_DAYS = (1..365).freeze
 
   belongs_to :project
   belongs_to :business_calendar, class_name: 'SlaBusinessCalendar', optional: true
@@ -25,6 +29,12 @@ class SlaPolicy < ActiveRecord::Base
   validates :first_response_rule, inclusion: { in: FIRST_RESPONSE_RULES }
   validates :at_risk_threshold,
             numericality: { only_integer: true, greater_than: 0, less_than_or_equal_to: 100 }
+  # nil = not set for this project (inherit) — see .stale_threshold_days_for.
+  validates :stale_threshold_days,
+            numericality: { only_integer: true,
+                            greater_than_or_equal_to: STALE_THRESHOLD_DAYS.min,
+                            less_than_or_equal_to: STALE_THRESHOLD_DAYS.max },
+            allow_nil: true
   # Business Hours coverage requires a calendar to compute against.
   validates :business_calendar_id, presence: true, if: :business_hours?
 
@@ -87,6 +97,35 @@ class SlaPolicy < ActiveRecord::Base
   # no configuration of its own and must keep showing the ancestor's.
   def self.config_source_for(project)
     nearest_policy_with(project) { |policy| !policy.inherits_config? }
+  end
+
+  # How many days of inactivity make an open ticket STALE for +project+ (Step 6.2a), resolved down
+  # the chain the user is shown on the settings tab:
+  #
+  #   1. this project's own value, if it set one;
+  #   2. otherwise the nearest ANCESTOR that set one — so configuring it on a root project covers
+  #      every subproject beneath it, which is the whole reason it lives on this table;
+  #   3. otherwise nil — nobody has said what stale means for this project, and the dashboard card
+  #      reports exactly that rather than inventing a number.
+  #
+  # There is no instance-wide fallback: the threshold is a per-customer answer, and one global
+  # number applying to projects that never chose it is the defect this step exists to fix.
+  #
+  # Deliberately looks only for a non-nil VALUE, not for the effective policy: a lightweight row
+  # (`inherits_config?`) owns no configuration and never carries one, so it is skipped naturally,
+  # and a disabled row does not hide an ancestor's threshold from a project that is still on the
+  # dashboard through its own enabled row.
+  def self.stale_threshold_days_for(project)
+    return nil unless project
+
+    nearest_first_policies(project).filter_map(&:stale_threshold_days).first
+  end
+
+  # [project, policy] for the nearest row that actually SETS a stale threshold — what the settings
+  # tab names as the source of an inherited value ("inheriting 7 days from Acme"). Same traversal
+  # as every other resolver here.
+  def self.stale_threshold_source_for(project)
+    nearest_policy_with(project) { |policy| policy.stale_threshold_days.present? }
   end
 
   # This project's OWN enablement decision, ignoring the tree: :inherit (no row of its own, so the

@@ -29,7 +29,7 @@ class SlaPoliciesController < ApplicationController
   # allow-list and the set copied when a section other than General creates the row
   # (see #seed_scalars_from!). The two must not drift apart.
   POLICY_ATTRIBUTES = %i[enabled coverage_hours business_calendar_id first_response_rule
-                         at_risk_threshold pause_enabled].freeze
+                         at_risk_threshold stale_threshold_days pause_enabled].freeze
 
   # Milestone roles owned by each section; roles NOT listed for the posted section are left
   # untouched. Every role in SlaStatusMapping::ROLES must appear in exactly one entry.
@@ -45,6 +45,11 @@ class SlaPoliciesController < ApplicationController
     if params[:clone_from].present?
       @sla_policy = build_clone_prefill(params[:clone_from])
       return render_404 unless @sla_policy
+
+      # The Notifications panel is re-rendered from this when it is set (see edit.js.erb and
+      # SlaPoliciesHelper#sla_notification_setting_for_form, which this pre-empts). nil ⇒ the panel
+      # is left exactly as it is, which is what must happen when the copy would be refused.
+      @sla_notification_setting = build_clone_notification_prefill(params[:clone_from])
     end
     respond_to do |format|
       format.js
@@ -57,15 +62,31 @@ class SlaPoliciesController < ApplicationController
 
     @sla_policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
     section = posted_section
+    # Resolved ONCE and threaded through every consumer below rather than memoised on the
+    # controller: an instance variable would tie three methods together invisibly, and a controller
+    # instance is not guaranteed to serve exactly one request (ActionController::TestCase reuses
+    # one across calls, which is enough to make a stale nil look like "no clone was requested").
+    clone_source = clone_source_policy
+    notifications_skipped = false
 
     begin
       ActiveRecord::Base.transaction do
-        # A project whose configuration is inherited edits a form pre-filled from the ancestor, so
-        # this save is a FORK: the whole inherited configuration is written as the project's own and
-        # the posted section is applied on top. Captured before the row is touched, since assigning
-        # below is exactly what stops it being inherited.
-        source = forking_from_inherited? ? inherited_seed_source : nil
-        seed_scalars_from!(source) if source
+        # Two different reasons to copy another project's configuration wholesale, one code path:
+        #
+        #   * a CLONE — the user picked a source, pressed Load, and reviewed every section
+        #     pre-filled from it. "Clone" means the whole policy, not the section that happens to
+        #     host the button, and it applies whether or not this project already had a policy of
+        #     its own (before, an existing policy took the `source = nil` branch and only its
+        #     targets were copied — everything else silently stayed behind);
+        #   * a FORK — a project whose configuration is inherited saves for the first time, and
+        #     must end up with the complete configuration it had a moment earlier plus the change
+        #     just made (Step 6A.3).
+        #
+        # The clone wins when both apply: it is the explicit choice. `forking_from_inherited?` is
+        # read before the row is touched, since assigning below is exactly what stops it being
+        # inherited.
+        source = clone_source || (forking_from_inherited? ? inherited_seed_source : nil)
+        seed_scalars_from!(source, clone: clone_source.present?) if source
         @sla_policy.assign_attributes(policy_params)
         # Saving any policy section writes configuration onto this row, which by definition makes
         # it self-defining — the case that matters is a project that first used the tri-state
@@ -77,9 +98,10 @@ class SlaPoliciesController < ApplicationController
         copy_configuration_from!(source, definitions: !cloning_definitions?(section)) if source
         replace_status_mappings!(SECTION_STATUS_ROLES.fetch(section, []))
         if section == 'targets'
-          apply_clone_source!
+          apply_clone_source!(clone_source)
           replace_tracker_definitions!
         end
+        notifications_skipped = !copy_notification_settings!(clone_source) if clone_source
       end
     rescue ActiveRecord::RecordInvalid => e
       flash[:error] = e.record.errors.full_messages.join(', ')
@@ -87,6 +109,7 @@ class SlaPoliciesController < ApplicationController
     end
 
     flash[:notice] = l(:notice_successful_update)
+    announce_clone_outcome(clone_source, notifications_skipped)
     if section == 'targets' && params[:recalculate] == '1'
       SlaPolicyRecalculationJob.perform_later(@project.id)
       flash[:notice] = "#{flash[:notice]} #{l(:notice_sla_recalculation_queued)}"
@@ -187,12 +210,20 @@ class SlaPoliciesController < ApplicationController
     @sla_policy.new_record? || @sla_policy.inherits_config?
   end
 
-  # The policy the form the user just submitted was populated from: the clone source when one was
-  # loaded, else the ancestor whose configuration this project inherits today. nil for the first
-  # policy anywhere in the tree — there the form really is blank and the DB defaults are right.
+  # The clone source the user loaded and is now saving, or nil when this is an ordinary save.
+  # Deliberately not memoised — see the note at its single call site in #update.
+  def clone_source_policy
+    return nil if params[:clone_source_id].blank?
+
+    authorized_source_policy(params[:clone_source_id])
+  end
+
+  # The ancestor whose configuration this project inherits today — what a FORK seeds from. The
+  # clone source is resolved separately (above) and takes priority in #update, so this no longer
+  # has to consider it. nil for the first policy anywhere in the tree: there the form really is
+  # blank and the DB defaults are right.
   def inherited_seed_source
-    source = authorized_source_policy(params[:clone_source_id]) if params[:clone_source_id].present?
-    source || SlaPolicy.config_source_for(@project).last
+    SlaPolicy.config_source_for(@project).last
   end
 
   # Scalars first, so the posted section's own fields (assigned after this) win.
@@ -202,12 +233,75 @@ class SlaPoliciesController < ApplicationController
   # (SlaPolicy.effective_for). Saving, say, Measurement Rules on a project inheriting an ENABLED
   # policy would silently switch SLA off for a project whose screen showed it on.
   #
-  # `enabled` is the one exception on an EXISTING row: a lightweight row's on/off decision is its
-  # own (set through the tri-state control) and must not be overwritten by the ancestor's.
-  def seed_scalars_from!(source)
+  # `enabled` on an EXISTING row is the one attribute that needs a decision, and it differs by
+  # reason: a FORK must leave it alone, because a lightweight row's on/off is the project's own
+  # (set through the tri-state control) and an ancestor's must not overwrite it — whereas a CLONE
+  # copies it, because it is part of the policy the user chose and the General panel showed them
+  # its state, switch included, before they saved.
+  def seed_scalars_from!(source, clone: false)
     attributes = source.attributes.slice(*POLICY_ATTRIBUTES.map(&:to_s))
-    attributes.delete('enabled') unless @sla_policy.new_record?
+    attributes.delete('enabled') if !clone && !@sla_policy.new_record?
     @sla_policy.assign_attributes(attributes)
+  end
+
+  # A clone carries the source's NOTIFICATION setup too — the whole point of "clone the policy" is
+  # that the target needs no further setup. Those settings live on a different model behind a
+  # different permission, so they get their own gate: the user must hold
+  # :manage_sla_notifications on BOTH projects.
+  #
+  # Requiring it on the SOURCE is the part that matters. The Google Chat webhook is effectively a
+  # secret, and :edit_sla_policy on a project (which is all #authorized_source_policy demands) must
+  # not be enough to extract it into a project the user does control.
+  #
+  # @return [Boolean] false only when the copy was REFUSED, so #update can say so. A source with no
+  #   notification row at all is not a refusal — there is simply nothing to carry across.
+  def copy_notification_settings!(clone_source)
+    # Presence first, so a source with nothing configured is never reported as a permission
+    # refusal — telling someone they lack a permission when nothing was lost sends them chasing
+    # an access problem that isn't there.
+    source_setting = SlaNotificationSetting.find_by(project_id: clone_source.project_id)
+    return true if source_setting.nil?
+    return false unless notifications_copyable?(clone_source.project)
+
+    SlaNotificationSetting.copy_to!(@project, source_setting)
+    true
+  end
+
+  def notifications_copyable?(source_project)
+    source_project.present? &&
+      User.current.allowed_to?(:manage_sla_notifications, source_project) &&
+      User.current.allowed_to?(:manage_sla_notifications, @project)
+  end
+
+  # Say what the clone actually did. A clone rewrites every section, so confirming it by name is
+  # worth a line — and a refused notification copy has to be stated rather than left as a panel
+  # the user assumes came across with everything else.
+  #
+  # The project name is ESCAPED before it goes anywhere near the flash. Redmine renders flash
+  # content as raw HTML (`content_tag('div', v.html_safe, ...)` in ApplicationHelper
+  # #render_flash_messages) and `Project#name` is free text with no format validation, so an
+  # unescaped name here is stored XSS: anyone who can rename a project the victim may clone from
+  # gets script execution in the victim's session.
+  def announce_clone_outcome(source, notifications_skipped)
+    return if source.nil?
+
+    name = ERB::Util.html_escape(source.project&.name)
+    flash[:notice] = "#{flash[:notice]} #{l(:notice_sla_clone_applied, project: name)}"
+    return unless notifications_skipped
+
+    flash[:warning] = l(:warning_sla_clone_notifications_skipped, project: name)
+  end
+
+  # Mirrors #build_clone_prefill for the Notifications panel, so a clone load SHOWS the settings it
+  # is about to write. Returns nil when the copy would be refused, which leaves the panel exactly
+  # as it was: the form must never preview values the save will not write.
+  def build_clone_notification_prefill(source_project_id)
+    source = authorized_source_policy(source_project_id)
+    return nil unless source && notifications_copyable?(source.project)
+
+    SlaNotificationSetting.prefill_for(
+      @project, SlaNotificationSetting.find_by(project_id: source.project_id)
+    )
   end
 
   # Copy the source's status mappings and (unless the clone path below is about to do it) its
@@ -269,11 +363,9 @@ class SlaPoliciesController < ApplicationController
 
   # Step 4.7 save half: when the form was prefilled from another project, copy ALL the source's
   # definitions first (restricted to this project's trackers); the posted tracker's rows below
-  # then override the copied ones. Scalars/mappings arrive through the posted form itself.
-  def apply_clone_source!
-    return if params[:clone_source_id].blank?
-
-    source = authorized_source_policy(params[:clone_source_id])
+  # then override the copied ones. Scalars and status mappings are copied by #update's shared
+  # clone/fork path, so this only owns the definitions.
+  def apply_clone_source!(source)
     return unless source
 
     @sla_policy.sla_definitions.delete_all

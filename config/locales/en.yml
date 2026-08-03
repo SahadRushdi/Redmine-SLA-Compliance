@@ -50,7 +50,8 @@ en:
   label_sla_card_stale: "Stale"
   label_sla_card_not_configured: "Not Configured"
   label_sla_card_not_tracked: "Not Tracked"
-  text_sla_card_stale_hint: "Open tickets with no updates past their inactivity threshold."
+  text_sla_card_stale_hint: "Open tickets with no comment, status change or edit past their project's inactivity threshold."
+  text_sla_card_stale_unset_hint: "No inactivity threshold set for these projects — configure one under Project Settings → SLA Policy → Measurement Rules."
   text_sla_card_reconciliation_hint: "= SLA Met + SLA Breached + No SLA"
 
   # --- Dashboard tabs + SLA Trend (Phase 6) -------------------------------------------------
@@ -97,7 +98,7 @@ en:
   # --- Admin lookups (target options + business calendars) --------------------------------
   label_sla_target_options: "SLA Target Options"
   label_sla_target_option_new: "New target option"
-  text_sla_target_options_hint: "Duration options offered in the Response / Workaround / Resolution dropdowns of every project's SLA policy."
+  text_sla_target_options_hint: "Duration options offered in the Response / Workaround / Resolution / Update Frequency dropdowns of every project's SLA policy."
   field_sla_target_type: "Target type"
   field_sla_code: "Code"
   text_sla_code_hint: "Short unique identifier within the target type (e.g. 4h, 2d)."
@@ -202,6 +203,7 @@ en:
   label_sla_target_response: "Response"
   label_sla_target_workaround: "Workaround"
   label_sla_target_resolution: "Resolution"
+  label_sla_target_update_frequency: "Update Frequency"
   label_sla_target_skipped: "— not tracked —"
   label_sla_target_current_value: "Current: %{value}"
   text_sla_definitions_hint: "A priority with every target unset is excluded from SLA tracking. Saving updates the selected trackers only."
@@ -211,6 +213,16 @@ en:
   text_sla_unclassified_row_hint: "Always excluded from SLA evaluation (Administration → Plugins → SLA Compliance)."
   text_sla_unclassified_notice: "Always excluded from SLA evaluation. Configure global exclusions in %{link}."
   label_sla_admin_settings_link: "Administration → Plugins → SLA Compliance"
+
+  label_sla_stale_card: "Stale Tickets"
+  text_sla_stale_card: "When an open ticket with no activity should be flagged as stale on the dashboard."
+  field_sla_stale_threshold_days_project: "Stale after"
+  label_sla_days_suffix: "days of inactivity"
+  text_sla_stale_threshold_project_hint: "Leave empty to inherit. A value set here also applies to every subproject that has not set its own, so configuring it once on a parent covers the whole tree. Clear the field to stop overriding and go back to inheriting."
+  text_sla_stale_threshold_inherited: "Currently inheriting %{days} days from %{source}."
+  text_sla_stale_threshold_unset_anywhere: "Not set anywhere — open tickets in this project are never flagged stale."
+  label_sla_stale_threshold_placeholder_inherited: "Inherited: %{days}"
+  label_sla_stale_threshold_placeholder_unset: "Not set"
 
   label_sla_pause_section: "Exclusions (Pauses)"
   label_sla_pause_card: "Pause Handling"
@@ -228,8 +240,8 @@ en:
   field_sla_clone_source: "Project"
   label_sla_clone_source_blank: "— Select a project —"
   button_sla_clone_load: "Load"
-  text_sla_clone_hint: "Pre-fills this section from the selected project's policy, including targets for all its trackers. Nothing is saved until you press Save Policy."
-  text_sla_clone_confirm_overwrite: "Loading will replace everything currently entered in this form. Continue?"
+  text_sla_clone_hint: "Pre-fills every section from the selected project's policy — General, SLA Targets for all its trackers, Measurement Rules, Exclusions and Notifications. Review them in the sidebar, then press Save Policy to apply the whole set."
+  text_sla_clone_confirm_overwrite: "Loading will replace everything currently entered in every section of this policy, not just this one. Continue?"
 
   button_sla_save_policy: "Save Policy"
   button_sla_save_general: "Save General Settings"
@@ -259,6 +271,8 @@ en:
   label_sla_recalculate_historical: "Recalculate historical tickets"
   text_sla_forward_only_hint: "By default, saving applies to new activity only. Tick to re-evaluate all existing tickets against the new policy in the background."
   notice_sla_recalculation_queued: "Historical recalculation has been queued."
+  notice_sla_clone_applied: "The full SLA policy was copied from %{project}."
+  warning_sla_clone_notifications_skipped: "Notification settings were not copied — you do not have permission to manage notifications on %{project}. Everything else was copied."
 
   # --- Notification settings (4.6) ----------------------------------------------------------
   label_sla_notifications_section: "Notification Settings"
@@ -289,7 +303,7 @@ en:
   field_stale_email_recipients: "Recipients"
   field_stale_email_frequency: "Frequency"
   field_stale_threshold_days: "Stale after (days of inactivity)"
-  text_sla_stale_threshold_hint: "A ticket excluded from SLA (unclassified priority or unset target) with no comment or status change for this many days is included in the digest."
+  text_sla_stale_threshold_hint: "A ticket excluded from SLA (unclassified priority or unset target) with no comment or status change for this many days is included in THIS PROJECT'S email digest. The dashboard's Stale card uses the instance-wide threshold under Administration → Plugins → SLA Compliance instead."
   label_sla_frequency_daily: "Daily"
   label_sla_frequency_weekly: "Weekly"
   label_sla_frequency_monthly: "Monthly"

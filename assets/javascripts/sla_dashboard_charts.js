@@ -19,8 +19,7 @@
 
   // #ffffff/#fff or rgb(a)(...) -> the same color at a lower alpha, for dimming a non-highlighted
   // series rather than hiding it. Unrecognized formats pass through unchanged (safe no-op) rather
-  // than throwing, since colorschemes/the server payload controls the actual color values, not
-  // this file.
+  // than throwing, since the server payload controls the actual color values, not this file.
   var DIMMED_ALPHA = 0.15;
 
   function fadeColor(color, alpha) {
@@ -285,7 +284,13 @@
                     ticks: { beginAtZero: true, precision: 0, display: false } }],
           yAxes: [{ stacked: true, gridLines: { display: false, drawBorder: false } }]
         },
+        // Chart.js's horizontalBar type defaults to tooltips.mode 'index', which lists EVERY
+        // dataset for the hovered row (all four SLA states at once). Forcing nearest+intersect
+        // reports only the segment actually under the cursor, matching how the donut's tooltip
+        // behaves — hover a color, get that color's value.
         tooltips: {
+          mode: 'nearest',
+          intersect: true,
           callbacks: {
             label: function (item, data) {
               var dataset = data.datasets[item.datasetIndex];
@@ -303,11 +308,10 @@
     };
   }
 
-  // Trend chart (Created vs Resolved). Colors are now hand-picked per dataset in the ERB payload
-  // (red Created / green Resolved — reusing the plugin's breached/met palette) instead of
-  // chartjs-plugin-colorschemes, so each line's meaning reads at a glance and the base colors are
-  // known up front (no scheme-cleanup dance needed). Points are drawn large with a white ring so
-  // every data point is clearly visible (per the reference design).
+  // Trend chart (Created vs Resolved). Colors are hand-picked per dataset in the ERB payload (red
+  // Created / green Resolved — reusing the plugin's breached/met palette), so each line's meaning
+  // reads at a glance and the base colors are known up front. Points are drawn large with a white
+  // ring so every data point is clearly visible (per the reference design).
   //
   // Chart.js's own native legend (display: true + legend.onClick) turned out unreliable for click
   // hit-testing in this card's layout - clicks landed on visibly-rendered legend items but never

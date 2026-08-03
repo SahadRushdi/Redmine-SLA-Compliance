@@ -15,10 +15,13 @@
     <table class="tw-w-full tw-table-fixed tw-text-sm tw-text-left tw-text-gray-700">
       <thead class="tw-bg-gray-50 tw-text-gray-700">
         <tr>
+          <%# Title case, never uppercase (CLAUDE.md) — the i18n value already carries the casing. %>
+          <%# One column per target type, driven by the model's list so a new target (Update %>
+          <%# Frequency) needs no edit here and header and input can never fall out of step. %>
           <th class="tw-w-40 tw-px-4 tw-py-2 tw-font-medium"><%= l(:label_sla_priority) %></th>
-          <th class="tw-px-4 tw-py-2 tw-font-medium"><%= l(:label_sla_target_response) %></th>
-          <th class="tw-px-4 tw-py-2 tw-font-medium"><%= l(:label_sla_target_workaround) %></th>
-          <th class="tw-px-4 tw-py-2 tw-font-medium"><%= l(:label_sla_target_resolution) %></th>
+          <% SlaDefinition::TARGET_TYPES.each do |target_type| %>
+            <th class="tw-px-4 tw-py-2 tw-font-medium"><%= sla_target_type_label(target_type) %></th>
+          <% end %>
         </tr>
       </thead>
       <tbody id="sla-definitions-rows-<%= tracker.id %>">

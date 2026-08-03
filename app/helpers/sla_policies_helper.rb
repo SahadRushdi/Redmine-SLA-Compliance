@@ -153,6 +153,37 @@ module SlaPoliciesHelper
   end
   private :sla_own_or_inherited_policy
 
+  # --- Step 6.2a: the Stale threshold's "if you leave this empty" answer ----------------------
+  #
+  # What would apply to +project+ if it set no value of its own: [days, ancestor_project], or
+  # [nil, nil] when nothing would. Asks the PARENT, never the project itself — the point is to
+  # describe what the empty field falls back to, and a project's own value is precisely what it
+  # would stop using.
+  def sla_inherited_stale_threshold(project)
+    parent = project&.parent
+    days   = SlaPolicy.stale_threshold_days_for(parent)
+    return [nil, nil] unless days
+
+    source, _policy = SlaPolicy.stale_threshold_source_for(parent)
+    [days, source]
+  end
+
+  # Greyed hint inside the empty input: the number that applies if the field is left blank.
+  def sla_stale_threshold_placeholder(inherited)
+    days, _source = inherited
+    days ? l(:label_sla_stale_threshold_placeholder_inherited, days: days)
+         : l(:label_sla_stale_threshold_placeholder_unset)
+  end
+
+  # The line under the field naming WHICH project an inherited number comes from. Without it
+  # "Inherited: 7" is a number with no author.
+  def sla_stale_threshold_source_text(inherited)
+    days, source = inherited
+    return l(:text_sla_stale_threshold_unset_anywhere) if days.nil?
+
+    l(:text_sla_stale_threshold_inherited, days: days, source: source.name)
+  end
+
   # Status IDs selected for a milestone role, read from the in-memory association so unsaved
   # clone prefills render too.
   def sla_status_ids(policy, role)

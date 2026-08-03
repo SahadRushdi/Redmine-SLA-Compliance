@@ -2,9 +2,6 @@
 <%# Clone-source load: swap the nav AND the policy sections. The sections are rebuilt from the %>
 <%# in-memory prefill (@sla_policy), and the inheritance notice/tri-state must go with them — %>
 <%# what's on screen is now the clone source's policy, not the inherited one. %>
-<%# %>
-<%# The Notifications panel is NOT part of either region and is left untouched, so text typed %>
-<%# there (and its Tom Select instances) survives a clone load. %>
 <% sections = sla_visible_sections(@project) %>
 <% current = sla_current_section(sections) %>
 $('#sla-policy-nav-slot').replaceWith('<%= escape_javascript(
@@ -12,6 +9,15 @@ $('#sla-policy-nav-slot').replaceWith('<%= escape_javascript(
 $('#sla-policy-tab-body').html('<%= escape_javascript(
   render 'sla_policies/policy_body',
          project: @project, policy: @sla_policy, current: current, inherited_source: nil) %>');
+<%# The Notifications panel is a separate region and is normally left alone, so unsaved input %>
+<%# there survives a re-render. A clone is the exception: it copies the source's notification %>
+<%# setup as well, so the panel is rebuilt from the same prefill the save will write. %>
+<%# @sla_notification_setting is nil when that copy would be refused on permissions — then the %>
+<%# panel stays exactly as it was, since it must never preview values the save won't write. %>
+<% if @sla_notification_setting %>
+$('#sla-policy-notifications-slot').replaceWith('<%= escape_javascript(
+  render 'sla_policies/notifications_slot', project: @project, current: current) %>');
+<% end %>
 <% else %>
 <%# A tracker was added to the SLA Targets picker: build just that tracker's table. Inserted %>
 <%# rather than replacing the whole section, so target values already entered for the other %>

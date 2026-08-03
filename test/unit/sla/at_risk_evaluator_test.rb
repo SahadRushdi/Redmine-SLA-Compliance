@@ -66,6 +66,38 @@ class Sla::AtRiskEvaluatorTest < ActiveSupport::TestCase
     assert_nil breach_at
   end
 
+  # --- which target is at risk (the notification dedup key, Step 8.2) -------------------------
+
+  test "reports the flagged milestone closest to breaching, agreeing with breach_at" do
+    now = UTC.local(2026, 6, 1, 9, 0)
+    milestones = [{ kind: :response, target: 3600, elapsed: 3000 },       # at risk, remaining 600
+                  { kind: :resolution, target: 36_000, elapsed: 30_000 }] # at risk, remaining 6000
+    at_risk, breach_at, kind = calendar_eval(now: now).evaluate(milestones)
+
+    assert at_risk
+    assert_equal :response, kind, 'the one breach_at projects is the one to notify about'
+    assert_equal now + 600, breach_at
+  end
+
+  test "an on-track milestone is never reported as the at-risk target" do
+    milestones = [{ kind: :response, target: 3600, elapsed: 100 },        # on track
+                  { kind: :update_frequency, target: 7200, elapsed: 6000 }] # 83% -> at risk
+    at_risk, _breach_at, kind = calendar_eval.evaluate(milestones)
+
+    assert at_risk
+    assert_equal :update_frequency, kind
+  end
+
+  test "no at-risk target when nothing crosses the threshold" do
+    _at_risk, _breach_at, kind = calendar_eval.evaluate([{ kind: :response, target: 3600, elapsed: 100 }])
+    assert_nil kind
+  end
+
+  test "a breached milestone is not reported as at-risk target either" do
+    _at_risk, _breach_at, kind = calendar_eval.evaluate([{ kind: :resolution, target: 3600, elapsed: 9999 }])
+    assert_nil kind
+  end
+
   # --- business-hours mode --------------------------------------------------------------
 
   test "business: on-track ticket projects breach_at in working time" do

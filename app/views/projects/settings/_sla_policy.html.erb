@@ -6,9 +6,10 @@
 <%# Which sections exist, and which one opens, is decided by SlaPoliciesHelper (permission- and %>
 <%# inheritance-aware) so the nav and the panels can never disagree. %>
 <%# %>
-<%# The panel column holds two independently-replaceable regions: #sla-policy-tab-body (the %>
-<%# policy sections, swapped by the clone/Override AJAX) and the Notifications panel, which sits %>
-<%# OUTSIDE it so a clone load cannot discard unsaved notification input. %>
+<%# The panel column holds two independently-replaceable regions: #sla-policy-tab-body (the policy %>
+<%# sections) and #sla-policy-notifications-slot. Both are swapped by a clone load — a clone copies %>
+<%# the notification setup too, so it has to be shown — while every other re-render touches only %>
+<%# the first, leaving unsaved notification input alone. %>
 <%= render 'sla_compliance/assets' %>
 <% content_for :header_tags do %>
   <%= javascript_include_tag 'sla_policy_form.js', plugin: 'redmine_sla_compliance' %>
@@ -34,12 +35,7 @@
                    current: current, inherited_source: inherited_source %>
       </div>
 
-      <% if User.current.allowed_to?(:manage_sla_notifications, @project) %>
-        <%= render layout: 'sla_policies/panel',
-                   locals: { key: 'notifications', current: current } do %>
-          <%= render 'sla_notification_settings/form', project: @project %>
-        <% end %>
-      <% end %>
+      <%= render 'sla_policies/notifications_slot', project: @project, current: current %>
     </div>
   </div>
 </div>

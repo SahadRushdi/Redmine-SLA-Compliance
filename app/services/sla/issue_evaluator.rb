@@ -32,6 +32,11 @@ module Sla
         # fall back to Redmine's own closed_on.
         current_status_id:    @issue.status_id,
         fallback_resolved_at: @issue.closed_on,
+        # Passed as a callable, not a value: the Update Frequency target has to know which journal
+        # authors are not real people, but that lookup is a query and most issues never reach it
+        # (no cadence target for their priority). Deferring it means an ordinary issue save pays
+        # nothing, while the sweep — which does hit it — resolves it once per project context.
+        non_human_author_ids: -> { @context.non_human_author_ids },
         now:                  @now
       ).classify
     end

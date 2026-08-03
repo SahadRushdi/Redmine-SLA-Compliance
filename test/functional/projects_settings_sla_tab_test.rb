@@ -146,6 +146,75 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     end
   end
 
+  # --- Step 6.2a: the Stale threshold field, and the "what happens if I leave this empty" line ---
+
+  def get_measurement_section(project = @project)
+    get :settings, params: { id: project.identifier, tab: 'sla_policy', section: 'measurement' }
+    assert_response :success
+  end
+
+  test "the Measurement Rules section offers the stale threshold field" do
+    get_measurement_section
+
+    assert_select '[data-sla-panel="measurement"]' do
+      assert_select "input[name='sla_policy[stale_threshold_days]']", 1
+    end
+  end
+
+  test "a project with its own threshold shows it in the field" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true, stale_threshold_days: 4)
+
+    get_measurement_section
+
+    assert_select "input[name='sla_policy[stale_threshold_days]'][value='4']", 1
+  end
+
+  test "with nothing set anywhere the field is empty and says so" do
+    get_measurement_section
+
+    assert_select "input[name='sla_policy[stale_threshold_days]'][value]", 0, 'no value, so it inherits'
+    assert_select '#sla-stale-threshold-source', text: I18n.t(:text_sla_stale_threshold_unset_anywhere)
+  end
+
+  test "a subproject shows which ancestor its inherited threshold comes from" do
+    child = Project.find(5) # parent = @project (1)
+    child.enable_module!(:sla_compliance)
+    SlaPolicy.create!(project_id: @project.id, enabled: true, stale_threshold_days: 4)
+
+    get_measurement_section(child)
+
+    assert_select '#sla-stale-threshold-source',
+                  text: I18n.t(:text_sla_stale_threshold_inherited, days: 4, source: @project.name)
+    # The placeholder repeats it inside the empty box, so the number is visible where it is typed.
+    assert_select "input[name='sla_policy[stale_threshold_days]'][placeholder=?]",
+                  I18n.t(:label_sla_stale_threshold_placeholder_inherited, days: 4)
+  end
+
+  # A project's OWN value must not be described as something it inherits — the line answers
+  # "what applies if this box is empty", which is the parent's answer, never its own.
+  test "a project's own value is not reported as inherited from itself" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true, stale_threshold_days: 9)
+
+    get_measurement_section
+
+    assert_select '#sla-stale-threshold-source', text: I18n.t(:text_sla_stale_threshold_unset_anywhere)
+  end
+
+  test "every configured target type gets its own column, header and dropdown per priority" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+    assert_response :success
+
+    tracker_id = @project.trackers.sorted.first.id
+    priority   = IssuePriority.active.first
+    SlaDefinition::TARGET_TYPES.each do |target_type|
+      assert_select "select[name='definitions[rows][#{tracker_id}][#{priority.id}][#{target_type}]']", 1,
+                    "#{target_type} must have a dropdown on every priority row"
+      # Title case from the i18n value, never an uppercase CSS transform (CLAUDE.md).
+      assert_select "#sla-definitions-table-#{tracker_id} thead th",
+                    text: I18n.t("label_sla_target_#{target_type}"), count: 1
+    end
+  end
+
   # A disabled alert card collapses to just its switch, but its fields stay in the DOM and keep
   # posting — otherwise turning an alert off and on again would silently drop the recipients the
   # project had already saved.

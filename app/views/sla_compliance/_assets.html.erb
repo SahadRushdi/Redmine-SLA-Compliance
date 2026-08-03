@@ -5,9 +5,11 @@
   <%= stylesheet_link_tag 'tom-select.min.css', plugin: 'redmine_sla_compliance' %>
   <%= javascript_include_tag 'flowbite.min.js', plugin: 'redmine_sla_compliance' %>
   <%= javascript_include_tag 'tom-select.complete.min.js', plugin: 'redmine_sla_compliance' %>
+  <%# chartjs-plugin-colorschemes is deliberately NOT loaded: every chart now supplies its own %>
+  <%# colors (sla_chart_color for the donut/priority charts, hand-picked red/green in %>
+  <%# _trend_chart.html.erb). The plugin self-registers globally against Chart on load and filled %>
+  <%# in only the properties a dataset left unset — which meant the trend chart's points inherited %>
+  <%# brewer.Paired12 blues (#a6cee3 / #1f78b4) as their pointBorderColor, drawing a blue ring %>
+  <%# around every data point. Nothing opts into it, so it is gone rather than disabled per chart. %>
   <%= javascript_include_tag 'chart.min.js', plugin: 'redmine_sla_compliance' %>
-  <%# Must load after chart.min.js - it self-registers against the global Chart object on load. %>
-  <%# Only the trend chart opts into it (sla_dashboard_charts.js); the donut/priority charts keep %>
-  <%# their fixed met/breached/at_risk/no_sla colors from sla_chart_color. %>
-  <%= javascript_include_tag 'chartjs-plugin-colorschemes.min.js', plugin: 'redmine_sla_compliance' %>
 <% end %>
