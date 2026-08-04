@@ -28,18 +28,56 @@ module SlaComplianceHelper
 
   # --- Step 6.2: summary cards ---------------------------------------------------------------
 
-  # Border one step more saturated than the pastel fill (-300 vs -50 bg) so each card reads as a
-  # clearly delineated tile against the near-white page, matching the reference design.
+  # ONE hue per SLA state, used identically wherever that state appears (summary card surface,
+  # icon tile, headline number, detail-table result badge). Every state carries a real hue —
+  # no_sla is violet rather than grey because it is routinely the LARGEST bucket on the board
+  # (~80% of tickets on an unconfigured project), and a grey tile reads as "disabled/empty" for
+  # what is actually the dashboard's biggest number. Stale is teal — distinct both from at_risk's
+  # amber (a met ticket nearing breach) and from any SLA state, since "nobody has touched this"
+  # is an activity signal, not an SLA verdict.
+  #
+  # Every map below spells its utilities out in full rather than interpolating a hue name into
+  # `tw-bg-#{hue}-50`: Tailwind's content scanner matches literal class strings in these files, so
+  # an interpolated name is never compiled and the class silently renders unstyled.
+
+  # Tinted card surface: -50 fill with a -200 border. The border is only one step up from the fill
+  # (not -300) because the tiles sit on the gray-50 page canvas, where a heavier outline reads as a
+  # warning rather than as a boundary.
+  SLA_CARD_SURFACE_CLASSES = {
+    total: 'tw-bg-primary-50 tw-border-primary-200',
+    met: 'tw-bg-green-50 tw-border-green-200',
+    breached: 'tw-bg-red-50 tw-border-red-200',
+    at_risk: 'tw-bg-amber-50 tw-border-amber-200',
+    no_sla: 'tw-bg-violet-50 tw-border-violet-200',
+    stale: 'tw-bg-teal-50 tw-border-teal-200'
+  }.freeze
+
+  def sla_card_surface_classes(state)
+    SLA_CARD_SURFACE_CLASSES.fetch(state.to_sym)
+  end
+
+  # Headline number colour. `total` is the one exception to "number takes the state hue": it is a
+  # neutral count, not a verdict, so it stays near-black and the four verdict cards beside it keep
+  # colour as a meaningful signal instead of decoration.
+  SLA_CARD_VALUE_CLASSES = {
+    total: 'tw-text-gray-900', met: 'tw-text-green-600', breached: 'tw-text-red-600',
+    at_risk: 'tw-text-amber-600', no_sla: 'tw-text-violet-600', stale: 'tw-text-teal-600'
+  }.freeze
+
+  def sla_card_value_classes(state)
+    SLA_CARD_VALUE_CLASSES.fetch(state.to_sym)
+  end
+
+  # Result badges in the ticket-level detail table: same hue as the card, -50 fill / -700 text so
+  # the badge stays legible at 12px. Kept separate from the card surface because a badge needs a
+  # text colour and no border, and the card needs the reverse.
   SLA_CARD_COLOR_CLASSES = {
     total: 'tw-bg-primary-50 tw-text-primary-700 tw-border-primary-300',
     met: 'tw-bg-green-50 tw-text-green-700 tw-border-green-300',
     breached: 'tw-bg-red-50 tw-text-red-700 tw-border-red-300',
     at_risk: 'tw-bg-amber-50 tw-text-amber-700 tw-border-amber-300',
-    no_sla: 'tw-bg-gray-50 tw-text-gray-700 tw-border-gray-300',
-    # Stale gets its own orange tint - distinct from at_risk's amber (a met ticket nearing breach)
-    # and no_sla's neutral grey, since a stale ticket is a separate "nobody has touched this"
-    # attention signal, not an SLA state.
-    stale: 'tw-bg-orange-50 tw-text-orange-700 tw-border-orange-300'
+    no_sla: 'tw-bg-violet-50 tw-text-violet-700 tw-border-violet-300',
+    stale: 'tw-bg-teal-50 tw-text-teal-700 tw-border-teal-300'
   }.freeze
 
   def sla_card_color_classes(state)
@@ -57,15 +95,15 @@ module SlaComplianceHelper
     ((count.to_f / total) * 100).round(1)
   end
 
-  # Icon-circle background/text tint per card state - one step darker than the card's own pastel
-  # background (SLA_CARD_COLOR_CLASSES) so the icon reads clearly against it.
+  # Icon-tile background/text tint per card state - one step darker than the card's own pastel
+  # surface (SLA_CARD_SURFACE_CLASSES) so the icon reads clearly against it.
   SLA_CARD_ICON_CLASSES = {
-    total: 'tw-bg-primary-100 tw-text-primary-700',
-    met: 'tw-bg-green-100 tw-text-green-700',
-    breached: 'tw-bg-red-100 tw-text-red-700',
-    at_risk: 'tw-bg-amber-100 tw-text-amber-700',
-    no_sla: 'tw-bg-gray-200 tw-text-gray-700',
-    stale: 'tw-bg-orange-100 tw-text-orange-700'
+    total: 'tw-bg-primary-100 tw-text-primary-600',
+    met: 'tw-bg-green-100 tw-text-green-600',
+    breached: 'tw-bg-red-100 tw-text-red-600',
+    at_risk: 'tw-bg-amber-100 tw-text-amber-600',
+    no_sla: 'tw-bg-violet-100 tw-text-violet-600',
+    stale: 'tw-bg-teal-100 tw-text-teal-600'
   }.freeze
 
   def sla_card_icon_classes(state)

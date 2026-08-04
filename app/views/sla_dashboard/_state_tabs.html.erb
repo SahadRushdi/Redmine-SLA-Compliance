@@ -8,8 +8,11 @@
 <% detail_states = [['all', l(:label_sla_detail_state_all), @counts.total]] +
      %w[met breached at_risk no_sla].map { |s| [s, sla_card_label(s.to_sym), @counts.public_send(s)] } %>
 <% detail_states.each do |state, label, count| %>
+  <%# Same pill family as the SLA Trend tab's date-range buttons — identical shape, size, weight and %>
+  <%# active fill — so every "pick one of these" control on the dashboard reads the same and the %>
+  <%# page carries one type scale rather than a text-xs group beside a text-sm one. %>
   <%= link_to "#{label} (#{count})",
         sla_detail_table_url(@filters, @project, state: state == 'all' ? nil : state, q: @search_query),
-        class: "tw-text-xs tw-font-medium tw-rounded-full tw-px-3 tw-py-1.5 tw-transition-colors #{
-          state == @state_filter ? 'tw-bg-primary-600 tw-text-white' : 'tw-bg-gray-100 tw-text-gray-600 hover:tw-bg-gray-200'}" %>
+        class: "tw-text-sm tw-font-semibold tw-rounded-lg tw-px-3 tw-py-1.5 tw-border tw-border-solid tw-transition-colors #{
+          state == @state_filter ? 'tw-bg-primary-600 tw-text-white tw-border-primary-600' : 'tw-bg-white tw-text-gray-700 tw-border-gray-200 hover:tw-bg-gray-50'}" %>
 <% end %>

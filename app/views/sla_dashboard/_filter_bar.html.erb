@@ -21,13 +21,15 @@
 %>
 <div class="tw-mb-6">
   <%= form_tag(sla_dashboard_base_path(@project), method: :get, id: 'sla-filter-form') do %>
-    <div class="tw-flex tw-items-start tw-justify-between tw-flex-wrap tw-gap-4">
-      <div>
-        <h1 class="tw-text-2xl tw-font-bold tw-text-gray-900">
-          <%= @project ? "#{l(:label_sla_compliance)} — #{@project.name}" : l(:label_sla_dashboard_all) %>
-        </h1>
-        <p class="tw-text-sm tw-text-gray-500 tw-mt-1"><%= l(:label_sla_dashboard_subtitle) %></p>
-      </div>
+    <%# tw-items-center, not tw-items-start: with the subtitle banner gone the title is a single %>
+    <%# line and sits on the same baseline band as the filter controls opposite it. %>
+    <div class="tw-flex tw-items-center tw-justify-between tw-flex-wrap tw-gap-4">
+      <%# No subtitle here. "Open Tickets is live / SLA Trend is date-scoped" was a permanent %>
+      <%# boxed sentence restating what the two tab labels and their Live / Date-scoped badges %>
+      <%# already say — the badges carry it now. %>
+      <h1 class="tw-text-2xl tw-font-bold tw-text-gray-900">
+        <%= @project ? "#{l(:label_sla_compliance)} — #{@project.name}" : l(:label_sla_dashboard_all) %>
+      </h1>
 
       <%# Clean single-line header (Figma): no stacked field labels — the Date Range pills, the %>
       <%# Tracker/Priority dropdowns, and Export CSV sit centered on one baseline. Labels are %>

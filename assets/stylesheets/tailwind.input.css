@@ -22,6 +22,9 @@
  *   - _detail_table.css — the ticket-level detail table's compact (in-card) vs expanded (modal)
  *     column/control visibility, toggled by a single `.sla-detail-expanded` class on the one
  *     table node that gets moved into the modal on expand.
+ *   - _card_tooltip.css — the summary cards' (i) hover/focus tooltip. CSS rather than a Flowbite
+ *     Tooltip so no extra component (and no extra theme collision to re-verify) is needed for
+ *     "reveal a sentence on hover".
  * postcss-import inlines these before Tailwind/scoping run, so they get the exact same
  * `.sla-plugin` treatment as everything else in this file.
  */
@@ -32,6 +35,7 @@
 @import 'partials/_option_card.css';
 @import 'partials/_chart_legend.css';
 @import 'partials/_detail_table.css';
+@import 'partials/_card_tooltip.css';
 
 @tailwind base;
 @tailwind components;
