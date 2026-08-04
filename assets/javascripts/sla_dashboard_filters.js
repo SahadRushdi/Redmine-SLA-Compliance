@@ -99,15 +99,15 @@
     }
   }
 
+  // ONE class, matching what the ERB renders server-side (`.sla-pill.is-active`) — not a hand-kept
+  // copy of the button's Tailwind utilities. Toggling the utilities individually left the inactive
+  // state's `hover:tw-bg-gray-50` behind on the button that had just become active, and a `hover:`
+  // utility outscores a plain one, so the just-clicked pill went white-on-white under the cursor
+  // until the reload landed (permanently for Custom Range, which never reloads). See
+  // assets/stylesheets/partials/_pill_group.css.
   function markActivePresetButton(activeBtn) {
     document.querySelectorAll('[data-sla-preset-btn]').forEach(function (btn) {
-      var active = btn === activeBtn;
-      btn.classList.toggle('tw-bg-primary-600', active);
-      btn.classList.toggle('tw-text-white', active);
-      btn.classList.toggle('tw-border-primary-600', active);
-      btn.classList.toggle('tw-bg-white', !active);
-      btn.classList.toggle('tw-text-gray-700', !active);
-      btn.classList.toggle('tw-border-gray-300', !active);
+      btn.classList.toggle('is-active', btn === activeBtn);
     });
   }
 
@@ -128,15 +128,10 @@
     (form.requestSubmit ? form.requestSubmit() : form.submit());
   }
 
+  // Same single-class contract as the date presets above (`.sla-seg.is-active`).
   function markActiveGranularityButton(activeBtn) {
     document.querySelectorAll('[data-sla-granularity-btn]').forEach(function (btn) {
-      var active = btn === activeBtn;
-      btn.classList.toggle('tw-bg-primary-600', active);
-      btn.classList.toggle('tw-text-white', active);
-      btn.classList.toggle('tw-border-primary-600', active);
-      btn.classList.toggle('tw-bg-white', !active);
-      btn.classList.toggle('tw-text-gray-700', !active);
-      btn.classList.toggle('tw-border-gray-300', !active);
+      btn.classList.toggle('is-active', btn === activeBtn);
     });
   }
 

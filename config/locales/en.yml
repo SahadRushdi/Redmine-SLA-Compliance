@@ -50,18 +50,15 @@ en:
   label_sla_card_stale: "Stale"
   label_sla_card_not_configured: "Not Configured"
   label_sla_card_not_tracked: "Not Tracked"
-  # Each summary card carries a SHORT caption under its number, always visible, and — where there
-  # is more to say than fits in three or four words — a longer *_hint behind the card's (i)
-  # tooltip. The captions must stay short enough not to wrap in a five-across card row; the hints
-  # are the place for the full sentence.
+  # Each summary card carries exactly ONE short caption under its number — there are no card
+  # tooltips, so a caption that doesn't fit on a line or two of a five-across card is too long to
+  # be on the card at all. The unset-Stale caption keeps its pointer to where the threshold is
+  # configured, because that card's whole job in that state is to say "go set this".
   label_sla_card_total_caption: "Met + Breached + No SLA"
   label_sla_card_stale_caption: "No activity past threshold"
-  label_sla_card_stale_unset_caption: "No threshold set"
+  label_sla_card_stale_unset_caption: "No threshold set — see Project Settings"
   label_sla_card_at_risk_caption: "Nearing SLA deadline"
   text_sla_card_breached_caption: "%{count} of %{total} open tickets"
-  text_sla_card_stale_hint: "Open tickets with no comment, status change or edit past their project's inactivity threshold."
-  text_sla_card_stale_unset_hint: "No inactivity threshold set for these projects — configure one under Project Settings → SLA Policy → Measurement Rules."
-  text_sla_card_reconciliation_hint: "Every unresolved ticket in scope. Total = SLA Met + SLA Breached + No SLA. At Risk is a subset of SLA Met, not a sixth bucket added on top."
 
   # --- Dashboard tabs + SLA Trend (Phase 6) -------------------------------------------------
   label_sla_tab_open_tickets: "Open Tickets"

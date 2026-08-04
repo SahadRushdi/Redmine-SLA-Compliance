@@ -55,6 +55,29 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_select '.sla-plugin'
   end
 
+  # Redmine picks the highlighted menu entry by comparing each item's name to the controller's
+  # current_menu_item, which defaults to the CONTROLLER name (:sla_dashboard) — not the name the
+  # menu entry is registered under (:sla_compliance). Without the explicit `menu_item` declarations
+  # in SlaDashboardController the tab never highlighted while you were standing on the dashboard.
+  test "the project's SLA Compliance tab is marked selected while the dashboard is open" do
+    list!(:viewer, @user.id)
+
+    get :index, params: { project_id: @project.id }
+
+    assert_response :success
+    assert_select '#main-menu a.sla-compliance.selected'
+  end
+
+  test "the cross-project dashboard selects the top-level SLA entry, not the project tab" do
+    list!(:viewer, @user.id)
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+
+    get :cross_project
+
+    assert_response :success
+    assert_select '#main-menu a.sla-dashboard-all.selected'
+  end
+
   test "a listed manager opens the dashboard too" do
     list!(:manager, @user.id)
 
@@ -270,7 +293,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
     assert_response :success
     assert_select '#sla-card-stale-value', text: '—', count: 1
-    assert_select '#sla-card-stale-hint', text: I18n.t(:text_sla_card_stale_unset_hint)
+    assert_select '#sla-card-stale-hint', text: I18n.t(:label_sla_card_stale_unset_caption)
   end
 
   test "the project's own threshold counts its idle open tickets" do
@@ -280,7 +303,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
     assert_response :success
     assert_select '#sla-card-stale-value', text: '1'
-    assert_select '#sla-card-stale-hint', text: I18n.t(:text_sla_card_stale_hint)
+    assert_select '#sla-card-stale-hint', text: I18n.t(:label_sla_card_stale_caption)
   end
 
   test "a ticket idle for less than the project's threshold is not stale" do

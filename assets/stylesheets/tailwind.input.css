@@ -22,9 +22,11 @@
  *   - _detail_table.css — the ticket-level detail table's compact (in-card) vs expanded (modal)
  *     column/control visibility, toggled by a single `.sla-detail-expanded` class on the one
  *     table node that gets moved into the modal on expand.
- *   - _card_tooltip.css — the summary cards' (i) hover/focus tooltip. CSS rather than a Flowbite
- *     Tooltip so no extra component (and no extra theme collision to re-verify) is needed for
- *     "reveal a sentence on hover".
+ *   - _pill_group.css — the dashboard's segmented "pick one of these" button groups (date-range
+ *     presets, trend granularity). Active/inactive is ONE class (`is-active`) that
+ *     sla_dashboard_filters.js toggles, for the same reason _settings_nav.css and
+ *     _chart_legend.css do it that way: no Tailwind class strings in the JS, so the server-rendered
+ *     state and the click-rendered state cannot drift apart.
  * postcss-import inlines these before Tailwind/scoping run, so they get the exact same
  * `.sla-plugin` treatment as everything else in this file.
  */
@@ -35,7 +37,7 @@
 @import 'partials/_option_card.css';
 @import 'partials/_chart_legend.css';
 @import 'partials/_detail_table.css';
-@import 'partials/_card_tooltip.css';
+@import 'partials/_pill_group.css';
 
 @tailwind base;
 @tailwind components;

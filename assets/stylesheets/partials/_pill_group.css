@@ -1,0 +1,100 @@
+/*
+ * Dashboard "pick one of these" button groups — the SLA Trend tab's date-range presets
+ * (`.sla-pill`) and the trend chart's Daily/Weekly/Monthly granularity (`.sla-seg`).
+ *
+ * WHY THIS IS CSS AND NOT TAILWIND UTILITIES ON THE BUTTON
+ *
+ * sla_dashboard_filters.js repaints the clicked pill optimistically (the form then submits and the
+ * page reloads, and without this the pill would sit un-updated for the whole round trip). It used
+ * to do that by toggling the individual utilities — `tw-bg-primary-600`, `tw-text-white`,
+ * `tw-bg-white`, … — which produced two real bugs:
+ *
+ *   1. The inactive state's `hover:tw-bg-gray-50` was never removed when a pill became active.
+ *      A `hover:` utility compiles to `.sla-plugin .hover\:tw-bg-gray-50:hover` (0,2,1), which
+ *      OUTSCORES the plain `.sla-plugin .tw-bg-primary-600` (0,2,0) the JS had just added — so the
+ *      pill you had just clicked went white-background/white-text (invisible) for as long as the
+ *      cursor stayed on it. On Custom Range, which reveals the date inputs instead of reloading,
+ *      "for as long as the cursor stayed on it" meant permanently.
+ *   2. The JS's class list and the ERB's class list were two copies of the same design that had
+ *      already drifted (the JS still applied the pre-redesign `tw-border-gray-300`).
+ *
+ * Both go away by expressing the whole thing as ONE class the JS toggles — the convention
+ * _settings_nav.css and _chart_legend.css already follow in this plugin — with every state
+ * (rest / hover / active) declared here, in one place, for both branches.
+ *
+ * FOCUS: deliberately not handled here. _theme_isolation.css already owns the single focus
+ * treatment for every button in the plugin (`button:focus { outline: none }` +
+ * `button:focus-visible { outline: 2px solid #2563eb }`), so these pills carry no ring utilities of
+ * their own. They used to carry `focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-primary-300`,
+ * which at (0,2,1) beat that shared rule and inverted it: a blue ring painted on every MOUSE click
+ * (a focus ring nobody asked for) while keyboard users lost the outline entirely.
+ *
+ * postcss-prefix-selector scopes every rule below to `.sla-plugin ...` at build time.
+ */
+
+.sla-pill,
+.sla-seg {
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.12s ease-in-out, color 0.12s ease-in-out,
+    border-color 0.12s ease-in-out;
+}
+
+/* --- Date-range presets: separately rounded, bordered buttons ------------------------------- */
+
+.sla-pill {
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem; /* text-sm */
+  line-height: 1.25rem;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb; /* gray-200 */
+  background-color: #fff;
+  color: #374151; /* gray-700 */
+  box-shadow: none;
+}
+
+.sla-pill:hover {
+  background-color: #f9fafb; /* gray-50 */
+  color: #111827; /* gray-900 */
+  border-color: #e5e7eb;
+}
+
+.sla-pill.is-active,
+.sla-pill.is-active:hover {
+  background-color: #2563eb; /* primary-600 */
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.sla-pill.is-active:hover {
+  background-color: #1d4ed8; /* primary-700 — a darker fill, never a lighter one */
+  border-color: #1d4ed8;
+}
+
+/* --- Granularity: pills inside a single gray track ------------------------------------------ */
+
+.sla-seg {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem; /* text-xs */
+  line-height: 1rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background-color: transparent;
+  color: #4b5563; /* gray-600 */
+  box-shadow: none;
+}
+
+.sla-seg:hover {
+  background-color: transparent;
+  color: #111827; /* gray-900 */
+}
+
+.sla-seg.is-active,
+.sla-seg.is-active:hover {
+  background-color: #2563eb; /* primary-600 */
+  color: #fff;
+}
+
+.sla-seg.is-active:hover {
+  background-color: #1d4ed8; /* primary-700 */
+}

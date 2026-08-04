@@ -13,6 +13,17 @@
 require 'csv'
 
 class SlaDashboardController < ApplicationController
+  # Which registered menu entry Redmine should render as SELECTED while this controller is acting.
+  #
+  # Without these, Redmine::MenuManager::MenuController#current_menu_item falls back to
+  # `menu_items[controller_name][:default]`, which defaults to the CONTROLLER NAME — :sla_dashboard.
+  # Neither menu entry is called that (init.rb registers the project tab as :sla_compliance and the
+  # cross-project entry as :sla_dashboard_all, deliberately distinct so their dasherized CSS classes
+  # don't collide), so nothing ever matched and the "SLA Compliance" project tab never highlighted
+  # while you were standing on it. The names below must stay in step with init.rb's `menu` calls.
+  menu_item :sla_compliance
+  menu_item :sla_dashboard_all, only: :cross_project
+
   before_action :find_project_by_project_id, only: :index
   before_action :authorize, only: :index
   before_action :set_permitted_projects, only: :index

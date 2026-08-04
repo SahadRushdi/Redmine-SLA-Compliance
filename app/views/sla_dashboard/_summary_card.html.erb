@@ -4,11 +4,12 @@
   (_sla_met_card.html.erb), so the two tabs cannot drift into two different card designs.
 
   Anatomy, top to bottom:
-    row 1 — icon in a tinted rounded tile, the SHORT label, and (optionally) an (i) that reveals the
-            long explanation on hover/focus. Long sentences used to sit permanently under the number
-            as boxed banners; they are the same words, moved into the tooltip.
+    row 1 — icon in a tinted rounded tile, then the label.
     row 2 — the headline number, the largest type on the page after the h1.
     row 3 — one short muted caption.
+
+  No (i) tooltips. Every card says everything it has to say in the always-visible caption; if a
+  caption needs a paragraph behind an icon to be understood, the caption is wrong.
 
   Locals:
     state        palette key (:total, :stale, :breached, :at_risk, :no_sla, :met)
@@ -16,16 +17,13 @@
     value        headline figure. Pass a plain value, or an html_safe fragment when it carries a
                  secondary part (the Breached card's "(17)").
     caption      short muted line under the number. Omit for none.
-    tooltip      long explanation behind the (i). Omit for no (i) at all.
     value_id     id for the headline element (functional tests assert on these — keep them stable)
     caption_id   id for the caption element
-    tooltip_id   id for the tooltip text node
     surface      override for the tile background/border classes (the SLA Met card is a white tile
                  on the Trend tab rather than a tinted one, since it stands alone rather than in a
                  row of five)
 %>
 <% caption = local_assigns[:caption] %>
-<% tooltip = local_assigns[:tooltip] %>
 <% surface = local_assigns.fetch(:surface, sla_card_surface_classes(state)) %>
 <%# tw-border-solid, not just tw-border: Tailwind Preflight is disabled in this plugin (CLAUDE.md), %>
 <%# so nothing sets a default border-style and a width-only utility would render no border at all. %>
@@ -35,22 +33,6 @@
     <%# and reads as part of the tile rather than as an avatar. %>
     <span class="tw-inline-flex tw-items-center tw-justify-center tw-w-9 tw-h-9 tw-rounded-lg tw-flex-shrink-0 <%= sla_card_icon_classes(state) %>"><%= sla_card_icon(state) %></span>
     <span class="tw-text-sm tw-font-semibold tw-text-gray-700 tw-min-w-0 tw-truncate"><%= label %></span>
-
-    <% if tooltip.present? %>
-      <%# CSS-only tooltip (partials/_card_tooltip.css) rather than a Flowbite Tooltip: the card row %>
-      <%# needs no JS for this, and CLAUDE.md's theme-isolation rules make every extra Flowbite %>
-      <%# component a Purplemine2 collision to re-verify. tabindex="0" makes it keyboard-reachable — %>
-      <%# the CSS opens it on :focus-within as well as :hover. %>
-      <span class="sla-card-info tw-ml-auto tw-flex-shrink-0 tw-text-gray-400" tabindex="0"
-            aria-describedby="<%= local_assigns[:tooltip_id] %>">
-        <svg class="tw-w-4 tw-h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" stroke-width="2"/>
-          <line x1="12" y1="11" x2="12" y2="16.5" stroke-width="2" stroke-linecap="round"/>
-          <circle cx="12" cy="7.75" r="0.9" fill="currentColor" stroke="none"/>
-        </svg>
-        <span class="sla-card-tip" role="tooltip" id="<%= local_assigns[:tooltip_id] %>"><%= tooltip %></span>
-      </span>
-    <% end %>
   </div>
 
   <%# content_tag rather than literal markup only so a nil *_id local drops the attribute entirely %>

@@ -22,9 +22,11 @@
  *   - _detail_table.css — the ticket-level detail table's compact (in-card) vs expanded (modal)
  *     column/control visibility, toggled by a single `.sla-detail-expanded` class on the one
  *     table node that gets moved into the modal on expand.
- *   - _card_tooltip.css — the summary cards' (i) hover/focus tooltip. CSS rather than a Flowbite
- *     Tooltip so no extra component (and no extra theme collision to re-verify) is needed for
- *     "reveal a sentence on hover".
+ *   - _pill_group.css — the dashboard's segmented "pick one of these" button groups (date-range
+ *     presets, trend granularity). Active/inactive is ONE class (`is-active`) that
+ *     sla_dashboard_filters.js toggles, for the same reason _settings_nav.css and
+ *     _chart_legend.css do it that way: no Tailwind class strings in the JS, so the server-rendered
+ *     state and the click-rendered state cannot drift apart.
  * postcss-import inlines these before Tailwind/scoping run, so they get the exact same
  * `.sla-plugin` treatment as everything else in this file.
  */
@@ -760,64 +762,93 @@
 .sla-plugin .sla-detail-title { max-width: 11rem; }
 .sla-plugin .sla-detail-expanded .sla-detail-title { max-width: 28rem; }
 /*
- * Summary-card (i) tooltip — the long explanations that used to sit permanently under each card's
- * number as a boxed banner (see app/views/sla_dashboard/_summary_card.html.erb).
+ * Dashboard "pick one of these" button groups — the SLA Trend tab's date-range presets
+ * (`.sla-pill`) and the trend chart's Daily/Weekly/Monthly granularity (`.sla-seg`).
  *
- * CSS-only on purpose. A Flowbite Tooltip would work, but every Flowbite component added to this
- * plugin is another Purplemine2 collision to re-verify (CLAUDE.md), and the whole behaviour here is
- * "show a box on hover" — no positioning engine, no JS, nothing to initialise on a page that the
- * tab switcher already re-shows client-side.
+ * WHY THIS IS CSS AND NOT TAILWIND UTILITIES ON THE BUTTON
  *
- * Opened by :hover AND :focus-within, so the tooltip is reachable by keyboard via the trigger's
- * tabindex="0". Uses visibility+opacity rather than display so the transition can run and so the
- * text stays in the accessibility tree for the aria-describedby reference on the trigger.
+ * sla_dashboard_filters.js repaints the clicked pill optimistically (the form then submits and the
+ * page reloads, and without this the pill would sit un-updated for the whole round trip). It used
+ * to do that by toggling the individual utilities — `tw-bg-primary-600`, `tw-text-white`,
+ * `tw-bg-white`, … — which produced two real bugs:
+ *
+ *   1. The inactive state's `hover:tw-bg-gray-50` was never removed when a pill became active.
+ *      A `hover:` utility compiles to `.sla-plugin .hover\:tw-bg-gray-50:hover` (0,2,1), which
+ *      OUTSCORES the plain `.sla-plugin .tw-bg-primary-600` (0,2,0) the JS had just added — so the
+ *      pill you had just clicked went white-background/white-text (invisible) for as long as the
+ *      cursor stayed on it. On Custom Range, which reveals the date inputs instead of reloading,
+ *      "for as long as the cursor stayed on it" meant permanently.
+ *   2. The JS's class list and the ERB's class list were two copies of the same design that had
+ *      already drifted (the JS still applied the pre-redesign `tw-border-gray-300`).
+ *
+ * Both go away by expressing the whole thing as ONE class the JS toggles — the convention
+ * _settings_nav.css and _chart_legend.css already follow in this plugin — with every state
+ * (rest / hover / active) declared here, in one place, for both branches.
+ *
+ * FOCUS: deliberately not handled here. _theme_isolation.css already owns the single focus
+ * treatment for every button in the plugin (`button:focus { outline: none }` +
+ * `button:focus-visible { outline: 2px solid #2563eb }`), so these pills carry no ring utilities of
+ * their own. They used to carry `focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-primary-300`,
+ * which at (0,2,1) beat that shared rule and inverted it: a blue ring painted on every MOUSE click
+ * (a focus ring nobody asked for) while keyboard users lost the outline entirely.
  *
  * postcss-prefix-selector scopes every rule below to `.sla-plugin ...` at build time.
  */
-.sla-plugin .sla-card-info {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  cursor: help;
+.sla-plugin .sla-pill,
+.sla-plugin .sla-seg {
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.12s ease-in-out, color 0.12s ease-in-out,
+    border-color 0.12s ease-in-out;
 }
-.sla-plugin .sla-card-info:hover,
-.sla-plugin .sla-card-info:focus-within {
-  color: #4b5563; /* gray-600 — the icon darkens so the card acknowledges the hover */
-}
-.sla-plugin .sla-card-info:focus-visible {
-  outline: 2px solid #93c5fd; /* primary-300 */
-  outline-offset: 2px;
-  border-radius: 9999px;
-}
-.sla-plugin .sla-card-tip {
-  position: absolute;
-  /* Anchored to the trigger's right edge and hung below it: these triggers sit at the right edge of
-   * a card in a five-across row, where a centred tooltip would overflow the viewport on the last
-   * card. */
-  top: calc(100% + 0.5rem);
-  right: 0;
-  z-index: 30;
-  width: 16rem;
-  max-width: 60vw;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
-  background-color: #111827; /* gray-900 */
-  color: #f9fafb; /* gray-50 */
-  font-size: 0.75rem;
-  font-weight: 400;
+/* --- Date-range presets: separately rounded, bordered buttons ------------------------------- */
+.sla-plugin .sla-pill {
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem; /* text-sm */
   line-height: 1.25rem;
-  /* Normal casing/alignment regardless of what the trigger inherited from the card row. */
-  text-align: left;
-  white-space: normal;
-  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  visibility: hidden;
-  opacity: 0;
-  transition: opacity 0.12s ease-in-out, visibility 0.12s ease-in-out;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb; /* gray-200 */
+  background-color: #fff;
+  color: #374151; /* gray-700 */
+  box-shadow: none;
 }
-.sla-plugin .sla-card-info:hover .sla-card-tip,
-.sla-plugin .sla-card-info:focus-within .sla-card-tip {
-  visibility: visible;
-  opacity: 1;
+.sla-plugin .sla-pill:hover {
+  background-color: #f9fafb; /* gray-50 */
+  color: #111827; /* gray-900 */
+  border-color: #e5e7eb;
+}
+.sla-plugin .sla-pill.is-active,
+.sla-plugin .sla-pill.is-active:hover {
+  background-color: #2563eb; /* primary-600 */
+  border-color: #2563eb;
+  color: #fff;
+}
+.sla-plugin .sla-pill.is-active:hover {
+  background-color: #1d4ed8; /* primary-700 — a darker fill, never a lighter one */
+  border-color: #1d4ed8;
+}
+/* --- Granularity: pills inside a single gray track ------------------------------------------ */
+.sla-plugin .sla-seg {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem; /* text-xs */
+  line-height: 1rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background-color: transparent;
+  color: #4b5563; /* gray-600 */
+  box-shadow: none;
+}
+.sla-plugin .sla-seg:hover {
+  background-color: transparent;
+  color: #111827; /* gray-900 */
+}
+.sla-plugin .sla-seg.is-active,
+.sla-plugin .sla-seg.is-active:hover {
+  background-color: #2563eb; /* primary-600 */
+  color: #fff;
+}
+.sla-plugin .sla-seg.is-active:hover {
+  background-color: #1d4ed8; /* primary-700 */
 }
 .sla-plugin *, .sla-plugin ::before, .sla-plugin ::after {
   --tw-border-spacing-x: 0;
@@ -1424,9 +1455,6 @@
 .sla-plugin .tw-ml-1 {
   margin-left: 0.25rem;
 }
-.sla-plugin .tw-ml-auto {
-  margin-left: auto;
-}
 .sla-plugin .tw-ms-3 {
   margin-inline-start: 0.75rem;
 }
@@ -1709,9 +1737,6 @@
 .sla-plugin .tw-rounded-lg {
   border-radius: 0.5rem;
 }
-.sla-plugin .tw-rounded-md {
-  border-radius: 0.375rem;
-}
 .sla-plugin .tw-rounded-xl {
   border-radius: 0.75rem;
 }
@@ -1912,10 +1937,6 @@
 .sla-plugin .tw-px-3 {
   padding-left: 0.75rem;
   padding-right: 0.75rem;
-}
-.sla-plugin .tw-px-3\.5 {
-  padding-left: 0.875rem;
-  padding-right: 0.875rem;
 }
 .sla-plugin .tw-px-4 {
   padding-left: 1rem;

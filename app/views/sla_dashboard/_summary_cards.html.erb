@@ -4,15 +4,14 @@
 <%# it, never added into the total; no_sla == not_configured + not_tracked. %>
 <%# Card values carry stable ids (also useful for functional tests, since assigns() isn't %>
 <%# available in this Rails version without rails-controller-testing). %>
-<%# Every card is the shared _summary_card partial — icon tile, short label, optional (i), one big %>
-<%# number, one short caption. The long explanations that used to sit under the numbers as boxed %>
-<%# banners now live behind the (i) on the two cards that need them. %>
+<%# Every card is the shared _summary_card partial — icon tile, short label, one big number, one %>
+<%# short caption. Nothing else: no boxed explanatory banner under the number, and no (i) tooltip %>
+<%# either. Each caption is the whole supporting text the card gets. %>
 <div class="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 lg:tw-grid-cols-5 tw-gap-4 tw-mb-6">
   <%= render 'sla_dashboard/summary_card',
         state: :total, label: sla_card_label(:total), value: @counts.total,
         value_id: 'sla-card-total-value',
-        caption: l(:label_sla_card_total_caption),
-        tooltip: l(:text_sla_card_reconciliation_hint), tooltip_id: 'sla-card-total-tip' %>
+        caption: l(:label_sla_card_total_caption) %>
 
   <%# Stale replaces the SLA Met card on this current-state row (SLA Met now lives on the SLA Trend %>
   <%# tab). Count comes from Sla::StaleSummary: open tickets with no updates past the inactivity %>
@@ -20,15 +19,14 @@
   <%# %>
   <%# With no threshold configured the card shows an em dash, NOT 0 — "nobody has defined stale %>
   <%# here" and "nothing is stale" are different statements, and printing 0 would assert the second %>
-  <%# while meaning the first. The caption says which of the two it is in three words; the tooltip %>
-  <%# carries the full sentence, including how to fix an unset threshold. %>
+  <%# while meaning the first. The caption is the only place that distinction is stated now that the %>
+  <%# cards carry no tooltip, so the unset variant keeps the pointer to where it gets fixed. %>
   <%= render 'sla_dashboard/summary_card',
         state: :stale, label: sla_card_label(:stale),
         value: @stale.configured? ? @stale.count : '—',
         value_id: 'sla-card-stale-value',
         caption: @stale.configured? ? l(:label_sla_card_stale_caption) : l(:label_sla_card_stale_unset_caption),
-        tooltip: @stale.configured? ? l(:text_sla_card_stale_hint) : l(:text_sla_card_stale_unset_hint),
-        tooltip_id: 'sla-card-stale-hint' %>
+        caption_id: 'sla-card-stale-hint' %>
 
   <%# The breached figure is a percentage with the raw count beside it, so it is assembled here %>
   <%# rather than passed as a bare number — safe_join keeps the two spans' ids intact without %>

@@ -140,10 +140,21 @@ module SlaComplianceHelper
 
   # --- Step 6.3: chart colors ----------------------------------------------------------------
 
-  # Real Tableau 10 hex values (Global Rule 7), chosen so the compliance-state colors
-  # simultaneously match the summary cards' semantic palette (green/red/orange/gray).
+  # DEVIATION FROM GLOBAL RULE 7, recorded deliberately. The implementation plan specifies the
+  # Tableau 10 palette for charts, and these were its real hex values (#59A14F / #F28E2B /
+  # #E15759 / #BAB0AC). The approved dashboard design supplies its own chart palette instead, so
+  # these now match it — which has the side benefit of making a state EXACTLY the same colour in
+  # the chart as on its summary card and its detail-table badge, rather than a muted Tableau
+  # cousin of it. Raise it if the plan should be amended.
+  #
+  # met / breached / at_risk are the -600 hues of SLA_CARD_VALUE_CLASSES. no_sla is the one
+  # mismatch: gray-300 in charts (per the design) against violet on the card, because as ~80% of
+  # a typical donut a saturated violet swamps the two arcs that actually carry a verdict.
   SLA_CHART_COLORS = {
-    met: '#59A14F', at_risk: '#F28E2B', breached: '#E15759', no_sla: '#BAB0AC'
+    met: '#16a34a',      # green-600
+    at_risk: '#d97706',  # amber-600
+    breached: '#dc2626', # red-600
+    no_sla: '#d1d5db'    # gray-300
   }.freeze
 
   def sla_chart_color(key)

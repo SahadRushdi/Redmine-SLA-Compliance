@@ -11,13 +11,15 @@
 <div class="tw-flex tw-items-center tw-flex-wrap tw-gap-x-3 tw-gap-y-2 tw-mb-6">
   <div class="tw-flex tw-flex-wrap tw-items-center tw-gap-2" role="group" aria-label="<%= l(:label_sla_filter_date_range) %>">
     <% sla_date_presets.each do |preset| %>
-      <% active = @filters[:date_preset] == preset %>
       <%# Separately rounded buttons rather than one joined segmented bar: at six presets the joined %>
-      <%# bar could not wrap without breaking its own rounded ends. tw-shadow-none defeats %>
-      <%# Purplemine2's permanent blue 1px button box-shadow (see filter bar). %>
+      <%# bar could not wrap without breaking its own rounded ends. %>
+      <%# %>
+      <%# `.sla-pill` + a single `is-active` class, NOT a ternary over Tailwind utilities: %>
+      <%# sla_dashboard_filters.js repaints the clicked pill before the page reloads, and the two %>
+      <%# class lists have to be the same list. See partials/_pill_group.css for the whole story %>
+      <%# (including why these carry no focus-ring utilities). %>
       <button type="button" data-sla-preset-btn="<%= preset %>"
-              class="tw-px-3.5 tw-py-2 tw-text-sm tw-font-semibold tw-rounded-lg tw-border tw-border-solid tw-shadow-none tw-transition-colors focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-primary-300
-                     <%= active ? 'tw-bg-primary-600 tw-text-white tw-border-primary-600' : 'tw-bg-white tw-text-gray-700 tw-border-gray-200 hover:tw-bg-gray-50' %>">
+              class="sla-pill<%= ' is-active' if @filters[:date_preset] == preset %>">
         <%= sla_date_preset_label(preset) %>
       </button>
     <% end %>
