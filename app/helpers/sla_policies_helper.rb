@@ -303,8 +303,10 @@ module SlaPoliciesHelper
       'tw-rounded-lg tw-text-sm tw-px-5 tw-py-2.5 tw-cursor-pointer'
   end
 
-  # Neutral outlined button (Clone "Load", "Revert to inherited policy") — deliberately never blue,
-  # so the primary colour stays reserved for the one save action per section (Global Rule 7).
+  # Neutral outlined button (the Clone section's "Load"). Was also "Revert to inherited policy" on
+  # the reasoning that the primary colour should stay reserved for the one save action per section;
+  # that call was overruled — Revert is a deliberate, consequential action of its own and was being
+  # missed entirely as a grey outline, so it now uses sla_primary_button_classes above.
   def sla_secondary_button_classes
     'tw-inline-flex tw-items-center tw-gap-2 tw-text-gray-900 tw-bg-white tw-border ' \
       'tw-border-solid tw-border-gray-300 hover:tw-bg-gray-100 ' \

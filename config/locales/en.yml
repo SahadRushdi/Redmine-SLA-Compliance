@@ -37,7 +37,10 @@ en:
   button_sla_export_csv: "Export CSV"
   text_sla_filter_locked_project_hint: "This project has no sub-projects, so the Project filter is locked to it."
 
-  label_sla_card_total: "Total Open Tickets"
+  # Deliberately the SAME wording as label_sla_tab_open_tickets: the tab, this summary card and the
+  # donut all report one metric, and calling it "Total Open Tickets" here made it read as a second,
+  # broader figure than the tab it lives on.
+  label_sla_card_total: "Open Tickets"
   # The Open Tickets tab counts only OPEN tickets, so its "met" state means "still inside its
   # target" — it is not the compliance figure. The genuine % SLA met lives on the SLA Trend tab
   # over RESOLVED tickets and uses label_sla_card_met_window below. Keeping the two apart is what
@@ -166,12 +169,13 @@ en:
   text_sla_section_notifications: "Email & webhook alerts"
 
   label_sla_policy_general: "General"
-  label_sla_status_card: "SLA Status"
-  text_sla_status_card: "Enable or disable SLA tracking for this project."
+  # Each General setting is one row: the *_card / field_* string is its bold name and the *_hint is
+  # the single helper line under it. The old wrapper-card titles ("SLA Status", "Coverage Hours" as
+  # a heading over a separately-labelled field) are gone — they restated the row below them.
   field_sla_tracking: "SLA Tracking"
   text_sla_tracking_hint: "When disabled, no SLA targets will be evaluated for new issues."
   label_sla_coverage_card: "Coverage Hours"
-  text_sla_coverage_card: "Define when the SLA clock is active."
+  # Also the coverage select's aria-label, since the row's own title is its visible name.
   field_sla_coverage_schedule: "Coverage schedule"
   text_sla_coverage_schedule_hint: "Specifies the hours during which SLA time is counted. E.g. 24×7×365 for always-on."
   field_sla_enabled: "SLA enabled"
@@ -241,13 +245,13 @@ en:
   text_sla_pause_hint: "Time spent in these statuses is subtracted from SLA measurements. Leave empty for no pauses."
   text_sla_pause_statuses_hint: "Leave empty for no pauses."
 
-  label_sla_project_selection_card: "Project Selection"
-  text_sla_project_selection_card: "Choose a project to copy an existing SLA policy from. Selecting one changes nothing on its own."
-  label_sla_clone_section: "Clone Policy"
+  # Picking a project and pressing Load are one action, so they are one card with one description
+  # (formerly split across "Project Selection" and "Clone Policy").
+  label_sla_clone_from_project_card: "Clone from existing project"
+  text_sla_clone_from_project_card: "Choose a project to copy an existing SLA policy from. Pre-fills every section — General, SLA Targets for all its trackers, Measurement Rules, Exclusions and Notifications. Review them in the sidebar, then press Save Policy to apply the whole set."
   field_sla_clone_source: "Project"
   label_sla_clone_source_blank: "— Select a project —"
   button_sla_clone_load: "Load"
-  text_sla_clone_hint: "Pre-fills every section from the selected project's policy — General, SLA Targets for all its trackers, Measurement Rules, Exclusions and Notifications. Review them in the sidebar, then press Save Policy to apply the whole set."
   text_sla_clone_confirm_overwrite: "Loading will replace everything currently entered in every section of this policy, not just this one. Continue?"
 
   button_sla_save_policy: "Save Policy"
@@ -259,7 +263,9 @@ en:
   # --- Inheritance notice + Revert (B3) ------------------------------------------------------
   text_sla_inherited_notice: "These settings are inherited from %{project} and apply to this project already. Change anything and save, and this project keeps its own copy from then on — %{project}'s later changes will no longer reach it."
   button_sla_view_source_policy: "View source project's policy"
+  # The long string names the settings row; the button beside it only has to say what it does.
   button_sla_revert_to_inherited: "Revert to inherited policy"
+  button_sla_revert: "Revert"
   text_sla_revert_confirm: "This removes this project's own SLA policy. It will go back to inheriting from %{project}. Continue?"
   text_sla_revert_hint: "Removes this project's own policy so it inherits from %{project} again. Cached SLA results are recalculated, not deleted."
   notice_sla_reverted_to_inherited: "Reverted to the inherited SLA policy."

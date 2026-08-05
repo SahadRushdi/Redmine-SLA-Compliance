@@ -82,8 +82,9 @@
   }
 
   // #rgb / #rrggbb -> a text colour that stays legible on it. Needed because the priority chart
-  // draws each segment's value INSIDE the segment, and the palette spans a dark red and a very
-  // light gray (no_sla) — a hard-coded white label is invisible on the latter.
+  // draws each segment's value INSIDE the segment: white reads on every hue in the current -600
+  // palette, but this stays derived rather than hard-coded so a lighter palette entry (no_sla was
+  // gray-300 until it moved to violet-600) can't silently render invisible labels again.
   function readableTextOn(color) {
     var hex = typeof color === 'string' && color.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
     if (!hex) { return '#ffffff'; }
@@ -326,9 +327,9 @@
 
         ctx.save();
 
-        // Pass 1 — per-segment values, centered in each segment. The colour is chosen per segment
-        // rather than pinned to white: No SLA is a very light gray in this palette, and white-on-
-        // gray-300 was unreadable for what is usually the biggest segment on the chart.
+        // Pass 1 — per-segment values, centered in each segment. The colour is derived per segment
+        // (readableTextOn) rather than pinned to white, so a light palette entry can't leave the
+        // label invisible on what is often the biggest segment on the chart.
         ctx.font = 'bold 12px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';

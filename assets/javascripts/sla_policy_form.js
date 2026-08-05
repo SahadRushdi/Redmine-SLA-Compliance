@@ -60,6 +60,10 @@
   // CSS; see partials/_tom_select.css. Re-measured on every open, since row position and list
   // length both change as the user filters.
   function bindDropUp(instance) {
+    // Suppress the list Redmine's own defaultFocus() would otherwise pop open on load — see
+    // assets/javascripts/sla_tom_select.js. Every instance in this file is built through here.
+    if (window.slaTomSelect) { window.slaTomSelect.guard(instance); }
+
     instance.on('dropdown_open', function (dropdown) {
       var rect = instance.control.getBoundingClientRect();
       var needed = dropdown.offsetHeight;

@@ -199,6 +199,13 @@
     };
   }
 
+  // See assets/javascripts/sla_tom_select.js: Redmine core's defaultFocus() focuses the first
+  // visible text input on the page, which after init IS a Tom Select control, and openOnFocus then
+  // leaves the list hanging open before the user has touched anything.
+  function guard(instance) {
+    return window.slaTomSelect ? window.slaTomSelect.guard(instance) : instance;
+  }
+
   function initUserPickers() {
     document.querySelectorAll('[data-sla-access-list]').forEach(function (container) {
       if (container.slaAccessListReady) { return; }
@@ -210,7 +217,7 @@
 
       var url = select.getAttribute('data-sla-user-search');
 
-      var tomSelect = new TomSelect(select, {
+      var tomSelect = guard(new TomSelect(select, {
         valueField: 'id',
         labelField: 'name',
         searchField: ['name', 'login'],
@@ -252,7 +259,7 @@
           // table row added above is the lasting record, the pill doesn't need to persist.
           window.setTimeout(function () { tomSelect.clear(true); }, CLEAR_DELAY_MS);
         }
-      });
+      }));
     });
   }
 

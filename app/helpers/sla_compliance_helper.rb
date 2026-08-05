@@ -147,9 +147,12 @@ module SlaComplianceHelper
   # the chart as on its summary card and its detail-table badge, rather than a muted Tableau
   # cousin of it. Raise it if the plan should be amended.
   #
-  # met / breached / at_risk are the -600 hues of SLA_CARD_VALUE_CLASSES. no_sla is the one
-  # mismatch: gray-300 in charts (per the design) against violet on the card, because as ~80% of
-  # a typical donut a saturated violet swamps the two arcs that actually carry a verdict.
+  # Every state is the -600 hue of its SLA_CARD_VALUE_CLASSES entry, no_sla included. no_sla was
+  # previously gray-300 here (violet only on the card) on the theory that a saturated violet would
+  # swamp the arcs that carry a real verdict — but in practice the grey read as "missing data" in
+  # the legends and dots, and disagreed with the violet card for the same number. One hue per
+  # state everywhere wins over that: the mapping is now identical on the card, the badge, and
+  # every chart segment/legend dot on the page.
   SLA_CHART_COLORS = {
     met: '#16a34a',      # green-600
     at_risk: '#d97706',  # amber-600

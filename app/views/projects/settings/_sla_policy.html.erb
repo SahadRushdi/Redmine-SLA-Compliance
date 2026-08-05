@@ -28,6 +28,12 @@
   <div id="sla-policy-settings" class="tw-flex tw-flex-col lg:tw-flex-row tw-gap-6 tw-items-start">
     <%= render 'sla_policies/nav_slot', project: @project, sections: sections, current: current %>
 
+    <%# Deliberately NOT given the reference design's gray-50 page canvas. It would read well behind %>
+    <%# the General section's new headerless white cards, but sla_policies/_card.html.erb — used by %>
+    <%# every section this change was told to leave alone — separates its header from its body with %>
+    <%# a gray-50 tint, and on a gray-50 canvas that header stops looking like part of the card at %>
+    <%# all. Matching the reference here means whitening those headers too, which is a change to %>
+    <%# sections that were explicitly out of scope. %>
     <div class="tw-flex-1 tw-min-w-0 tw-w-full">
       <div id="sla-policy-tab-body">
         <%= render 'sla_policies/policy_body',

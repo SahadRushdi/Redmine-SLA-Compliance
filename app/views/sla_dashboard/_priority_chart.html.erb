@@ -1,18 +1,27 @@
 <%# Horizontal stacked bar, one row per priority present in the filtered scope, ordered by %>
 <%# Redmine's own IssuePriority position (never hardcoded). Uses the exact same 4-color state %>
 <%# palette as the donut and the shared legend above - one visual language across both charts. %>
+<%#
+  Dataset order is the STACKING order of each bar (met → at risk → breached → no SLA, left to
+  right) and is deliberately fixed: it is layout, and a stack that reshuffles per project would
+  make two boards impossible to compare at a glance. The LEGEND below is sorted by count instead
+  — see there.
+%>
+<% priority_states = [
+     { key: :met,      label: l(:label_sla_chart_met_on_track),
+       data: @priority_breakdown.map { |r| r.met - r.at_risk } },
+     { key: :at_risk,  label: l(:label_sla_chart_met_at_risk),
+       data: @priority_breakdown.map(&:at_risk) },
+     { key: :breached, label: sla_card_label(:breached),
+       data: @priority_breakdown.map(&:breached) },
+     { key: :no_sla,   label: sla_card_label(:no_sla),
+       data: @priority_breakdown.map(&:no_sla) }
+   ] %>
 <% priority_payload = {
      labels: @priority_breakdown.map(&:priority_name),
-     datasets: [
-       { label: l(:label_sla_chart_met_on_track), backgroundColor: sla_chart_color(:met),
-         data: @priority_breakdown.map { |r| r.met - r.at_risk } },
-       { label: l(:label_sla_chart_met_at_risk), backgroundColor: sla_chart_color(:at_risk),
-         data: @priority_breakdown.map(&:at_risk) },
-       { label: l(:label_sla_card_breached), backgroundColor: sla_chart_color(:breached),
-         data: @priority_breakdown.map(&:breached) },
-       { label: l(:label_sla_card_no_sla), backgroundColor: sla_chart_color(:no_sla),
-         data: @priority_breakdown.map(&:no_sla) }
-     ]
+     datasets: priority_states.map { |state|
+       { label: state[:label], backgroundColor: sla_chart_color(state[:key]), data: state[:data] }
+     }
    } %>
 <div class="tw-h-full tw-flex tw-flex-col">
   <h3 class="tw-text-base tw-font-semibold tw-text-gray-900 tw-mb-3"><%= l(:label_sla_chart_priority_breakdown) %></h3>
@@ -32,22 +41,25 @@
   <%# Same 4-color state mapping as the donut's legend - dot + label only (no counts) since the %>
   <%# per-segment value labels already drawn on the bars themselves (sla_dashboard_charts.js) %>
   <%# carry the numbers, avoiding a second place the same counts would need to stay in sync. %>
-  <%# priority_dataset_index matches priority_payload's own dataset order above (met=0, at_risk=1, %>
-  <%# breached=2, no_sla=3) - unlike the donut (one dataset, many arc indices), this chart has one %>
-  <%# dataset PER state, so highlighting is by dataset index, not data-point index. Kept as an %>
-  <%# explicit map rather than each_with_index so the legend's own display order (met, breached, %>
-  <%# at_risk, no_sla - matching the donut's) doesn't have to match the dataset construction order %>
-  <%# above. Click-to-highlight (dim the other datasets' bars, not hide any of them) is wired in %>
-  <%# sla_dashboard_charts.js - same behavior as the donut's and trend chart's legends. %>
-  <% priority_dataset_index = { met: 0, at_risk: 1, breached: 2, no_sla: 3 } %>
+  <%#
+    ORDER: sorted by each state's total across every priority row, descending — the same
+    biggest-bucket-first rule the donut's legend uses, recomputed from @priority_breakdown on every
+    render. The sort is stable (`each_with_index … [-total, i]`), so states tied at 0 keep the
+    declaration order above rather than shuffling between requests. Highlighting is by DATASET index
+    (this chart has one dataset per state, unlike the donut's single dataset of arcs), so each entry
+    carries its own original index — which is exactly why the legend can be reordered freely without
+    touching the stacking order above.
+  %>
+  <% priority_legend = priority_states.each_with_index
+                                      .sort_by { |state, i| [-state[:data].sum, i] } %>
   <div id="sla-priority-chart-legend" class="tw-flex tw-flex-wrap tw-gap-x-4 tw-gap-y-1 tw-mt-3 tw-pt-3 tw-border-t tw-border-gray-100 tw-text-xs tw-text-gray-600">
-    <% %i[met breached at_risk no_sla].each do |state| %>
+    <% priority_legend.each do |state, dataset_index| %>
       <%# sla-legend-item carries the click affordance AND the active pill the JS toggles — see %>
       <%# partials/_chart_legend.css. %>
       <span class="sla-legend-item tw-inline-flex tw-items-center tw-gap-1.5"
-            data-sla-legend-target="sla-priority-chart" data-sla-legend-dataset="<%= priority_dataset_index[state] %>">
-        <span class="tw-w-2.5 tw-h-2.5 tw-rounded-full tw-inline-block" style="background-color: <%= sla_chart_color(state) %>"></span>
-        <%= state == :at_risk ? l(:label_sla_card_at_risk) : sla_card_label(state) %>
+            data-sla-legend-target="sla-priority-chart" data-sla-legend-dataset="<%= dataset_index %>">
+        <span class="tw-w-2.5 tw-h-2.5 tw-rounded-full tw-inline-block" style="background-color: <%= sla_chart_color(state[:key]) %>"></span>
+        <%= sla_card_label(state[:key]) %>
       </span>
     <% end %>
   </div>

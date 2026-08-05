@@ -38,10 +38,17 @@
 
   // Same pattern as sla_policy_form.js's initChips/initSingleSelects (chip multi-selects vs.
   // single-value dropdowns styled to match the rest of the scoped Flowbite UI).
+  // See assets/javascripts/sla_tom_select.js: Redmine core's defaultFocus() focuses the first
+  // visible text input on the page, which after init IS a Tom Select control, and openOnFocus then
+  // leaves the list hanging open before the user has touched anything.
+  function guard(instance) {
+    return window.slaTomSelect ? window.slaTomSelect.guard(instance) : instance;
+  }
+
   function initChips() {
     document.querySelectorAll('select[data-sla-chips]').forEach(function (el) {
       if (!el.tomselect && window.TomSelect) {
-        new TomSelect(el, { plugins: ['remove_button'] });
+        guard(new TomSelect(el, { plugins: ['remove_button'] }));
       }
     });
   }
@@ -49,7 +56,7 @@
   function initSingleSelects() {
     document.querySelectorAll('select[data-sla-select]').forEach(function (el) {
       if (!el.tomselect && window.TomSelect) {
-        new TomSelect(el, { create: false, allowEmptyOption: true });
+        guard(new TomSelect(el, { create: false, allowEmptyOption: true }));
       }
     });
   }

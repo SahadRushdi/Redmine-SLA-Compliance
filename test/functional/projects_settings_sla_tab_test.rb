@@ -24,6 +24,27 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     Setting.plugin_redmine_sla_compliance = {}
   end
 
+  # Regression: an ERB comment in _setting_card.html.erb illustrated the partial's usage with a
+  # snippet, and the snippet's own closing tag ended the comment early — so the remainder of the
+  # doc comment rendered as visible text above the SLA Tracking and Coverage Hours cards. Nothing
+  # else caught it: the page still returned 200 and every field assertion still passed. Scans the
+  # whole rendered tab rather than that one partial, since the trap applies to any of them.
+  test "no ERB source leaks into the rendered SLA Policy tab" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+
+    assert_response :success
+    tab = css_select('#tab-content-sla_policy').first
+    assert tab.present?, 'SLA Policy tab did not render'
+    text = tab.text
+    %w[<% %> <%= <%#].each do |marker|
+      assert_not_includes text, marker,
+                          "ERB source #{marker} leaked into the page — an ERB comment probably " \
+                          'contains a closing tag and was terminated early'
+    end
+  end
+
   test "settings page renders both tab sections with saved values" do
     saved = SlaPolicy.create!(project_id: @project.id, enabled: true, at_risk_threshold: 85)
     status_id = @project.rolled_up_statuses.first.id
