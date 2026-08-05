@@ -23,18 +23,6 @@
 
   function byId(id) { return document.getElementById(id); }
 
-  // Grey arrows only (no brand colour): neutral = both chevrons on an unsorted column, a single
-  // up/down arrow for the active sort direction.
-  var ICONS = {
-    neutral: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">' +
-             '<path d="M8 10l4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>' +
-             '<path d="M8 14l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    asc:  '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">' +
-          '<path d="M7 14l5-5 5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    desc: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">' +
-          '<path d="M7 10l5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-  };
-
   // Mirrors Redmine::Pagination::Paginator#linked_pages (lib/redmine/pagination.rb) so this
   // client-side pager windows exactly like Redmine's own server-rendered ones (Spent time, issue
   // list): always first + last + current, plus current ± 2, with the gaps rendered as an ellipsis.
@@ -57,32 +45,6 @@
     span.className = 'tw-px-2 tw-py-1.5 tw-text-xs tw-text-gray-400 tw-select-none';
     span.textContent = '…';
     return span;
-  }
-
-  function cellValue(row, index) {
-    var cell = row.children[index];
-    if (!cell) { return ''; }
-    var explicit = cell.getAttribute('data-sla-sort-value');
-    return explicit !== null ? explicit : (cell.textContent || '').trim();
-  }
-
-  // Blanks always sort last, regardless of direction, for both numeric and text columns.
-  function compare(a, b, type, dir) {
-    var mul = dir === 'asc' ? 1 : -1;
-    if (type === 'number') {
-      var na = (a === '' || a == null) ? null : parseFloat(a);
-      var nb = (b === '' || b == null) ? null : parseFloat(b);
-      if (na === null && nb === null) { return 0; }
-      if (na === null) { return 1; }
-      if (nb === null) { return -1; }
-      if (na === nb) { return 0; }
-      return (na < nb ? -1 : 1) * mul;
-    }
-    var sa = (a || '').toLowerCase(), sb = (b || '').toLowerCase();
-    if (sa === '' && sb === '') { return 0; }
-    if (sa === '') { return 1; }
-    if (sb === '') { return -1; }
-    return sa.localeCompare(sb) * mul;
   }
 
   function Table(root) {
@@ -146,7 +108,10 @@
     var type = header ? header.getAttribute('data-sla-sort-type') : 'text';
     var dir = this.sortDir;
     return rows.sort(function (r1, r2) {
-      return compare(cellValue(r1, index), cellValue(r2, index), type, dir);
+      // Shared with the admin module's lookup tables — see assets/javascripts/sla_table_sort.js.
+      // Read here rather than captured at parse time, so script order cannot matter.
+      var shared = window.slaTableSort;
+      return shared.compare(shared.cellValue(r1, index), shared.cellValue(r2, index), type, dir);
     });
   };
 
@@ -197,7 +162,8 @@
       var span = th.querySelector('.sla-sort-icon');
       if (!span) { return; }
       var active = th.getAttribute('data-sla-sort') === self.sortKey;
-      span.innerHTML = active ? ICONS[self.sortDir] : ICONS.neutral;
+      var icons = window.slaTableSort.ICONS;
+      span.innerHTML = active ? icons[self.sortDir] : icons.neutral;
       span.classList.toggle('tw-text-gray-600', active);
       span.classList.toggle('tw-text-gray-400', !active);
     });

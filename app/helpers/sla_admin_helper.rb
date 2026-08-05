@@ -118,8 +118,17 @@ module SlaAdminHelper
   end
 
   # Shared table classes, defined once so the two lookup tables cannot drift apart.
+  #
+  # tw-border-collapse is load-bearing, not decoration. Tailwind's Preflight normally sets
+  # `table { border-collapse: collapse }`, and Preflight is DISABLED in this build (CLAUDE.md) —
+  # so the browser default `border-collapse: separate; border-spacing: 2px` was in force on every
+  # table here. That inset the header cells 2px from the table box, letting the card's white
+  # background show between the card's own grey border and the grey-50 header: a thick grey frame
+  # around the heading that nothing in this plugin had asked for. Collapsing the borders removes
+  # the spacing entirely, so the header meets the card edge and the only line left is the card's
+  # own 1px border.
   def sla_admin_table_classes
-    'tw-w-full tw-text-sm tw-text-left tw-text-gray-700'
+    'tw-w-full tw-border-collapse tw-text-sm tw-text-left tw-text-gray-700'
   end
 
   # Title case only — never uppercased via CSS (CLAUDE.md).

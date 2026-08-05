@@ -12,9 +12,11 @@
              action_path: new_sla_business_calendar_path %>
 
   <% if @calendars.any? %>
+    <%# Same header shape as every other caller; nil keys because this table is not sorted. %>
     <%= render layout: 'sla_admin/data_table',
-               locals: { headers: [l(:field_name), l(:field_sla_working_days),
-                                   l(:field_sla_working_hours), l(:field_sla_holidays), ''] } do %>
+               locals: { headers: [[l(:field_name), nil], [l(:field_sla_working_days), nil],
+                                   [l(:field_sla_working_hours), nil], [l(:field_sla_holidays), nil],
+                                   ['', nil]] } do %>
       <% @calendars.each do |calendar| %>
         <% working_days = calendar.working_days.to_a.map(&:to_i).sort %>
         <tr>

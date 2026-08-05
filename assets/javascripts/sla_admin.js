@@ -145,10 +145,71 @@
     });
   }
 
+  // --- Client-side column sorting ---------------------------------------------------------------
+  // The lookup tables are small and never paginate, so the whole table is already on the page and
+  // re-sorting it needs no round trip. Icons and comparison come from window.slaTableSort, shared
+  // with the dashboard's ticket detail table so the two sort and look identical.
+  //
+  // A header sorts by its column's `data-sla-sort-value` when the cell carries one, else by the
+  // cell's text — which is how Duration sorts by seconds while displaying "2d" or a Best Effort
+  // badge. Blanks sort last in both directions (see sla_table_sort.js), so a Best Effort row with
+  // no duration stays at the bottom either way rather than jumping ends as the arrow flips.
+
+  function paintSortIcons(table, key, dir) {
+    var icons = window.slaTableSort.ICONS;
+    table.querySelectorAll('thead th[data-sla-sort]').forEach(function (th) {
+      var span = th.querySelector('.sla-sort-icon');
+      if (!span) { return; }
+      var active = th.getAttribute('data-sla-sort') === key;
+      span.innerHTML = active ? icons[dir] : icons.neutral;
+      th.setAttribute('aria-sort', active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none');
+    });
+  }
+
+  function sortTable(table, state, th) {
+    var shared = window.slaTableSort;
+    var headers = Array.prototype.slice.call(table.querySelectorAll('thead th'));
+    var index = headers.indexOf(th);
+    var type = th.getAttribute('data-sla-sort-type') || 'text';
+    var tbody = table.querySelector('tbody');
+    if (index < 0 || !tbody) { return; }
+
+    var rows = Array.prototype.slice.call(tbody.rows).sort(function (r1, r2) {
+      return shared.compare(shared.cellValue(r1, index), shared.cellValue(r2, index),
+                            type, state.dir);
+    });
+    // Appending an existing node MOVES it, so this reorders in place without rebuilding any markup
+    // — the row-action links and their rails-ujs handlers survive untouched.
+    rows.forEach(function (row) { tbody.appendChild(row); });
+
+    paintSortIcons(table, state.key, state.dir);
+  }
+
+  function initSortableTables() {
+    document.querySelectorAll('[data-sla-sortable-table]').forEach(function (table) {
+      if (table.slaSortReady || !window.slaTableSort) { return; }
+      table.slaSortReady = true;
+
+      var state = { key: null, dir: 'asc' };
+      paintSortIcons(table, null, 'asc'); // every sortable header starts neutral
+
+      table.querySelectorAll('thead th[data-sla-sort]').forEach(function (th) {
+        th.addEventListener('click', function () {
+          var key = th.getAttribute('data-sla-sort');
+          // Toggle on the column already sorted; any other column starts ascending.
+          state.dir = state.key === key && state.dir === 'asc' ? 'desc' : 'asc';
+          state.key = key;
+          sortTable(table, state, th);
+        });
+      });
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     bindSectionNav();
     bindReveals();
     initSingleSelects();
     initDateChips();
+    initSortableTables();
   });
 })();

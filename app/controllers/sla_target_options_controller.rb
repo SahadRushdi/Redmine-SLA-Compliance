@@ -23,6 +23,9 @@ class SlaTargetOptionsController < ApplicationController
   before_action :find_target_option, only: [:edit, :update, :destroy]
 
   def index
+    # One fixed, sensible order. Column sorting is CLIENT-SIDE (sla_admin.js) — the whole table is
+    # already on the page, so re-sorting it does not need a round trip, and a lookup this size
+    # never paginates.
     @target_options = SlaTargetOption.order(:target_type, :position, :seconds)
   end
 

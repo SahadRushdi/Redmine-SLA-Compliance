@@ -933,8 +933,12 @@
   text-align: right;
   white-space: nowrap;
 }
-/* Sortable header (the access lists). A pointer + no text selection is the whole affordance;
- * the direction arrow is filled in by the JS. */
+/* Sortable header on the access allow-lists. A pointer + no text selection is the whole affordance;
+ * the direction arrow is text, filled in by sla_access_form.js.
+ *
+ * The lookup tables' sortable headers need no class of their own: they mirror the dashboard's
+ * ticket detail table, which carries `tw-cursor-pointer tw-select-none` as utilities and lets
+ * sla_table_sort.js paint the icon. */
 .sla-plugin .sla-admin-sortable {
   cursor: pointer;
   -webkit-user-select: none;
@@ -1794,6 +1798,9 @@
 }
 .sla-plugin .tw-table-fixed {
   table-layout: fixed;
+}
+.sla-plugin .tw-border-collapse {
+  border-collapse: collapse;
 }
 .sla-plugin .-tw-translate-y-1\/2 {
   --tw-translate-y: -50%;

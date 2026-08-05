@@ -220,6 +220,73 @@ class SlaAdminTargetOptionsPagesTest < ActionController::TestCase
     assert_select 'a[href=?]', new_sla_target_option_path
   end
 
+  # --- Column sorting (client-side) ---------------------------------------------------------------
+  # The sorting itself runs in the browser (sla_admin.js + sla_table_sort.js), so what is asserted
+  # here is the contract the markup owes that script: which columns are sortable, what type each
+  # sorts as, and the sort value behind a cell whose text is not what you sort by.
+
+  test "every named column carries a sort hook, and the actions column does not" do
+    make_option
+    get :index
+
+    %w[target_type code label duration basis position].each do |key|
+      assert_select "thead th[data-sla-sort=?]", key, 1, "#{key} must be sortable"
+    end
+    # Six named columns plus the unnamed row-actions column, which must not be sortable.
+    assert_select 'thead th', 7
+    assert_select 'thead th[data-sla-sort]', 6
+    assert_select 'table[data-sla-sortable-table]', 1, 'the script binds on this attribute'
+  end
+
+  test "each sortable header carries the icon slot the script paints" do
+    make_option
+    get :index
+
+    # Same hook and the same starting state as the dashboard's ticket detail table.
+    assert_select 'thead th[data-sla-sort] .sla-sort-icon', 6
+    assert_select 'thead th[data-sla-sort][aria-sort=?]', 'none', 6
+  end
+
+  test "the numeric columns declare themselves numeric" do
+    # Without this they sort as text, where "10" lands before "9".
+    make_option
+    get :index
+
+    assert_select "thead th[data-sla-sort=?][data-sla-sort-type=?]", 'duration', 'number'
+    assert_select "thead th[data-sla-sort=?][data-sla-sort-type=?]", 'position', 'number'
+    assert_select "thead th[data-sla-sort=?][data-sla-sort-type=?]", 'code', 'text'
+  end
+
+  test "duration sorts by raw seconds, not by the text it displays" do
+    # The cell reads "4h"; sorting it as text would order it against "48 Hours" alphabetically.
+    make_option(seconds: 14_400)
+    get :index
+
+    assert_select "td[data-sla-sort-value=?]", '14400', 1
+  end
+
+  test "a Best Effort row carries no sort value, so it sorts last either way" do
+    # Blanks sort last in both directions (sla_table_sort.js). A target with no deadline is
+    # neither the shortest nor the longest, and must not jump ends as the arrow flips.
+    SlaTargetOption.delete_all
+    make_option(code: 'be', label: 'Best Effort', best_effort: true, seconds: nil)
+    get :index
+
+    assert_select "td[data-sla-sort-value='']", 1
+  end
+
+  test "no sorting round trip is offered" do
+    # Client-side means the headers are click targets, not links: a header <a> would navigate and
+    # a ?sort= param would be ignored by the controller, which orders the list one fixed way.
+    make_option
+    get :index
+
+    assert_select 'thead th a', 0
+    assert_select 'thead th[data-sla-sort]' do |headers|
+      headers.each { |th| assert_nil th['href'] }
+    end
+  end
+
   test "each row offers edit and delete" do
     option = make_option
     get :index

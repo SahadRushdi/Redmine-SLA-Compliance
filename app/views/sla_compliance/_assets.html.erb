@@ -8,6 +8,10 @@
   <%# Must load BEFORE any page script that builds a Tom Select — see the file's own header for %>
   <%# why Redmine's defaultFocus() otherwise leaves the first dropdown open on arrival. %>
   <%= javascript_include_tag 'sla_tom_select.js', plugin: 'redmine_sla_compliance' %>
+  <%# Shared client-side table-sort primitives (icons + comparison), used by both the dashboard's %>
+  <%# ticket detail table and the admin module's lookup tables. Consumers read window.slaTableSort %>
+  <%# inside a function, so this include's position relative to theirs does not matter. %>
+  <%= javascript_include_tag 'sla_table_sort.js', plugin: 'redmine_sla_compliance' %>
   <%# chartjs-plugin-colorschemes is deliberately NOT loaded: every chart now supplies its own %>
   <%# colors (sla_chart_color for the donut/priority charts, hand-picked red/green in %>
   <%# _trend_chart.html.erb). The plugin self-registers globally against Chart on load and filled %>
