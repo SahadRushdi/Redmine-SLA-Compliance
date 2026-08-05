@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Sla
-  # Step 5.1 — resolves the user allow-list configured in Administration → Plugins → SLA Compliance.
+  # Step 5.1 — resolves the user allow-list configured in Administration → SLA Compliance.
   #
   # Redmine grants permissions to ROLES, reached through project membership; it has no way to
   # express "this specific person can see SLA" without inventing a role and a membership for them.

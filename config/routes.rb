@@ -11,6 +11,11 @@ Rails.application.routes.draw do
     resource :sla_notification_setting, only: [:update], controller: 'sla_notification_settings'
   end
 
+  # Administration → SLA Compliance. A singular resource of its own rather than Redmine's
+  # settings/plugin/:id page — see SlaSettingsController for why it had to move.
+  get 'sla_settings', to: 'sla_settings#show', as: :sla_settings
+  patch 'sla_settings', to: 'sla_settings#update'
+
   resources :sla_target_options, except: [:show]
   resources :sla_business_calendars, except: [:show]
 

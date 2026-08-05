@@ -14,6 +14,13 @@ class SlaBusinessCalendarsControllerTest < ActionController::TestCase
                                   work_end_time: '17:00' }.merge(attrs))
   end
 
+  # The redesigned forms render their own validation summary (app/views/sla_admin/_form_errors)
+  # rather than Redmine's `#errorExplanation` block, so core's assert_select_error no longer
+  # applies. Same intent: the failing field's message reaches the re-rendered page.
+  def assert_sla_form_error(pattern)
+    assert_select 'div[role=?] li', 'alert', text: pattern
+  end
+
   test "every action requires admin" do
     @request.session[:user_id] = 2
     calendar = make_calendar
@@ -60,7 +67,7 @@ class SlaBusinessCalendarsControllerTest < ActionController::TestCase
       }
     end
     assert_response :success
-    assert_select_error(/Holidays/)
+    assert_sla_form_error(/Holidays/)
   end
 
   test "update persists changes" do

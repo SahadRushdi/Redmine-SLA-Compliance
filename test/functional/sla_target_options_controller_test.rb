@@ -13,6 +13,13 @@ class SlaTargetOptionsControllerTest < ActionController::TestCase
                               seconds: 14_400, position: 1 }.merge(attrs))
   end
 
+  # The redesigned forms render their own validation summary (app/views/sla_admin/_form_errors)
+  # rather than Redmine's `#errorExplanation` block, so core's assert_select_error no longer
+  # applies. Same intent: the failing field's message reaches the re-rendered page.
+  def assert_sla_form_error(pattern)
+    assert_select 'div[role=?] li', 'alert', text: pattern
+  end
+
   test "every action requires admin" do
     @request.session[:user_id] = 2 # jsmith, not admin
     option = make_option
@@ -37,7 +44,7 @@ class SlaTargetOptionsControllerTest < ActionController::TestCase
     make_option
     get :index
     assert_response :success
-    assert_select 'table.list td', text: '4 hours'
+    assert_select '.sla-admin-rows td', text: '4 hours'
   end
 
   test "create persists a valid option" do
@@ -58,7 +65,7 @@ class SlaTargetOptionsControllerTest < ActionController::TestCase
                                                    label: '1 hour', seconds: 3600 } }
     end
     assert_response :success # re-rendered form with errors
-    assert_select_error(/Target type/)
+    assert_sla_form_error(/Target type/)
   end
 
   test "update persists changes" do
@@ -104,7 +111,7 @@ class SlaTargetOptionsControllerTest < ActionController::TestCase
                                                    label: 'x' } }
     end
     assert_response :success
-    assert_select_error(/Seconds/)
+    assert_sla_form_error(/Seconds/)
   end
 
   test "create persists the basis" do
@@ -126,6 +133,6 @@ class SlaTargetOptionsControllerTest < ActionController::TestCase
                                                    basis: 'bogus' } }
     end
     assert_response :success
-    assert_select_error(/Basis/)
+    assert_sla_form_error(/Basis/)
   end
 end

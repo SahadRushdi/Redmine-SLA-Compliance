@@ -1,0 +1,97 @@
+<%# --- Step 5.1: access control --------------------------------------------------------------- %>
+<%# Redmine grants permissions to ROLES only. These two lists add the user-level grant it has no %>
+<%# way to express; Sla::AccessControl + UserPatch turn them into permissions. Admins always have %>
+<%# access and are not listed here. %>
+<%# %>
+<%# Every hook the JS and the controller depend on is unchanged by the redesign — the `settings[…]` %>
+<%# input names, the data-sla-* attributes sla_access_form.js binds to, and the blank sentinel that %>
+<%# makes an emptied list persist as empty. Only the chrome around them is new. %>
+<% content_for :header_tags do %>
+  <%= javascript_include_tag 'sla_access_form.js', plugin: 'redmine_sla_compliance' %>
+<% end %>
+
+<%# Why these lists exist at all — stated once, above both, rather than repeated per list. %>
+<div class="tw-mb-5 tw-flex tw-gap-3 tw-rounded-lg tw-border tw-border-solid tw-border-gray-200
+            tw-bg-gray-50 tw-p-4 tw-text-sm tw-text-gray-600">
+  <span class="tw-mt-0.5 tw-text-gray-400"><%= sla_info_icon %></span>
+  <p class="tw-m-0"><%= l(:text_sla_access_control_hint) %></p>
+</div>
+
+<div class="tw-grid tw-grid-cols-1 xl:tw-grid-cols-2 tw-gap-5">
+  <% { viewer: :field_sla_viewer_users, manager: :field_sla_manager_users }.each do |list, label_key| %>
+    <% users = Sla::PluginSettings.public_send(:"#{list}_users").to_a %>
+    <%# data-sla-users seeds sla_access_form.js's in-memory state (add/sort/paginate/delete); %>
+    <%# everything server-rendered below is the no-JS-safe fallback the JS then replaces. %>
+    <div data-sla-access-list="<%= list %>"
+         data-sla-remove-label="<%= l(:button_delete) %>"
+         data-sla-users="<%= users.map { |u| { id: u.id, name: u.name, login: u.login, mail: u.mail } }.to_json %>">
+      <%= render layout: 'sla_policies/card',
+                 locals: { title: l(label_key), description: l(:"text_sla_#{list}_users_hint") } do %>
+        <%# Search-only: picking a result adds a row to the table below instead of showing a chip %>
+        <%# here — the table is the single place a granted user is shown. %>
+        <%# %>
+        <%# The card's own title is the visible name for this box, so it carries an aria-label %>
+        <%# rather than a second <label> repeating it. aria-label and not a visually-hidden label: %>
+        <%# core's `.tabular.settings label` rules apply to every label on this page and would %>
+        <%# fight tw-sr-only's own metrics, and Tom Select replaces this <select> with its own %>
+        <%# control anyway, which a `for=` association would no longer reach. %>
+        <%= content_tag :select, '', id: "sla-#{list}-users", 'aria-label': l(label_key),
+              data: { sla_user_search: sla_access_users_path } %>
+
+        <%# Sentinel: guarantees the [] param is still posted once every row is removed, so %>
+        <%# clearing a list persists as empty instead of leaving the old list untouched. %>
+        <%= hidden_field_tag "settings[sla_#{list}_user_ids][]", '', id: nil %>
+        <%# Server-rendered so the form still submits the current grants unchanged even if JS %>
+        <%# never runs; sla_access_form.js fully replaces this container's contents on every %>
+        <%# add/remove once it boots. %>
+        <div data-sla-hidden-inputs>
+          <% users.each do |user| %>
+            <%= hidden_field_tag "settings[sla_#{list}_user_ids][]", user.id, id: nil %>
+          <% end %>
+        </div>
+
+        <%# Server-rendered as a read-only, unsorted, unpaginated fallback; sla_access_form.js %>
+        <%# replaces the body with a sortable, paginated, delete-capable version once it boots. %>
+        <%# Row/cell styling lives in partials/_admin_settings.css (`.sla-admin-rows`), NOT in %>
+        <%# utility classes, precisely because the JS re-renders these rows and would otherwise %>
+        <%# have to carry a copy of the Tailwind class strings that could drift from this file. %>
+        <div class="tw-mt-4 tw-overflow-x-auto tw-rounded-lg tw-border tw-border-solid tw-border-gray-200">
+          <table class="<%= sla_admin_table_classes %>">
+            <thead class="tw-bg-gray-50 tw-border-b tw-border-solid tw-border-gray-200">
+              <tr>
+                <% [[:name, :label_user], [:login, :field_login], [:mail, :field_mail]].each do |key, header_label_key| %>
+                  <%# Sortable header: a real button so it is keyboard-reachable, with the sort %>
+                  <%# direction indicator the JS fills in. Title case, never uppercase (CLAUDE.md). %>
+                  <th scope="col" class="<%= sla_admin_th_classes %> sla-admin-sortable"
+                      data-sla-sort="<%= key %>">
+                    <%= l(header_label_key) %> <span data-sla-sort-indicator></span>
+                  </th>
+                <% end %>
+                <th scope="col" class="<%= sla_admin_th_classes %>"><span class="tw-sr-only"><%= l(:button_delete) %></span></th>
+              </tr>
+            </thead>
+            <tbody class="sla-admin-rows" data-sla-rows>
+              <% users.each do |user| %>
+                <tr>
+                  <td><%= h user.name %></td>
+                  <td><%= h user.login %></td>
+                  <td><%= h user.mail %></td>
+                  <td></td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="tw-mt-3 tw-mb-0 tw-text-center tw-text-xs tw-text-gray-400<%= ' hidden' if users.present? %>"
+           data-sla-empty>
+          <%= l(:label_sla_no_users_added) %>
+        </p>
+        <%# Same markup/classes as Redmine::Pagination::Helper#pagination_links_full (see e.g. %>
+        <%# the Users admin list) so Purplemine2's own .pagination/.pages CSS styles it %>
+        <%# identically -- sla_access_form.js only swaps real page links for click handlers. %>
+        <span class="pagination sla-admin-pagination" data-sla-pagination></span>
+      <% end %>
+    </div>
+  <% end %>
+</div>

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Step 5.1 — backs the user search on the two allow-list pickers in
-# Administration → Plugins → SLA Compliance. The lists themselves are stored in the plugin
+# Administration → SLA Compliance. The lists themselves are stored in the plugin
 # settings hash and saved by Redmine's own SettingsController#plugin, so this controller only
 # has to answer "which users match what the admin is typing?".
 #

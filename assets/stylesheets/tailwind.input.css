@@ -22,6 +22,10 @@
  *   - _detail_table.css — the ticket-level detail table's compact (in-card) vs expanded (modal)
  *     column/control visibility, toggled by a single `.sla-detail-expanded` class on the one
  *     table node that gets moved into the modal on expand.
+ *   - _admin_settings.css — the Administration → SLA Compliance module's shared chrome (data-table
+ *     rows/row actions, breadcrumb links, working-day chips) plus the one rule that has to reach
+ *     OUTSIDE the plugin wrapper, to neutralise the `box tabular settings` container Redmine wraps
+ *     around every plugin settings partial.
  *   - _pill_group.css — the dashboard's segmented "pick one of these" button groups (date-range
  *     presets, trend granularity). Active/inactive is ONE class (`is-active`) that
  *     sla_dashboard_filters.js toggles, for the same reason _settings_nav.css and
@@ -38,6 +42,7 @@
 @import 'partials/_chart_legend.css';
 @import 'partials/_detail_table.css';
 @import 'partials/_pill_group.css';
+@import 'partials/_admin_settings.css';
 
 @tailwind base;
 @tailwind components;

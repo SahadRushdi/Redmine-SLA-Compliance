@@ -1,6 +1,16 @@
-<h2><%= link_to l(:label_sla_business_calendars), sla_business_calendars_path %> &#187; <%= h @calendar.name %></h2>
+<%= render layout: 'sla_admin/shell', locals: { current: 'business_calendars' } do %>
+  <%= render 'sla_admin/breadcrumb',
+             crumbs: [[l(:label_sla_compliance_settings), sla_admin_section_path('general')],
+                      [l(:label_sla_admin_section_business_calendars), sla_business_calendars_path],
+                      [@calendar.name, nil]] %>
 
-<%= labelled_form_for @calendar, url: sla_business_calendar_path(@calendar), html: { method: :put } do |f| %>
-  <%= render 'form', f: f %>
-  <p><%= submit_tag l(:button_save) %></p>
+  <%= render 'sla_admin/page_header',
+             title: @calendar.name,
+             description: l(:text_sla_business_calendars_hint) %>
+
+  <%= form_for @calendar, url: sla_business_calendar_path(@calendar),
+               html: { method: :put, autocomplete: 'off' } do |f| %>
+    <%= render 'form', f: f, cancel_path: sla_business_calendars_path,
+               submit_label: l(:button_save) %>
+  <% end %>
 <% end %>

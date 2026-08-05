@@ -2,7 +2,7 @@
 
 require_relative '../../test_helper'
 
-# Global, admin-configurable plugin settings (Administration → Plugins → SLA Compliance),
+# Global, admin-configurable plugin settings (Administration → SLA Compliance),
 # backed by Redmine's own plugin-settings hash — no plugin table for these two values.
 class Sla::PluginSettingsTest < ActiveSupport::TestCase
   fixtures :enumerations, :users, :email_addresses
@@ -138,19 +138,7 @@ class Sla::PluginSettingsTest < ActiveSupport::TestCase
   end
 
 
-  # --- Step 7.1: global Google Chat webhook ---------------------------------------------------
-
-  test "default_google_chat_webhook is nil when unset or blank" do
-    assert_nil Sla::PluginSettings.default_google_chat_webhook
-
-    Setting.plugin_redmine_sla_compliance = { 'google_chat_webhook' => '' }
-    assert_nil Sla::PluginSettings.default_google_chat_webhook,
-               'a blank field must read as "no global fallback", not as an empty URL'
-  end
-
-  test "default_google_chat_webhook reads the configured value" do
-    url = 'https://chat.googleapis.com/v1/spaces/AAA/messages?key=k'
-    Setting.plugin_redmine_sla_compliance = { 'google_chat_webhook' => url }
-    assert_equal url, Sla::PluginSettings.default_google_chat_webhook
-  end
+  # NOTE: Sla::PluginSettings.default_google_chat_webhook (Step 7.1's instance-wide fallback) was
+  # removed on 2026-08-05 along with its admin field; its tests went with it. A webhook is now a
+  # per-project setting only — see SlaNotificationSettingTest.
 end

@@ -6,13 +6,18 @@
 class SlaTargetOptionsController < ApplicationController
   layout 'admin'
   self.main_menu = false
-  # This is a separate controller from SettingsController#plugin, so without this the admin
-  # sidebar's :admin_menu highlighting (Redmine::MenuManager::MenuController#current_menu_item)
-  # has no entry for it and "Plugins" loses its selected state while on this page — mirror
-  # core's own `menu_item :plugins, :only => :plugin` (settings_controller.rb) so this page reads
-  # as part of the same "Plugins" section.
-  menu_item :plugins
+  # Keeps the "SLA Compliance" entry selected in the Administration sidebar while this page is
+  # open. Redmine::MenuManager marks an admin_menu item selected when its NAME equals the
+  # controller's `menu_item`, so every page of the module declares the same one — see
+  # SlaSettingsController. (This used to be `:plugins`, back when the module's other pages were
+  # hosted by SettingsController#plugin and that was the closest honest answer.)
+  menu_item :sla_compliance_settings
   helper :sla_compliance
+  # This page is one section of the SLA Compliance admin module and renders its shell, sidebar and
+  # shared form/table partials — which live in SlaAdminHelper and (for the button/input/card
+  # classes they share with the project-level policy form) SlaPoliciesHelper.
+  helper :sla_admin
+  helper :sla_policies
 
   before_action :require_admin
   before_action :find_target_option, only: [:edit, :update, :destroy]

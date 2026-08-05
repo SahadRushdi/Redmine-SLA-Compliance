@@ -1,6 +1,16 @@
-<h2><%= link_to l(:label_sla_target_options), sla_target_options_path %> &#187; <%= l(:label_sla_target_option_new) %></h2>
+<%= render layout: 'sla_admin/shell', locals: { current: 'target_options' } do %>
+  <%= render 'sla_admin/breadcrumb',
+             crumbs: [[l(:label_sla_compliance_settings), sla_admin_section_path('general')],
+                      [l(:label_sla_admin_section_target_options), sla_target_options_path],
+                      [l(:label_sla_target_option_new), nil]] %>
 
-<%= labelled_form_for @target_option, url: sla_target_options_path do |f| %>
-  <%= render 'form', f: f %>
-  <p><%= submit_tag l(:button_create) %></p>
+  <%= render 'sla_admin/page_header',
+             title: l(:label_sla_target_option_new),
+             description: l(:text_sla_target_options_hint) %>
+
+  <%# form_for, not labelled_form_for: Redmine's labelled builder emits its own <label> for every %>
+  <%# field, which would sit alongside the module's own field labels. See _form.html.erb. %>
+  <%= form_for @target_option, url: sla_target_options_path, html: { autocomplete: 'off' } do |f| %>
+    <%= render 'form', f: f, cancel_path: sla_target_options_path, submit_label: l(:button_create) %>
+  <% end %>
 <% end %>

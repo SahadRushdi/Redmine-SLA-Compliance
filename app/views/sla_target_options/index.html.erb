@@ -1,42 +1,55 @@
-<div class="contextual">
-  <%= link_to l(:label_sla_target_option_new), new_sla_target_option_path, class: 'icon icon-add' %>
-</div>
+<%# Target options section of the SLA Compliance admin module. Rendered inside the module shell, %>
+<%# so the sidebar is present here exactly as it is on the plugin settings page — this page used to %>
+<%# be reachable only through a text link and offered no way back to the settings it belongs to. %>
+<%= render layout: 'sla_admin/shell', locals: { current: 'target_options' } do %>
+  <%= render 'sla_admin/breadcrumb',
+             crumbs: [[l(:label_sla_compliance_settings), sla_admin_section_path('general')],
+                      [l(:label_sla_admin_section_target_options), nil]] %>
 
-<h2><%= l(:label_sla_target_options) %></h2>
-<p class="info"><%= l(:text_sla_target_options_hint) %></p>
+  <%= render 'sla_admin/page_header',
+             title: l(:label_sla_target_options),
+             description: l(:text_sla_target_options_hint),
+             action_label: l(:label_sla_target_option_new),
+             action_path: new_sla_target_option_path %>
 
-<% if @target_options.any? %>
-  <table class="list">
-    <thead>
-      <tr>
-        <th><%= l(:field_sla_target_type) %></th>
-        <th><%= l(:field_sla_code) %></th>
-        <th><%= l(:field_sla_option_label) %></th>
-        <th><%= l(:field_sla_duration) %></th>
-        <th><%= l(:field_sla_basis) %></th>
-        <th><%= l(:field_sla_position) %></th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
+  <% if @target_options.any? %>
+    <%# Header order matches the controller's sort (target_type, position, seconds), so the table %>
+    <%# reads in the order it is actually stored in. %>
+    <%= render layout: 'sla_admin/data_table',
+               locals: { headers: [l(:field_sla_target_type), l(:field_sla_code),
+                                   l(:field_sla_option_label), l(:field_sla_duration),
+                                   l(:field_sla_basis), l(:field_sla_position), ''] } do %>
       <% @target_options.each do |option| %>
         <tr>
-          <td><%= sla_target_type_label(option.target_type) %></td>
-          <td><%= h option.code %></td>
-          <td><%= h option.label %></td>
-          <td><%= option.best_effort? ? l(:field_sla_best_effort) : format_sla_duration(option.seconds) %></td>
-          <td><%= l("label_sla_basis_#{option.basis}") %></td>
-          <td><%= option.position %></td>
-          <td class="buttons">
-            <%= link_to l(:button_edit), edit_sla_target_option_path(option), class: 'icon icon-edit' %>
-            <%= link_to l(:button_delete), sla_target_option_path(option),
-                        method: :delete, data: { confirm: l(:text_are_you_sure) },
-                        class: 'icon icon-del' %>
+          <td><%= sla_admin_badge(sla_target_type_label(option.target_type)) %></td>
+          <%# Codes are terminal-ish identifiers ("4h", "2d") — monospace so they are scannable %>
+          <%# as a column and visibly distinct from the human label beside them. %>
+          <td><code class="sla-admin-code"><%= h option.code %></code></td>
+          <td class="tw-font-medium tw-text-gray-900"><%= h option.label %></td>
+          <td>
+            <% if option.best_effort? %>
+              <%= sla_admin_badge(l(:field_sla_best_effort)) %>
+            <% else %>
+              <%= format_sla_duration(option.seconds) %>
+            <% end %>
+          </td>
+          <td><%= sla_admin_badge(l("label_sla_basis_#{option.basis}")) %></td>
+          <td class="tw-text-gray-500"><%= option.position %></td>
+          <td>
+            <%= render 'sla_admin/row_actions',
+                       edit_path: edit_sla_target_option_path(option),
+                       delete_path: sla_target_option_path(option),
+                       confirm: l(:text_are_you_sure) %>
           </td>
         </tr>
       <% end %>
-    </tbody>
-  </table>
-<% else %>
-  <p class="nodata"><%= l(:label_no_data) %></p>
+    <% end %>
+  <% else %>
+    <%= render 'sla_admin/empty_state',
+               icon: sla_admin_section_icon('target_options'),
+               title: l(:label_sla_no_target_options_yet),
+               description: l(:text_sla_no_target_options_yet),
+               action_label: l(:label_sla_target_option_new),
+               action_path: new_sla_target_option_path %>
+  <% end %>
 <% end %>

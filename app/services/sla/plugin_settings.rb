@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Sla
-  # Reads the plugin's GLOBAL settings (Administration → Plugins → SLA Compliance), which are
+  # Reads the plugin's GLOBAL settings (Administration → SLA Compliance), which are
   # instance-wide rather than per-project — the sweep cadence and the "which priority means
   # unclassified" mapping both fit that shape, unlike everything in Phase 4's per-project policy
   # tab. Backed by Redmine's own plugin-settings mechanism (`Setting.plugin_redmine_sla_compliance`,
@@ -44,14 +44,10 @@ module Sla
         IssuePriority.where('LOWER(name) = ?', 'none').first&.id
       end
 
-      # Step 7.1 — instance-wide Google Chat webhook, used by any project that has not set its own
-      # (the plan's "per-project setting, with a global fallback"). Lives here rather than in a
-      # column because it is a single instance-wide value, exactly like the two settings above.
-      # `SlaNotificationSetting.google_chat_webhook_for` is what applies the fallback; this only
-      # reports the configured default.
-      def default_google_chat_webhook
-        settings['google_chat_webhook'].presence
-      end
+      # NOTE: there was a `default_google_chat_webhook` here — an instance-wide fallback webhook for
+      # projects that had not set their own (Step 7.1). It and its admin field were removed on
+      # request on 2026-08-05; a Google Chat webhook is now a per-project setting only. See
+      # SlaNotificationSetting.google_chat_webhook_for.
 
       # --- Step 5.1: the user access allow-lists ----------------------------------------------
       #
@@ -85,9 +81,9 @@ module Sla
       private
 
       # The settings form posts a blank sentinel entry (so the `[]` param still arrives when every
-      # chip has been removed) and Redmine's settings controller stores what it is given verbatim
-      # via `permit!.to_h` — so the cleanup has to happen on read. Tolerates a nil or non-array
-      # value, which is what a hand-edited or pre-5.1 settings hash looks like.
+      # chip has been removed) and SlaSettingsController#update stores what it is given verbatim —
+      # so the cleanup has to happen on read. Tolerates a nil or non-array value, which is what a
+      # hand-edited or pre-5.1 settings hash looks like.
       def user_ids_setting(key)
         Array(settings[key]).reject(&:blank?).map(&:to_i).uniq
       end

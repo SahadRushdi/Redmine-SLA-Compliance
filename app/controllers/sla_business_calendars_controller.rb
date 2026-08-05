@@ -6,11 +6,18 @@
 class SlaBusinessCalendarsController < ApplicationController
   layout 'admin'
   self.main_menu = false
-  # See the matching comment in SlaTargetOptionsController: without this, the admin sidebar's
-  # "Plugins" entry loses its selected state on this page because it's a separate controller
-  # from SettingsController#plugin.
-  menu_item :plugins
+  # Keeps the "SLA Compliance" entry selected in the Administration sidebar while this page is
+  # open. Redmine::MenuManager marks an admin_menu item selected when its NAME equals the
+  # controller's `menu_item`, so every page of the module declares the same one — see
+  # SlaSettingsController. (This used to be `:plugins`, back when the module's other pages were
+  # hosted by SettingsController#plugin and that was the closest honest answer.)
+  menu_item :sla_compliance_settings
   helper :sla_compliance
+  # This page is one section of the SLA Compliance admin module and renders its shell, sidebar and
+  # shared form/table partials — which live in SlaAdminHelper and (for the button/input/card
+  # classes they share with the project-level policy form) SlaPoliciesHelper.
+  helper :sla_admin
+  helper :sla_policies
 
   before_action :require_admin
   before_action :find_calendar, only: [:edit, :update, :destroy]
@@ -62,15 +69,23 @@ class SlaBusinessCalendarsController < ApplicationController
     render_404
   end
 
-  # working_days posts as an array of ISO weekday numbers (checkboxes); holidays post as a
-  # textarea of one ISO date per line, normalised here into the model's JSON array.
+  # working_days posts as an array of ISO weekday numbers (checkboxes); holidays post as one value
+  # per date from the chip input, normalised here into the model's JSON array.
+  #
+  # `holidays_text` is the form's older shape — a single textarea of one date per line. It is still
+  # accepted so anything posting the old payload (a bookmarked form, a script) keeps working; the
+  # chip input's `holidays[]` wins whenever it is present, which is on every submit from the
+  # current form since it posts a blank sentinel even when the list is empty.
   def calendar_params
     permitted = params.require(:sla_business_calendar)
                       .permit(:name, :work_start_time, :work_end_time, :holidays_text,
-                              working_days: []).to_h
+                              working_days: [], holidays: []).to_h
     holidays_text = permitted.delete('holidays_text')
     permitted['working_days'] = Array(permitted['working_days']).map(&:to_i)
-    permitted['holidays'] = holidays_text.to_s.split(/[\r\n,]+/).map(&:strip).reject(&:empty?)
+
+    raw_holidays = permitted.key?('holidays') ? Array(permitted['holidays'])
+                                              : holidays_text.to_s.split(/[\r\n,]+/)
+    permitted['holidays'] = raw_holidays.map { |day| day.to_s.strip }.reject(&:empty?)
     permitted
   end
 end

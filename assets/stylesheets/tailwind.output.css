@@ -22,6 +22,10 @@
  *   - _detail_table.css — the ticket-level detail table's compact (in-card) vs expanded (modal)
  *     column/control visibility, toggled by a single `.sla-detail-expanded` class on the one
  *     table node that gets moved into the modal on expand.
+ *   - _admin_settings.css — the Administration → SLA Compliance module's shared chrome (data-table
+ *     rows/row actions, breadcrumb links, working-day chips) plus the one rule that has to reach
+ *     OUTSIDE the plugin wrapper, to neutralise the `box tabular settings` container Redmine wraps
+ *     around every plugin settings partial.
  *   - _pill_group.css — the dashboard's segmented "pick one of these" button groups (date-range
  *     presets, trend granularity). Active/inactive is ONE class (`is-active`) that
  *     sla_dashboard_filters.js toggles, for the same reason _settings_nav.css and
@@ -686,6 +690,19 @@
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
 }
 /*
+ * Compact variant — the same tile sized to sit inline in a row of several (the Business calendar
+ * form's seven working-day checkboxes) rather than as a full-width stacked option.
+ *
+ * The selectors above are input-type agnostic (`input:checked`), so a checkbox tile picks up the
+ * selected/hover/focus treatment unchanged; only the box metrics differ. _theme_isolation.css has
+ * already reset the native checkbox into a correctly-rendering custom control, exactly as it does
+ * for the radios these tiles were first built for.
+ */
+.sla-plugin .sla-option-card--compact {
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+}
+/*
  * Dashboard chart legends — clickable rows that highlight one series and dim the rest.
  *
  * Clicking already re-drew the CHART (sla_dashboard_charts.js), but the legend itself gave no sign
@@ -849,6 +866,160 @@
 }
 .sla-plugin .sla-seg.is-active:hover {
   background-color: #1d4ed8; /* primary-700 */
+}
+/*
+ * SLA Compliance ADMIN MODULE — chrome shared by the plugin settings page and the two lookup CRUD
+ * screens (Administration → SLA Compliance).
+ *
+ * Everything here is either (a) a fix for Redmine/Purplemine2 markup this module has to live
+ * inside, or (b) a class that BOTH the ERB and a JS re-render name — the codebase's standing rule
+ * (see _settings_nav.css, _chart_legend.css, _pill_group.css) is that anything the JS re-renders is
+ * styled by one class here rather than by Tailwind class strings duplicated into the script.
+ *
+ * postcss-prefix-selector scopes every rule below to `.sla-plugin ...` at build time, EXCEPT those
+ * written pre-scoped (i.e. with `.sla-plugin` spelled out); those it leaves exactly as written.
+ * The first block below depends on that, because it has to reach an ANCESTOR of the wrapper.
+ */
+/* --- Redmine's plugin-settings container ------------------------------------------------------
+ *
+ * app/views/settings/plugin.html.erb wraps every plugin settings partial in
+ * `<div class="box tabular settings">`, and `.box` carries a background, a border, padding and a
+ * bottom margin. Around a module that draws its own cards on a page canvas, that reads as one
+ * stray outer card containing the real ones.
+ *
+ * The rule has to target that div, which is the wrapper's PARENT — so it cannot be written as a
+ * plain selector and left to the prefixer, which would nest it under `.sla-plugin` and never
+ * match. Writing `.sla-plugin` explicitly (here, as part of the `:has()` argument) is what makes
+ * postcss-prefix-selector return it untouched; `:has()` is already used the same way in
+ * _option_card.css. Scoped by OUR class, so no other plugin's settings box is affected.
+ *
+ * `.tabular.settings`'s own label/p rules are separately neutralised in _theme_isolation.css.
+ */
+.box.tabular.settings:has(.sla-plugin.sla-admin-module) {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin-bottom: 0;
+}
+/* --- Breadcrumb ------------------------------------------------------------------------------ */
+/* Purplemine2 styles `a` globally (colour + underline on hover); state this link's treatment
+ * outright rather than inheriting from whichever stylesheet wins — CLAUDE.md rule 4. */
+.sla-plugin .sla-admin-crumb {
+  color: #6b7280; /* gray-500 */
+  text-decoration: none;
+}
+.sla-plugin .sla-admin-crumb:hover {
+  color: #2563eb; /* primary-600 — the one blue permitted in UI chrome */
+  text-decoration: none;
+}
+/* --- Data tables ------------------------------------------------------------------------------
+ *
+ * Cell padding and row separators live here, not on the cells as utilities, because the access
+ * allow-list table's rows are re-rendered by sla_access_form.js — which must not carry a copy of
+ * those Tailwind class strings. The lookup tables use the same class so all three match.
+ */
+.sla-plugin .sla-admin-rows tr + tr {
+  border-top: 1px solid #f3f4f6; /* gray-100 */
+}
+.sla-plugin .sla-admin-rows tr:hover {
+  background-color: #f9fafb; /* gray-50 */
+}
+.sla-plugin .sla-admin-rows td {
+  padding: 0.75rem 1rem;
+  vertical-align: middle;
+}
+/* The trailing column is always the row's actions. */
+.sla-plugin .sla-admin-rows td:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+/* Sortable header (the access lists). A pointer + no text selection is the whole affordance;
+ * the direction arrow is filled in by the JS. */
+.sla-plugin .sla-admin-sortable {
+  cursor: pointer;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+          user-select: none;
+}
+.sla-plugin .sla-admin-sortable:hover {
+  color: #2563eb; /* primary-600 */
+}
+/* Short machine-ish identifiers in a table cell (a target option's Code). */
+.sla-plugin .sla-admin-code {
+  display: inline-block;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  background-color: #f3f4f6; /* gray-100 */
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  color: #374151; /* gray-700 */
+}
+/* --- Row actions ------------------------------------------------------------------------------
+ *
+ * Icon-only edit/delete buttons. Written as CSS (not utilities) for the same reason as the rows
+ * above: sla_access_form.js renders this exact markup for its own delete control.
+ */
+.sla-plugin .sla-admin-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+.sla-plugin .sla-admin-row-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.375rem;
+  color: #6b7280; /* gray-500 */
+  text-decoration: none;
+  transition: background-color 0.12s ease-in-out, color 0.12s ease-in-out;
+}
+.sla-plugin .sla-admin-row-action:hover {
+  background-color: #f3f4f6; /* gray-100 */
+  color: #111827; /* gray-900 */
+  text-decoration: none;
+}
+/* Destructive red. Not subject to the blue-only rule (Global Rule 7), which governs UI chrome —
+ * this is the standard danger affordance and must not read as neutral. */
+.sla-plugin .sla-admin-row-action--danger:hover {
+  background-color: #fef2f2; /* red-50 */
+  color: #dc2626; /* red-600 */
+}
+.sla-plugin .sla-admin-row-action:focus-visible {
+  outline: 2px solid #2563eb; /* primary-600 */
+  outline-offset: 1px;
+}
+/* --- Working-days summary (Business calendars list) -------------------------------------------
+ *
+ * All seven days are always rendered, with the non-working ones muted, so a calendar's shape is
+ * readable at a glance rather than having to be inferred from which names are absent.
+ */
+.sla-plugin .sla-admin-day-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  padding: 0.125rem 0.375rem;
+  border: 1px solid #e5e7eb; /* gray-200 */
+  border-radius: 0.25rem;
+  background-color: #ffffff;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  color: #d1d5db; /* gray-300 — an off day, deliberately low contrast */
+}
+.sla-plugin .sla-admin-day-chip.is-on {
+  border-color: #bfdbfe; /* primary-200 */
+  background-color: #eff6ff; /* primary-50 */
+  color: #2563eb; /* primary-600 */
+  font-weight: 500;
+}
+/* --- Pagination ------------------------------------------------------------------------------ */
+/* Redmine's own `.pagination` markup (core CSS styles it); only the gap above it is ours. */
+.sla-plugin .sla-admin-pagination {
+  display: block;
+  margin-top: 0.75rem;
 }
 .sla-plugin *, .sla-plugin ::before, .sla-plugin ::after {
   --tw-border-spacing-x: 0;
@@ -1431,6 +1602,10 @@
   margin-left: 0.25rem;
   margin-right: 0.25rem;
 }
+.sla-plugin .tw-mx-auto {
+  margin-left: auto;
+  margin-right: auto;
+}
 .sla-plugin .tw-mb-0 {
   margin-bottom: 0px;
 }
@@ -1449,9 +1624,6 @@
 .sla-plugin .tw-mb-6 {
   margin-bottom: 1.5rem;
 }
-.sla-plugin .tw-mb-8 {
-  margin-bottom: 2rem;
-}
 .sla-plugin .tw-ml-1 {
   margin-left: 0.25rem;
 }
@@ -1467,6 +1639,9 @@
 .sla-plugin .tw-mt-1 {
   margin-top: 0.25rem;
 }
+.sla-plugin .tw-mt-1\.5 {
+  margin-top: 0.375rem;
+}
 .sla-plugin .tw-mt-2 {
   margin-top: 0.5rem;
 }
@@ -1478,6 +1653,9 @@
 }
 .sla-plugin .tw-mt-5 {
   margin-top: 1.25rem;
+}
+.sla-plugin .tw-mt-6 {
+  margin-top: 1.5rem;
 }
 .sla-plugin .tw-block {
   display: block;
@@ -1502,6 +1680,9 @@
 }
 .sla-plugin .tw-h-10 {
   height: 2.5rem;
+}
+.sla-plugin .tw-h-12 {
+  height: 3rem;
 }
 .sla-plugin .tw-h-2\.5 {
   height: 0.625rem;
@@ -1538,6 +1719,9 @@
 }
 .sla-plugin .tw-w-11 {
   width: 2.75rem;
+}
+.sla-plugin .tw-w-12 {
+  width: 3rem;
 }
 .sla-plugin .tw-w-2\.5 {
   width: 0.625rem;
@@ -1593,6 +1777,12 @@
 .sla-plugin .tw-max-w-full {
   max-width: 100%;
 }
+.sla-plugin .tw-max-w-lg {
+  max-width: 32rem;
+}
+.sla-plugin .tw-max-w-md {
+  max-width: 28rem;
+}
 .sla-plugin .tw-flex-1 {
   flex: 1 1 0%;
 }
@@ -1619,6 +1809,9 @@
   -webkit-user-select: none;
      -moz-user-select: none;
           user-select: none;
+}
+.sla-plugin .tw-list-disc {
+  list-style-type: disc;
 }
 .sla-plugin .tw-list-none {
   list-style-type: none;
@@ -1682,6 +1875,10 @@
   -moz-column-gap: 1rem;
        column-gap: 1rem;
 }
+.sla-plugin .tw-gap-x-5 {
+  -moz-column-gap: 1.25rem;
+       column-gap: 1.25rem;
+}
 .sla-plugin .tw-gap-x-6 {
   -moz-column-gap: 1.5rem;
        column-gap: 1.5rem;
@@ -1724,6 +1921,9 @@
 .sla-plugin .tw-overflow-hidden {
   overflow: hidden;
 }
+.sla-plugin .tw-overflow-x-auto {
+  overflow-x: auto;
+}
 .sla-plugin .tw-overflow-y-auto {
   overflow-y: auto;
 }
@@ -1743,6 +1943,9 @@
 }
 .sla-plugin .tw-rounded-lg {
   border-radius: 0.5rem;
+}
+.sla-plugin .tw-rounded-md {
+  border-radius: 0.375rem;
 }
 .sla-plugin .tw-rounded-xl {
   border-radius: 0.75rem;
@@ -1915,9 +2118,6 @@
 .sla-plugin .tw-p-1 {
   padding: 0.25rem;
 }
-.sla-plugin .tw-p-1\.5 {
-  padding: 0.375rem;
-}
 .sla-plugin .tw-p-2\.5 {
   padding: 0.625rem;
 }
@@ -1953,6 +2153,10 @@
   padding-left: 1.25rem;
   padding-right: 1.25rem;
 }
+.sla-plugin .tw-px-6 {
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
 .sla-plugin .tw-py-0\.5 {
   padding-top: 0.125rem;
   padding-bottom: 0.125rem;
@@ -1964,6 +2168,10 @@
 .sla-plugin .tw-py-1\.5 {
   padding-top: 0.375rem;
   padding-bottom: 0.375rem;
+}
+.sla-plugin .tw-py-12 {
+  padding-top: 3rem;
+  padding-bottom: 3rem;
 }
 .sla-plugin .tw-py-2 {
   padding-top: 0.5rem;
@@ -2006,6 +2214,9 @@
 .sla-plugin .tw-pr-4 {
   padding-right: 1rem;
 }
+.sla-plugin .tw-ps-5 {
+  padding-inline-start: 1.25rem;
+}
 .sla-plugin .tw-pt-1 {
   padding-top: 0.25rem;
 }
@@ -2021,9 +2232,6 @@
 .sla-plugin .tw-text-center {
   text-align: center;
 }
-.sla-plugin .tw-text-right {
-  text-align: right;
-}
 .sla-plugin .tw-text-2xl {
   font-size: 1.5rem;
   line-height: 2rem;
@@ -2038,6 +2246,10 @@
 .sla-plugin .tw-text-base {
   font-size: 1rem;
   line-height: 1.5rem;
+}
+.sla-plugin .tw-text-lg {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
 }
 .sla-plugin .tw-text-sm {
   font-size: 0.875rem;
@@ -2149,6 +2361,10 @@
   --tw-text-opacity: 1;
   color: rgb(185 28 28 / var(--tw-text-opacity, 1));
 }
+.sla-plugin .tw-text-red-800 {
+  --tw-text-opacity: 1;
+  color: rgb(153 27 27 / var(--tw-text-opacity, 1));
+}
 .sla-plugin .tw-text-teal-600 {
   --tw-text-opacity: 1;
   color: rgb(13 148 136 / var(--tw-text-opacity, 1));
@@ -2171,6 +2387,9 @@
 }
 .sla-plugin .tw-underline {
   text-decoration-line: underline;
+}
+.sla-plugin .tw-no-underline {
+  text-decoration-line: none;
 }
 .sla-plugin .tw-opacity-80 {
   opacity: 0.8;
@@ -2290,8 +2509,8 @@
   --tw-content: '';
   content: var(--tw-content);
 }
-.sla-plugin .last\:tw-border-0:last-child {
-  border-width: 0px;
+.sla-plugin .last\:tw-mb-0:last-child {
+  margin-bottom: 0px;
 }
 .sla-plugin .hover\:tw-bg-gray-100:hover {
   --tw-bg-opacity: 1;
@@ -2386,8 +2605,17 @@
   }
 }
 @media (min-width: 768px) {
+  .sla-plugin .md\:tw-col-span-2 {
+    grid-column: span 2 / span 2;
+  }
+  .sla-plugin .md\:tw-w-40 {
+    width: 10rem;
+  }
   .sla-plugin .md\:tw-w-56 {
     width: 14rem;
+  }
+  .sla-plugin .md\:tw-w-64 {
+    width: 16rem;
   }
   .sla-plugin .md\:tw-w-80 {
     width: 20rem;
@@ -2447,5 +2675,10 @@
   }
   .sla-plugin .lg\:tw-items-start {
     align-items: flex-start;
+  }
+}
+@media (min-width: 1280px) {
+  .sla-plugin .xl\:tw-grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

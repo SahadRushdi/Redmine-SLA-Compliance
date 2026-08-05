@@ -60,6 +60,8 @@
     var paginationEl = container.querySelector('[data-sla-pagination]');
     var headers = container.querySelectorAll('[data-sla-sort]');
     var hiddenInputName = 'settings[sla_' + listName + '_user_ids][]';
+    // Localised server-side and handed over as data, rather than an English literal in here.
+    var removeLabel = container.getAttribute('data-sla-remove-label') || 'Remove';
 
     function sortedItems() {
       var items = state.items.slice();
@@ -80,19 +82,31 @@
       }).join('');
     }
 
+    // Remove glyph. Duplicated from SlaAdminHelper#sla_delete_icon on purpose: this table is
+    // re-rendered client-side, so its markup cannot come from ERB. Static developer-authored SVG,
+    // no user data. Keep the two in step -- they sit side by side in the same UI as the lookup
+    // tables' delete buttons.
+    var REMOVE_ICON =
+      '<svg class="tw-w-3.5 tw-h-3.5 tw-shrink-0" viewBox="0 0 24 24" fill="none" ' +
+      'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" ' +
+      'aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 ' +
+      '0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+
     function renderRows(pageItems) {
+      // Cells carry NO classes: row/cell styling is CSS on `.sla-admin-rows`
+      // (partials/_admin_settings.css), shared with the server-rendered fallback above and with
+      // the Target options / Business calendars tables. That is the codebase's standing rule for
+      // any node the JS re-renders -- no Tailwind class strings in here to drift from the ERB.
       rowsEl.innerHTML = pageItems.map(function (item) {
-        // Same convention Redmine core uses everywhere for an inline, client-only remove action
-        // (e.g. app/views/attachments/_form.html.erb) -- an `icon-only icon-del` link, not a
-        // Flowbite-style button, so Purplemine2's own (unscoped) icon/colour CSS styles it exactly
-        // like every other delete icon in the app, no custom CSS of ours involved.
-        return '<tr class="tw-border-b tw-border-gray-100 last:tw-border-0">' +
-          '<td class="tw-p-1.5">' + escapeHtml(item.name) + '</td>' +
-          '<td class="tw-p-1.5">' + escapeHtml(item.login) + '</td>' +
-          '<td class="tw-p-1.5">' + escapeHtml(item.mail) + '</td>' +
-          '<td class="tw-p-1.5 tw-text-right">' +
-          '<a href="#" class="icon-only icon-del" data-sla-remove="' + escapeHtml(item.id) +
-          '" title="Remove">Remove</a></td></tr>';
+        return '<tr>' +
+          '<td>' + escapeHtml(item.name) + '</td>' +
+          '<td>' + escapeHtml(item.login) + '</td>' +
+          '<td>' + escapeHtml(item.mail) + '</td>' +
+          '<td><div class="sla-admin-row-actions">' +
+          '<a href="#" class="sla-admin-row-action sla-admin-row-action--danger" ' +
+          'data-sla-remove="' + escapeHtml(item.id) + '" title="' + escapeHtml(removeLabel) +
+          '" aria-label="' + escapeHtml(removeLabel) + '">' + REMOVE_ICON + '</a>' +
+          '</div></td></tr>';
       }).join('');
     }
 

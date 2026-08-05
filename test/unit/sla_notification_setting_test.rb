@@ -68,41 +68,22 @@ class SlaNotificationSettingTest < ActiveSupport::TestCase
   # --- Step 7.1: Google Chat webhook resolution -----------------------------------------------
 
   PROJECT_WEBHOOK = 'https://chat.googleapis.com/v1/spaces/AAA/messages?key=k'
-  GLOBAL_WEBHOOK  = 'https://chat.googleapis.com/v1/spaces/GLOBAL/messages?key=g'
 
-  def with_global_webhook(url)
-    original = Setting.plugin_redmine_sla_compliance
-    Setting.plugin_redmine_sla_compliance = { 'google_chat_webhook' => url }
-    yield
-  ensure
-    Setting.plugin_redmine_sla_compliance = original
-  end
-
-  test "google_chat_webhook_for prefers the project's own webhook" do
+  test "google_chat_webhook_for returns the project's own webhook" do
     SlaNotificationSetting.create!(project_id: PROJECT_ID, google_chat_webhook: PROJECT_WEBHOOK)
 
-    with_global_webhook(GLOBAL_WEBHOOK) do
-      assert_equal PROJECT_WEBHOOK,
-                   SlaNotificationSetting.google_chat_webhook_for(Project.find(PROJECT_ID))
-    end
+    assert_equal PROJECT_WEBHOOK,
+                 SlaNotificationSetting.google_chat_webhook_for(Project.find(PROJECT_ID))
   end
 
-  test "google_chat_webhook_for falls back to the global setting" do
-    with_global_webhook(GLOBAL_WEBHOOK) do
-      # No row at all, and a row with the field left blank, must behave identically.
-      assert_equal GLOBAL_WEBHOOK,
-                   SlaNotificationSetting.google_chat_webhook_for(Project.find(PROJECT_ID))
+  test "google_chat_webhook_for is nil when the project has not set one" do
+    # The instance-wide fallback this used to consult was removed on 2026-08-05 together with its
+    # admin field, so a project without its own webhook now simply sends nothing. No row at all and
+    # a row with the field left blank must behave identically.
+    assert_nil SlaNotificationSetting.google_chat_webhook_for(Project.find(PROJECT_ID))
 
-      SlaNotificationSetting.create!(project_id: PROJECT_ID, google_chat_webhook: '')
-      assert_equal GLOBAL_WEBHOOK,
-                   SlaNotificationSetting.google_chat_webhook_for(Project.find(PROJECT_ID))
-    end
-  end
-
-  test "google_chat_webhook_for is nil when neither is configured" do
-    with_global_webhook(nil) do
-      assert_nil SlaNotificationSetting.google_chat_webhook_for(Project.find(PROJECT_ID))
-    end
+    SlaNotificationSetting.create!(project_id: PROJECT_ID, google_chat_webhook: '')
+    assert_nil SlaNotificationSetting.google_chat_webhook_for(Project.find(PROJECT_ID))
   end
 
   test "a webhook must be blank or an https URL" do

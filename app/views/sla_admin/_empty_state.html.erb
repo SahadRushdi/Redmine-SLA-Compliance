@@ -1,0 +1,25 @@
+<%# Empty state for a lookup that has no rows yet: a centred icon, what the thing is, why you'd %>
+<%# want one, and the action that creates the first. %>
+<%# %>
+<%# Replaces the plain `<p class="nodata">` / warning banner these lists used to show. A banner %>
+<%# reads as "something is wrong"; an empty list here is the normal starting state, so this says %>
+<%# what to do next instead. %>
+<%# %>
+<%# Locals: icon (inline SVG markup), title, description; action_label + action_path optional. %>
+<div class="tw-bg-white tw-border tw-border-solid tw-border-gray-200 tw-rounded-lg tw-shadow-sm
+            tw-px-6 tw-py-12 tw-text-center">
+  <div class="tw-mx-auto tw-flex tw-h-12 tw-w-12 tw-items-center tw-justify-center
+              tw-rounded-full tw-bg-gray-100 tw-text-gray-400">
+    <%= icon %>
+  </div>
+  <%# tw-m-0 / tw-mb-0 — Preflight is disabled, so the theme's own p margins still apply. %>
+  <p class="tw-mt-4 tw-mb-0 tw-text-sm tw-font-semibold tw-text-gray-900"><%= title %></p>
+  <p class="tw-mt-1 tw-mb-0 tw-mx-auto tw-max-w-md tw-text-sm tw-text-gray-500"><%= description %></p>
+  <% if local_assigns[:action_label].present? && local_assigns[:action_path].present? %>
+    <div class="tw-mt-5">
+      <%= link_to action_path, class: "#{sla_primary_button_classes} tw-no-underline" do %>
+        <%= sla_add_icon %><span><%= action_label %></span>
+      <% end %>
+    </div>
+  <% end %>
+</div>

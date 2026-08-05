@@ -2,14 +2,15 @@
 
 require_relative '../test_helper'
 
-# Step 5.1 — the admin screen itself: Administration → Plugins → SLA Compliance → Configure.
+# Step 5.1 — the admin screen itself: Administration → SLA Compliance → Access control.
 #
-# Renders and saves through Redmine's own SettingsController#plugin, which is what actually hosts
-# the plugin's settings partial. That makes this the end-to-end proof of the admin flow: the
-# partial renders (helper wiring, routes, PluginSettings readers), the pickers carry what the
-# Tom Select JS needs, and a saved list round-trips into a real permission.
+# Renders and saves through SlaSettingsController, the plugin's own page. (It used to be Redmine's
+# SettingsController#plugin; that host was dropped on 2026-08-05 because it could never highlight
+# the module's own sidebar entry — see SlaSettingsController.) This is the end-to-end proof of the
+# admin flow: the page renders (helper wiring, routes, PluginSettings readers), the pickers carry
+# what the Tom Select JS needs, and a saved list round-trips into a real permission.
 class SlaPluginSettingsPageTest < ActionController::TestCase
-  tests SettingsController
+  tests SlaSettingsController
 
   fixtures :projects, :users, :email_addresses, :roles, :members, :member_roles,
            :enabled_modules, :enumerations
@@ -24,7 +25,9 @@ class SlaPluginSettingsPageTest < ActionController::TestCase
   end
 
   def get_settings_page
-    get :plugin, params: { id: 'redmine_sla_compliance' }
+    # The access lists are the second panel; both are always in the DOM, so either section renders
+    # them. Asking for theirs explicitly keeps these assertions honest about what is on screen.
+    get :show, params: { section: 'access' }
   end
 
   # --- rendering ------------------------------------------------------------------------------
@@ -147,11 +150,10 @@ class SlaPluginSettingsPageTest < ActionController::TestCase
   # --- saving ---------------------------------------------------------------------------------
 
   test "saving persists both lists" do
-    post :plugin, params: { id: 'redmine_sla_compliance',
-                            settings: { 'sla_viewer_user_ids' => ['', '4', '7'],
+    patch :update, params: { settings: { 'sla_viewer_user_ids' => ['', '4', '7'],
                                         'sla_manager_user_ids' => ['', '2'] } }
 
-    assert_redirected_to plugin_settings_path('redmine_sla_compliance')
+    assert_redirected_to sla_settings_path
     assert_equal [4, 7], Sla::PluginSettings.viewer_user_ids
     assert_equal [2], Sla::PluginSettings.manager_user_ids
   end
@@ -160,8 +162,7 @@ class SlaPluginSettingsPageTest < ActionController::TestCase
     Setting.plugin_redmine_sla_compliance = { 'sla_viewer_user_ids' => %w[4] }
 
     # What the form posts once the admin removes every chip: the sentinel alone.
-    post :plugin, params: { id: 'redmine_sla_compliance',
-                            settings: { 'sla_viewer_user_ids' => [''] } }
+    patch :update, params: { settings: { 'sla_viewer_user_ids' => [''] } }
 
     assert_equal [], Sla::PluginSettings.viewer_user_ids
   end
@@ -175,8 +176,7 @@ class SlaPluginSettingsPageTest < ActionController::TestCase
 
     assert_not rhill.allowed_to?(:view_sla_dashboard, project), 'precondition: no access'
 
-    post :plugin, params: { id: 'redmine_sla_compliance',
-                            settings: { 'sla_viewer_user_ids' => ['', '4'] } }
+    patch :update, params: { settings: { 'sla_viewer_user_ids' => ['', '4'] } }
 
     assert rhill.allowed_to?(:view_sla_dashboard, project),
            'a saved grant must apply with no restart'
@@ -188,8 +188,7 @@ class SlaPluginSettingsPageTest < ActionController::TestCase
     project = Project.find(1)
     project.enable_module!(:sla_compliance)
 
-    post :plugin, params: { id: 'redmine_sla_compliance',
-                            settings: { 'sla_manager_user_ids' => ['', '4', '7'] } }
+    patch :update, params: { settings: { 'sla_manager_user_ids' => ['', '4', '7'] } }
 
     [4, 7].each do |id|
       assert User.find(id).allowed_to?(:edit_sla_policy, project), "user #{id}"
