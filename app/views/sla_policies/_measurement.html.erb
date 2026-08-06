@@ -35,18 +35,21 @@
   </div>
 <% end %>
 
+<%# The card heading and its one description ARE this field's label — it holds a single control, so %>
+<%# the "Threshold (%)" label and the hint underneath said the heading twice more before you %>
+<%# reached the input. The field carries its name as an aria-label instead, the same way the %>
+<%# General section's coverage select does. %>
 <%= render layout: 'sla_policies/card',
            locals: { title: l(:label_sla_at_risk_card),
                      description: l(:text_sla_at_risk_card) } do %>
-  <label for="sla_policy_at_risk_threshold" class="<%= sla_label_classes %>"><%= l(:field_sla_at_risk_threshold_short) %></label>
   <div class="tw-flex tw-items-center tw-gap-2">
     <div class="tw-w-32">
       <%= number_field_tag 'sla_policy[at_risk_threshold]', policy.at_risk_threshold,
-            min: 1, max: 100, id: 'sla_policy_at_risk_threshold', class: sla_input_classes %>
+            min: 1, max: 100, id: 'sla_policy_at_risk_threshold', class: sla_input_classes,
+            'aria-label': l(:field_at_risk_threshold) %>
     </div>
     <span class="tw-text-sm tw-text-gray-500">%</span>
   </div>
-  <p class="tw-mt-2 tw-mb-0 tw-text-xs tw-text-gray-500"><%= l(:text_sla_at_risk_threshold_hint) %></p>
 <% end %>
 
 <%# Step 6.2a — the Stale card's inactivity threshold, per project and inherited down the tree. %>
@@ -60,12 +63,15 @@
            locals: { title: l(:label_sla_stale_card),
                      description: l(:text_sla_stale_card) } do %>
   <% inherited = sla_inherited_stale_threshold(project) %>
-  <label for="sla_policy_stale_threshold_days" class="<%= sla_label_classes %>"><%= l(:field_sla_stale_threshold_days_project) %></label>
+  <%# Same single-control treatment as the at-risk card above: heading once, aria-label on the %>
+  <%# input, no repeated "Stale after" label. The line under the field is STATE, not description — %>
+  <%# it names which project an inherited number comes from — so it stays. %>
   <div class="tw-flex tw-items-center tw-gap-2">
     <div class="tw-w-32">
       <%= number_field_tag 'sla_policy[stale_threshold_days]', policy.stale_threshold_days,
             min: SlaPolicy::STALE_THRESHOLD_DAYS.min, max: SlaPolicy::STALE_THRESHOLD_DAYS.max,
             id: 'sla_policy_stale_threshold_days', class: sla_input_classes,
+            'aria-label': l(:field_sla_stale_threshold_days_project),
             placeholder: sla_stale_threshold_placeholder(inherited) %>
     </div>
     <span class="tw-text-sm tw-text-gray-500"><%= l(:label_sla_days_suffix) %></span>

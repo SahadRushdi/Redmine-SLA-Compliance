@@ -79,6 +79,48 @@ module SlaPoliciesHelper
     l(:"text_sla_section_#{key}")
   end
 
+  # --- Locking the configuration sections while SLA tracking is off ---------------------------
+  # These four sections only describe how an ACTIVE policy behaves; with tracking off, nothing they
+  # hold is ever evaluated, so leaving them editable invites someone to spend an afternoon
+  # configuring a policy that does nothing. They stay VISIBLE and readable — only their controls
+  # are disabled (see sla_policies/_lock.html.erb). General is deliberately never lockable: it is
+  # where tracking gets switched back on, so locking it would be a one-way door.
+  LOCKABLE_SECTIONS = %w[targets measurement exclusions notifications].freeze
+
+  def sla_lockable_section?(key)
+    LOCKABLE_SECTIONS.include?(key)
+  end
+
+  # Whether those sections are locked right now, memoised per request.
+  def sla_tracking_off?(project)
+    return @sla_tracking_off if defined?(@sla_tracking_off)
+
+    @sla_tracking_off = !sla_tracking_on?(project)
+  end
+
+  # Read from the SAME value the General section's own control DISPLAYS, not from
+  # SlaPolicy.effective_for: the lock must never contradict the switch the user is looking at. The
+  # two differ in real cases — a project with no row at all shows the switch off (the column's DB
+  # default) while effective_for is also nil, but a clone prefill or a failed validation puts an
+  # unsaved policy on screen that no resolver walking the database would ever return.
+  def sla_tracking_on?(project)
+    # An inheriting project shows the TRI-STATE radios instead of the switch, so "on" there means
+    # resolving :inherit against the ancestor's decision — the same thing those radios spell out.
+    if sla_inherited_policy_source(project).present?
+      state = sla_enablement_state(project)
+      state == :inherit ? sla_inherited_enablement_on?(project) : state == :enabled
+    else
+      sla_policy_for_form(project).enabled?
+    end
+  end
+  private :sla_tracking_on?
+
+  # Is the General section on offer to this user? The locked banner links there, and a
+  # notifications-only manager can't go.
+  def sla_general_section_visible?(project)
+    sla_visible_sections(project).any? { |section| section[:key] == 'general' }
+  end
+
   # Feather-style 24×24 outline icons for the sidebar, keyed by section. Static developer-authored
   # markup (no user data), hence html_safe; `currentColor` lets the nav's active/inactive text
   # colour drive the icon colour with no extra classes.
@@ -109,6 +151,13 @@ module SlaPoliciesHelper
   def sla_copy_icon
     sla_inline_icon('<rect x="9" y="9" width="13" height="13" rx="2"/>' \
                     '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>')
+  end
+
+  # Padlock: on a locked sidebar entry (in place of that row's chevron) and leading the banner that
+  # explains the lock, so the two read as the same state rather than two unrelated warnings.
+  def sla_lock_icon(size_classes = 'tw-w-4 tw-h-4 tw-shrink-0')
+    sla_inline_icon('<rect x="3" y="11" width="18" height="11" rx="2"/>' \
+                    '<path d="M7 11V7a5 5 0 0 1 10 0v4"/>', size_classes)
   end
 
   # Circled "i" leading the amber unclassified-priority notice.

@@ -88,3 +88,42 @@
 .sla-section-link.is-active .sla-section-link-chevron {
   opacity: 1;
 }
+
+/* --- Locked section ------------------------------------------------------------------------- */
+/* SLA Targets, Measurement Rules, Exclusions and Notifications while SLA tracking is off. Rendered
+ * with the class by the server and toggled by sla_policy_form.js when the General switch flips —
+ * same one-class contract as .is-active above, so the JS carries no Tailwind class strings.
+ *
+ * These rules come AFTER the active block deliberately: at equal specificity the later rule wins,
+ * and the `:not(.is-active)` guard is what keeps the OPEN section blue even while it is locked, so
+ * the user never loses track of where they are. */
+
+/* Always in the markup for a lockable entry, so the JS has nothing to build; only its display
+ * changes. It replaces the chevron rather than sitting beside it — the row would otherwise gain a
+ * column's width on lock and shift the labels. */
+.sla-section-link-lock {
+  display: none;
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  color: #9ca3af; /* gray-400 */
+}
+
+.sla-section-link-lock svg {
+  width: 100%;
+  height: 100%;
+}
+
+.sla-section-link.is-locked .sla-section-link-lock {
+  display: block;
+}
+
+.sla-section-link.is-locked .sla-section-link-chevron {
+  display: none;
+}
+
+.sla-section-link.is-locked:not(.is-active) .sla-section-link-icon,
+.sla-section-link.is-locked:not(.is-active) .sla-section-link-title,
+.sla-section-link.is-locked:not(.is-active) .sla-section-link-desc {
+  color: #9ca3af; /* gray-400 */
+}

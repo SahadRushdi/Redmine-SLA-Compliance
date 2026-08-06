@@ -57,6 +57,9 @@
     </div>
   <% end %>
 
+  <%# Said once, above every tracker's table, instead of once per table. %>
+  <p class="tw-mt-0 tw-mb-3 tw-text-sm tw-text-gray-500"><%= l(:text_sla_priority_targets_intro) %></p>
+
   <div id="sla-definitions-tables">
     <% selected.each do |tracker| %>
       <%= render 'sla_policies/definition_table', policy: policy, tracker: tracker %>

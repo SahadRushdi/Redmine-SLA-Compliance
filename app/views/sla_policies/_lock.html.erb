@@ -1,0 +1,19 @@
+<%# Wraps one configuration section's controls so they can be locked while SLA tracking is off for %>
+<%# this project. LAYOUT partial — locals: project, locked. %>
+<%# %>
+<%# A <fieldset disabled> rather than a `disabled` attribute per input, for two reasons: it reaches %>
+<%# every descendant control including the section's own Save button and any field added later %>
+<%# without anyone remembering this rule, and — the part that actually matters — a control inside a %>
+<%# disabled fieldset is NOT SUBMITTED, so a locked section cannot be posted even by hand. The %>
+<%# server is still the authority (SlaPoliciesController re-checks on save); this is the UI half. %>
+<%# %>
+<%# Disabled, never hidden: the values have to stay readable while tracking is off, because seeing %>
+<%# what a project WOULD measure is exactly how someone decides whether to turn tracking back on. %>
+<%# %>
+<%# The banner is rendered whether or not the section is locked (hidden when it isn't) so %>
+<%# sla_policy_form.js can reveal it the moment the General switch is flipped, without having to %>
+<%# build markup in JavaScript. %>
+<%= render 'sla_policies/locked_notice', project: project, locked: locked %>
+<fieldset class="sla-lock-fieldset" data-sla-lock <%= 'disabled' if locked %>>
+  <%= yield %>
+</fieldset>

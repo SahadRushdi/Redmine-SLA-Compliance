@@ -20,6 +20,9 @@
 <% current = sla_current_section(sections) %>
 
 <div class="sla-plugin">
+  <%# The header sits ABOVE the sidebar, so it is on screen for all five sections at once — its %>
+  <%# description is one short line rather than a sentence listing what those sections contain, %>
+  <%# which only repeated the sidebar's own labels and sub-labels back at the reader on every tab. %>
   <div class="tw-mb-6">
     <h2 class="tw-m-0 tw-text-xl tw-font-semibold tw-text-gray-900"><%= l(:label_sla_policy_settings) %></h2>
     <p class="tw-mt-1 tw-mb-0 tw-text-sm tw-text-gray-500"><%= l(:text_sla_policy_settings_intro) %></p>

@@ -1,0 +1,39 @@
+/*
+ * SLA Policy settings — a configuration section locked because SLA tracking is off.
+ *
+ * The lock is a <fieldset disabled> around the section's controls (sla_policies/_lock.html.erb):
+ * one wrapper disables every descendant control, including ones added later, and a control inside
+ * a disabled fieldset is not submitted, so a locked section cannot be posted at all. This file is
+ * only what that wrapper has to look like.
+ *
+ * postcss-prefix-selector scopes every rule below to `.sla-plugin ...` at build time.
+ */
+
+/* Preflight is disabled in this build, so a bare <fieldset> still carries the browser's default
+ * border, margin and padding — reset them or wrapping a section in one visibly boxes it in.
+ * min-width: 0 undoes the fieldset's built-in min-content sizing, which otherwise stops the grids
+ * and tables inside from shrinking below their content width (the classic fieldset flex bug). */
+.sla-lock-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+/* Muted, NOT hidden: the values have to stay readable while tracking is off, because seeing what a
+ * project would measure is how someone decides whether to turn tracking back on. 0.65 keeps body
+ * text above the contrast floor against white; anything lower reads as "this content is gone". */
+.sla-lock-fieldset[disabled] {
+  opacity: 0.65;
+}
+
+/* Browsers give no cursor feedback for a control disabled via an ancestor fieldset, so say it
+ * explicitly — including on the Tom Select controls, which are divs and never inherit :disabled. */
+.sla-lock-fieldset[disabled] input,
+.sla-lock-fieldset[disabled] select,
+.sla-lock-fieldset[disabled] textarea,
+.sla-lock-fieldset[disabled] button,
+.sla-lock-fieldset[disabled] label,
+.sla-lock-fieldset[disabled] .ts-wrapper {
+  cursor: not-allowed;
+}

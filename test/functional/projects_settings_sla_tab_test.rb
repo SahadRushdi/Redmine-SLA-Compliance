@@ -45,6 +45,26 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     end
   end
 
+  # The sibling failure mode, which the ERB-marker scan above does NOT catch: a tag closed early,
+  # so its remaining ATTRIBUTES render as visible text. It bit `tag.attributes(...)`, the obvious
+  # way to emit an attribute conditionally — it does not exist in Rails 6.1 (added in 7.0), and
+  # TagBuilder#method_missing silently builds an `<attributes …>` ELEMENT from it instead, which
+  # lands inside the opening tag and terminates it at its own `>`. The page still returned 200 and
+  # every assert_select in this file still passed; only the rendered text showed it.
+  test "no HTML attributes leak as text into the rendered SLA Policy tab" do
+    SlaPolicy.create!(project_id: @project.id, enabled: false) # renders the lock's markup too
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+
+    assert_response :success
+    text = css_select('#tab-content-sla_policy').first.text
+    %w[aria-current= data-sla- class=" href=" <attributes].each do |marker|
+      assert_not_includes text, marker,
+                          "#{marker} rendered as visible text — an opening tag was closed early, " \
+                          'most likely by markup emitted into the middle of it'
+    end
+  end
+
   test "settings page renders both tab sections with saved values" do
     saved = SlaPolicy.create!(project_id: @project.id, enabled: true, at_risk_threshold: 85)
     status_id = @project.rolled_up_statuses.first.id
@@ -132,6 +152,120 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select 'a[data-sla-section-link]', 1
     assert_select "a[data-sla-section-link='notifications'].is-active"
     assert_select "[data-sla-panel='notifications']:not(.hidden)"
+  end
+
+  # --- Locking the configuration sections while SLA tracking is off ----------------------------
+  # SLA Targets, Measurement Rules, Exclusions and Notifications describe how an ACTIVE policy
+  # behaves, so they go read-only while tracking is off — otherwise someone can spend an afternoon
+  # configuring a policy that is never evaluated. The lock is one <fieldset disabled> per section,
+  # which matters beyond appearance: a control inside a disabled fieldset is not submitted, so a
+  # locked section cannot be posted even by hand.
+
+  # Every section EXCEPT General, which owns the switch that would unlock the others — locking it
+  # would be a one-way door.
+  LOCKED_PANELS = %w[targets measurement exclusions notifications].freeze
+
+  test "the four configuration sections are locked while SLA tracking is off" do
+    SlaPolicy.create!(project_id: @project.id, enabled: false)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    LOCKED_PANELS.each do |key|
+      assert_select "[data-sla-panel='#{key}'] fieldset[data-sla-lock][disabled]", 1,
+                    "the #{key} section must be disabled while tracking is off"
+      assert_select "[data-sla-panel='#{key}'] [data-sla-locked-notice]:not(.hidden)", 1,
+                    "the #{key} section must say why its controls are inert"
+      assert_select "a[data-sla-section-link='#{key}'].is-locked", 1
+    end
+  end
+
+  test "General stays editable and unlocked while SLA tracking is off" do
+    SlaPolicy.create!(project_id: @project.id, enabled: false)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select "[data-sla-panel='general'] fieldset[data-sla-lock]", 0,
+                  'General is where tracking is switched back on — locking it strands the project'
+    assert_select "a[data-sla-section-link='general'].is-locked", 0
+    assert_select "input[type=checkbox][name='sla_policy[enabled]']:not([disabled])", 1
+  end
+
+  test "nothing is locked while SLA tracking is on" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select 'fieldset[data-sla-lock][disabled]', 0
+    assert_select 'a[data-sla-section-link].is-locked', 0
+    # The banner is rendered either way so the JS can reveal it the moment the switch flips; while
+    # tracking is on it must be hidden, not merely absent from view by accident.
+    assert_select '[data-sla-locked-notice]', LOCKED_PANELS.size
+    assert_select '[data-sla-locked-notice]:not(.hidden)', 0
+  end
+
+  # The locked banner sends the user to the one section that can undo the lock.
+  test "the locked banner links back to the General section" do
+    SlaPolicy.create!(project_id: @project.id, enabled: false)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select "[data-sla-locked-notice] a[data-sla-goto-section='general']" \
+                  "[href*='section=general']", LOCKED_PANELS.size
+  end
+
+  # A notifications-only manager cannot reach General, so pointing them at it would be a dead end —
+  # the banner still explains the lock, just without a link.
+  test "the locked banner is unlinked when General is not on offer" do
+    @role.remove_permission!(:edit_sla_policy)
+    SlaPolicy.create!(project_id: @project.id, enabled: false)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select '[data-sla-locked-notice]:not(.hidden)', 1
+    assert_select '[data-sla-locked-notice] a', 0
+  end
+
+  # An inheriting project's on/off decision lives in the TRI-STATE control, not the plain switch,
+  # so the lock has to resolve that instead — including :inherit, which means asking the ancestor.
+
+  test "an inheriting project locks on its own Disabled decision" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    SlaPolicy.create!(project_id: child.id, enabled: false, inherits_config: true)
+
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select 'fieldset[data-sla-lock][disabled]', LOCKED_PANELS.size
+  end
+
+  test "an inheriting project follows its ancestor while set to Inherit" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select "input[name='sla_policy[enablement]'][value='inherit'][checked]"
+    assert_select 'fieldset[data-sla-lock][disabled]', 0, 'the ancestor has tracking on'
+  end
+
+  test "an inheriting project locks when the ancestor it inherits from is off" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: @project.id, enabled: false)
+
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select 'fieldset[data-sla-lock][disabled]', LOCKED_PANELS.size
   end
 
   # --- Section bodies ---------------------------------------------------------------------------

@@ -12,8 +12,10 @@
  *     No separate flowbite-datepicker package/stylesheet is used anymore — this file supplies
  *     both structure (grid layout, cell sizing, popup positioning) and color, self-contained.
  *   - _tom_select.css — the Tom Select chip multi-select skin (Step 4.4/6.1).
- *   - _settings_nav.css — the SLA Policy settings sidebar's section links (active/inactive state
- *     as one toggled class, so the JS carries no Tailwind class strings).
+ *   - _settings_nav.css — the SLA Policy settings sidebar's section links (active/inactive/locked
+ *     state as one toggled class each, so the JS carries no Tailwind class strings).
+ *   - _locked_section.css — the <fieldset disabled> wrapper that makes a configuration section
+ *     read-only while SLA tracking is off, plus the fieldset resets Preflight isn't there to do.
  *   - _option_card.css — radio buttons presented as selectable tiles. Also CSS rather than
  *     utilities, but for a different reason: the :checked state has to reach an ANCESTOR, which
  *     Tailwind's sibling-based `peer-checked:` variant cannot express.
@@ -38,6 +40,7 @@
 @import 'partials/_datepicker.css';
 @import 'partials/_tom_select.css';
 @import 'partials/_settings_nav.css';
+@import 'partials/_locked_section.css';
 @import 'partials/_option_card.css';
 @import 'partials/_chart_legend.css';
 @import 'partials/_detail_table.css';

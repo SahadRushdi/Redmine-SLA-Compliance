@@ -194,7 +194,10 @@ en:
 
   # Sectioned settings shell — page header, sidebar nav entries (label + sub-label).
   label_sla_policy_settings: "SLA Policy Settings"
-  text_sla_policy_settings_intro: "Configure SLA targets, measurement rules, and notification preferences for this project."
+  # One short line, not a sentence naming every section: the page header sits ABOVE the sidebar and
+  # so is on screen for all five sections, where a list of what they contain only repeats the
+  # sidebar's own labels and sub-labels back at the reader.
+  text_sla_policy_settings_intro: "SLA behaviour for this project."
   label_sla_section_general: "General"
   text_sla_section_general: "SLA status & coverage hours"
   label_sla_section_measurement: "Measurement Rules"
@@ -205,6 +208,11 @@ en:
   text_sla_section_exclusions: "Pause statuses & handling"
   label_sla_section_notifications: "Notifications"
   text_sla_section_notifications: "Email & webhook alerts"
+
+  # Shown at the top of SLA Targets, Measurement Rules, Exclusions and Notifications while SLA
+  # tracking is off — the only thing on those sections that explains why their controls are inert.
+  text_sla_section_locked: "SLA tracking is off for this project — turn it on under %{link} to edit these settings."
+  label_sla_section_locked_title: "Locked"
 
   label_sla_policy_general: "General"
   # Each General setting is one row: the *_card / field_* string is its bold name and the *_hint is
@@ -228,8 +236,7 @@ en:
   label_sla_first_response_card: "First Response Rule"
   text_sla_first_response_card: "What counts as the first response to an issue."
   label_sla_at_risk_card: "At-Risk Threshold"
-  text_sla_at_risk_card: "Flag open tickets as at-risk once this percentage of the target time has elapsed."
-  field_sla_at_risk_threshold_short: "Threshold (%)"
+  text_sla_at_risk_card: "Flag a ticket at-risk once this much of its target has elapsed."
   field_sla_created_statuses: "Created statuses"
   field_sla_work_started_statuses: "Work-started statuses"
   field_sla_resolved_statuses: "Resolved statuses"
@@ -238,14 +245,17 @@ en:
   label_first_response_first_comment: "First public comment"
   label_first_response_first_status_change: "First status change"
   label_first_response_either: "Whichever comes first"
+  # Also the threshold input's aria-label — the card heading is its visible name now.
   field_at_risk_threshold: "At-risk threshold (%)"
-  text_sla_at_risk_threshold_hint: "Flag an open ticket as at risk once this percentage of its target time has elapsed."
 
   label_sla_definitions_section: "SLA Targets per Tracker and Priority"
   label_sla_tracker_card: "Tracker Selection"
   text_sla_tracker_card: "Pick every tracker you want to set targets for. Each one gets its own table below, and all of them are saved together."
   label_sla_priority_targets_card: "Priority Targets — %{tracker}"
-  text_sla_priority_targets_card: "SLA time targets for the \"%{tracker}\" tracker by priority level."
+  # One line above ALL the tracker tables, replacing a per-table caption that restated the heading
+  # ("SLA time targets for the X tracker by priority level") once per selected tracker. It carries
+  # the one thing the headings do not already say: what an all-empty row means.
+  text_sla_priority_targets_intro: "A priority with every target unset is excluded from SLA tracking."
   field_sla_trackers: "Trackers"
   text_sla_tracker_selection_hint: "Only the trackers shown here are written when you save. Removing one hides its table and leaves its saved targets untouched — to clear them, set every target to \"not tracked\" instead."
   label_sla_priority: "Priority"
@@ -264,20 +274,21 @@ en:
   label_sla_admin_settings_link: "Administration → SLA Compliance"
 
   label_sla_stale_card: "Stale Tickets"
-  text_sla_stale_card: "When an open ticket with no activity should be flagged as stale on the dashboard."
+  text_sla_stale_card: "Days of inactivity before an open ticket is flagged stale."
+  # Also the input's aria-label — the card heading is its visible name now.
   field_sla_stale_threshold_days_project: "Stale after"
   label_sla_days_suffix: "days of inactivity"
-  text_sla_stale_threshold_project_hint: "Leave empty to inherit. A value set here also applies to every subproject that has not set its own, so configuring it once on a parent covers the whole tree. Clear the field to stop overriding and go back to inheriting."
+  text_sla_stale_threshold_project_hint: "Leave empty to inherit; a value here also covers subprojects."
   text_sla_stale_threshold_inherited: "Currently inheriting %{days} days from %{source}."
   text_sla_stale_threshold_unset_anywhere: "Not set anywhere — open tickets in this project are never flagged stale."
   label_sla_stale_threshold_placeholder_inherited: "Inherited: %{days}"
   label_sla_stale_threshold_placeholder_unset: "Not set"
 
   label_sla_pause_section: "Exclusions (Pauses)"
+  # The card heading IS the switch's label (the switch sits on the header row), so there is no
+  # separate "Pause handling" field label/hint underneath repeating it.
   label_sla_pause_card: "Pause Handling"
-  text_sla_pause_card: "Time spent in paused statuses is subtracted from SLA measurements."
-  field_sla_pause_handling: "Pause handling"
-  text_sla_pause_handling_hint: "When enabled, time in pause statuses does not count against SLA targets."
+  text_sla_pause_card: "Time in these statuses is subtracted from SLA measurements."
   field_sla_pause_statuses: "Pause statuses"
   field_sla_pause_enabled: "Pause handling enabled"
   text_sla_pause_hint: "Time spent in these statuses is subtracted from SLA measurements. Leave empty for no pauses."
@@ -327,20 +338,18 @@ en:
 
   # --- Notification settings (4.6) ----------------------------------------------------------
   label_sla_notifications_section: "Notification Settings"
+  # Each card here states its purpose ONCE, in the header. The alert cards' switches sit on that
+  # same header row and the webhook field takes its heading as an aria-label, so none of them
+  # repeats the heading as a second field label plus a second hint underneath.
   label_sla_google_chat_card: "Google Chat Integration"
-  text_sla_google_chat_card: "Post a webhook message when an issue is created on an SLA-configured tracker."
+  text_sla_google_chat_card: "Post a message when an issue is created on an SLA-configured tracker."
   field_sla_webhook_url: "Webhook URL"
   text_sla_webhook_placeholder: "https://chat.googleapis.com/v1/spaces/…"
   label_sla_at_risk_email_card: "At-Risk Email Alerts"
-  text_sla_at_risk_email_card: "Send email alerts when a ticket approaches its SLA deadline."
-  field_sla_at_risk_alerts: "At-risk alerts"
-  text_sla_at_risk_alerts_hint: "Notify recipients when tickets exceed the at-risk threshold."
+  text_sla_at_risk_email_card: "Email recipients when a ticket approaches its SLA deadline."
   label_sla_stale_email_card: "Stale-Ticket Email Digest"
-  text_sla_stale_email_card: "Send periodic digests for SLA-excluded tickets with no recent activity."
-  field_sla_stale_digest: "Stale-ticket digest"
-  text_sla_stale_digest_hint: "Aggregate notifications for tickets that have gone stale."
+  text_sla_stale_email_card: "Periodic digest of SLA-excluded tickets with no recent activity."
   field_google_chat_webhook: "Google Chat webhook URL"
-  text_sla_webhook_hint: "Incoming-webhook URL posted to when an issue is created on an SLA-configured tracker."
   label_sla_at_risk_email: "At-risk email alerts"
   field_at_risk_email_enabled: "Enabled"
   field_at_risk_email_recipients: "Recipients"
