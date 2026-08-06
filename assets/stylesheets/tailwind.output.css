@@ -844,11 +844,64 @@
 .sla-plugin [data-sla-detail-controls] { display: none; }
 .sla-plugin .sla-detail-expanded .sla-detail-col-extra { display: table-cell; }
 .sla-plugin [data-sla-modal-controls-slot] [data-sla-detail-controls] { display: flex; }
-/* Only the expanded (modal) table may scroll sideways; the compact in-card table must not. */
-.sla-plugin .sla-detail-expanded [data-sla-detail-tablewrap] { overflow-x: auto; }
 /* Title truncates tightly in the narrow in-card table, wider once expanded into the roomy modal. */
 .sla-plugin .sla-detail-title { max-width: 11rem; }
 .sla-plugin .sla-detail-expanded .sla-detail-title { max-width: 28rem; }
+/* --- Expanded (modal): sticky column headers -------------------------------------------------
+ *
+ * `position: sticky` pins an element against its nearest SCROLLING ancestor, so the whole point of
+ * the rules below is to make the element that scrolls be the one the header should stick to.
+ *
+ * The modal body used to own the vertical scroll (`tw-overflow-y-auto`) while the table wrapper
+ * inside it owned only the horizontal one. A sticky `th` therefore had nothing to stick against:
+ * its scrollport was the wrapper, whose height is its content's, so it never scrolls vertically and
+ * the header just travelled up out of sight with the rows. Moving BOTH axes onto the wrapper fixes
+ * that and is better regardless — the modal's title bar, state pills, search box and the pager all
+ * stay put, and only the rows move.
+ *
+ * The chain is a flex column all the way down (`min-height: 0` at each level, or a flex item
+ * refuses to shrink below its content and the scroll never appears). None of it applies to the
+ * compact in-card table, which has no scroll container at all: `.sla-detail-expanded` is added only
+ * while the table node lives in the modal.
+ */
+.sla-plugin #sla-detail-modal-body {
+  display: flex;
+  flex-direction: column;
+  /* Beats the element's own tw-overflow-y-auto on specificity (id + class vs two classes). */
+  overflow: hidden;
+  min-height: 0;
+}
+.sla-plugin .sla-detail-expanded {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.sla-plugin .sla-detail-expanded [data-sla-detail-tablewrap] {
+  /* Both axes now, not overflow-x alone. The compact in-card table still never scrolls sideways
+   * (CLAUDE.md) — it simply hides the extra columns instead. */
+  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.sla-plugin .sla-detail-expanded thead th {
+  position: sticky;
+  top: 0;
+  /* Above the rows that scroll beneath it; the modal itself is z-50, so this stays local. */
+  z-index: 2;
+  /* Opaque, or the rows would show through — the table and its cells are otherwise transparent
+   * over the card's white background. */
+  background-color: #ffffff;
+  /* An inset shadow rather than a border-bottom. Purplemine2 sets `table { border-collapse:
+   * collapse }` globally, and under the collapsed model a border belongs to the TABLE GRID rather
+   * than to the cell — so the header's own rule stays put while the sticky cell moves, leaving a
+   * stray line drifting down through the rows. The shadow is painted by the cell and travels with
+   * it. The row's own utility border is dropped here for the same reason: it is that line. */
+  box-shadow: inset 0 -1px 0 #e5e7eb; /* gray-200 */
+}
+.sla-plugin .sla-detail-expanded thead tr {
+  border-bottom-width: 0;
+}
 /*
  * Dashboard "pick one of these" button groups — the SLA Trend tab's date-range presets
  * (`.sla-pill`) and the trend chart's Daily/Weekly/Monthly granularity (`.sla-seg`).

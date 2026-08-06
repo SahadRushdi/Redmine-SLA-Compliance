@@ -27,7 +27,9 @@
       <%# No subtitle here. "Open Tickets is live / SLA Trend is date-scoped" was a permanent %>
       <%# boxed sentence restating what the two tab labels and their Live / Date-scoped badges %>
       <%# already say — the badges carry it now. %>
-      <h1 class="tw-text-2xl tw-font-bold tw-text-gray-900">
+      <%# tw-text-xl, matching the SLA Policy Settings page's own h2 — the two are the same kind of %>
+      <%# thing (a plugin page title under Redmine's own chrome) and had no reason to differ. %>
+      <h1 class="tw-text-xl tw-font-bold tw-text-gray-900">
         <%= @project ? "#{l(:label_sla_compliance)} — #{@project.name}" : l(:label_sla_dashboard_all) %>
       </h1>
 
