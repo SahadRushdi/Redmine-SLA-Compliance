@@ -205,25 +205,28 @@ class SlaDashboardController < ApplicationController
 
   DETAIL_STATES = %w[all met breached at_risk no_sla].freeze
 
-  # Sorting and pagination are handled client-side (sla_dashboard_detail_table.js) over the rows
-  # rendered here — no page reload for either. State tabs, search and the main filters still
-  # resubmit as plain GET (they change WHICH rows are in scope), and each is clamped the same way
-  # resolve_filters clamps the main filters: an invalid value silently falls back to the default.
+  # State tabs, sorting and pagination are ALL handled client-side (sla_dashboard_detail_table.js)
+  # over the rows rendered here — no page reload for any of them. Only the main filters still
+  # resubmit as plain GET, since they change which tickets are in scope at all. `state` and `q` are
+  # still read here (and clamped the way resolve_filters clamps the main filters, an invalid value
+  # falling back to the default) so a bookmarked ?state=breached link still opens on that pill and a
+  # CSV export of one state still works.
   #
-  # @detail_scope is the full filtered relation (stable newest-ticket-first order, no limit/offset)
-  # reused by CSV export; @detail_results is the capped set of rows the HTML table renders in one
-  # shot for the client-side sorter/paginator to work over. Bounded by Redmine's own export-size
-  # setting so a pathological scope can't emit an unbounded page.
+  # @detail_results is the row set the HTML table renders in one shot, deliberately covering EVERY
+  # state: the pills filter it in place, so the rows they filter to have to already be on the page.
+  # Bounded by Redmine's own export-size setting so a pathological scope can't emit an unbounded
+  # page. @detail_scope is the state-filtered relation CSV export reads — an export has no client to
+  # do the filtering, so that one stays server-side.
   def build_detail_table
     @state_filter = DETAIL_STATES.include?(params[:state]) ? params[:state] : 'all'
     @search_query = params[:q].to_s.strip.presence
 
     base = @scope.joins(issue: %i[project tracker status]).left_joins(issue: :assigned_to)
-    base = apply_state_filter(base, @state_filter)
     base = apply_search_filter(base, @search_query)
+    base = base.reorder('issues.id DESC').includes(issue: %i[project tracker status assigned_to])
 
-    @detail_scope   = base.reorder('issues.id DESC').includes(issue: %i[project tracker status assigned_to])
-    @detail_results = @detail_scope.limit(Setting.issues_export_limit.to_i)
+    @detail_results = base.limit(Setting.issues_export_limit.to_i)
+    @detail_scope   = apply_state_filter(base, @state_filter)
   end
 
   # Reuses the exact same effective-state definition as the summary cards (Sla::EffectiveState) -

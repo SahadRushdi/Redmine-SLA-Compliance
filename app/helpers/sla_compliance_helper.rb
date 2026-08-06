@@ -207,17 +207,18 @@ module SlaComplianceHelper
     end
   end
 
-  # Every state-tab / sort-header / search / per-page / pagination / export link in the detail
-  # table goes through this, so the active project/tracker/priority/date filters are always
-  # carried forward - same mechanism as the chip URLs above (sla_dashboard_query_params), not a
-  # second one. `format: 'csv'` is how the Export CSV button reuses this exact link builder
-  # instead of a separate one - same filters/state/search/sort, just a different response format.
-  def sla_detail_table_url(filters, project, state: nil, sort: nil, sort_dir: nil, page: nil,
-                           q: nil, per_page: nil, format: nil)
-    query = sla_dashboard_query_params(filters)
-              .merge(state: state, sort: sort, sort_dir: sort_dir, page: page, q: q, per_page: per_page,
-                     format: format)
-              .reject { |_, v| v.blank? }
+  # The detail table's own link back to this page, carrying the active project/tracker/priority/date
+  # filters forward - same mechanism as the chip URLs above (sla_dashboard_query_params), not a
+  # second one. `format: 'csv'` is how the Export CSV button reuses this exact builder instead of a
+  # separate one: same filters, just a different response format.
+  #
+  # It used to take state/sort/sort_dir/page/q/per_page too, back when each of those controls was a
+  # server link. Every one of them filters, sorts or paginates the rendered rows in place now
+  # (sla_dashboard_detail_table.js), so nothing builds a URL from them any more and the parameters
+  # went with them. The CONTROLLER still reads ?state= and ?q= — a bookmarked link and a CSV export
+  # both still work — it is only the link-building side that is gone.
+  def sla_detail_table_url(filters, project, format: nil)
+    query = sla_dashboard_query_params(filters).merge(format: format).reject { |_, v| v.blank? }
 
     project ? project_sla_dashboard_index_path(project, query) : sla_dashboard_cross_project_path(query)
   end

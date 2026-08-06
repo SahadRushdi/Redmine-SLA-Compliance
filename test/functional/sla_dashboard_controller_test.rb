@@ -471,22 +471,44 @@ class SlaDashboardControllerTest < ActionController::TestCase
     get :index, params: { project_id: @project.id }
 
     assert_select '#sla-detail-state-tabs' do
-      assert_select 'a', text: /\AAll \(5\)\z/
-      assert_select 'a', text: /\A#{Regexp.escape(I18n.t(:label_sla_card_met))} \(2\)\z/
-      assert_select 'a', text: /\ASLA Breached \(2\)\z/
-      assert_select 'a', text: /\AAt Risk \(1\)\z/
-      assert_select 'a', text: /\ANo SLA \(1\)\z/
+      assert_select 'button', text: /\AAll \(5\)\z/
+      assert_select 'button', text: /\A#{Regexp.escape(I18n.t(:label_sla_card_met))} \(2\)\z/
+      assert_select 'button', text: /\ASLA Breached \(2\)\z/
+      assert_select 'button', text: /\AAt Risk \(1\)\z/
+      assert_select 'button', text: /\ANo SLA \(1\)\z/
     end
   end
 
-  test "clicking a state tab preserves the active project/tracker/priority/date filters in its href" do
+  # The pills filter the already-rendered rows in place, like the search box, sorting and
+  # pagination beside them — they were the last control on this table that still cost a page load
+  # for data the browser already had.
+  test "state tabs are client-side filter buttons, not server links" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
     list!(:viewer, @user.id)
     seed_reconciled_dataset
 
     get :index, params: { project_id: @project.id, date_preset: 'this_month' }
 
-    assert_select "#sla-detail-state-tabs a[href*='date_preset=this_month']", minimum: 1
+    assert_select '#sla-detail-state-tabs a', 0, 'a pill that is a link reloads the whole page'
+    SlaDashboardController::DETAIL_STATES.each do |state|
+      assert_select "#sla-detail-state-tabs button[data-sla-state-filter='#{state}']", 1
+    end
+  end
+
+  # Every state's rows are on the page at once, because the pills filter what is already there.
+  test "the detail table renders rows for every state so the pills can filter client-side" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    list!(:viewer, @user.id)
+    issues = seed_reconciled_dataset
+
+    get :index, params: { project_id: @project.id, state: 'breached' }
+
+    assert_response :success
+    assert_select '#sla-detail-table-body tr[data-sla-row]', 5,
+                  'a state param must no longer shrink the rendered row set'
+    assert_select "#sla-detail-row-#{issues[:met].id}", 1
+    # The requested state still decides which pill opens active, so a bookmarked link still works.
+    assert_select "button[data-sla-state-filter='breached'].is-active", minimum: 1
   end
 
   test "column headers are client-side sort triggers (typed, no server round-trip link)" do
@@ -552,16 +574,37 @@ class SlaDashboardControllerTest < ActionController::TestCase
                   minimum: 1
   end
 
-  test "a row whose cached primary_state is stale-met but live-breached sorts and filters as Breached, matching the cards" do
+  # The client-side pills filter on each row's data-sla-state, so THAT attribute is where the
+  # live-reclassification has to show up — a stale-met row whose breach_at has passed must carry
+  # state "breached", or the Breached pill would disagree with the badge on the row and with the
+  # summary cards. at_risk stays a flag on a met row, never a state of its own.
+  test "each row carries its effective state for the pills, live-reclassifying a stale-met breach" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
     list!(:viewer, @user.id)
     issues = seed_reconciled_dataset
 
-    get :index, params: { project_id: @project.id, state: 'breached' }
+    get :index, params: { project_id: @project.id }
 
-    assert_select "#sla-detail-row-#{issues[:breached].id}"
-    assert_select "#sla-detail-row-#{issues[:live_breached].id}"
-    assert_select "#sla-detail-row-#{issues[:met].id}", 0
+    assert_select "#sla-detail-row-#{issues[:breached].id}[data-sla-state='breached']"
+    assert_select "#sla-detail-row-#{issues[:live_breached].id}[data-sla-state='breached']"
+    assert_select "#sla-detail-row-#{issues[:met].id}[data-sla-state='met'][data-sla-at-risk='false']"
+    assert_select "#sla-detail-row-#{issues[:at_risk].id}[data-sla-state='met'][data-sla-at-risk='true']"
+    assert_select "#sla-detail-row-#{issues[:no_sla].id}[data-sla-state='no_sla']"
+  end
+
+  # CSV has no client to do the filtering, so ?state= must still narrow the export server-side.
+  test "CSV export still honours the state filter server-side" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    list!(:viewer, @user.id)
+    issues = seed_reconciled_dataset
+
+    get :index, params: { project_id: @project.id, state: 'breached', format: 'csv' }
+
+    assert_response :success
+    ticket_ids = CSV.parse(@response.body, headers: true).map { |r| r[I18n.t(:field_sla_detail_ticket)] }
+    assert_includes ticket_ids, issues[:breached].id.to_s
+    assert_includes ticket_ids, issues[:live_breached].id.to_s
+    refute_includes ticket_ids, issues[:met].id.to_s
   end
 
   test "cards, donut total, priority-bar total, and detail table All count all agree for the same filtered scope" do
@@ -576,7 +619,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_equal 5, donut['total']
     priority_chart = parse_chart_data('sla-priority-chart')
     assert_equal 5, priority_chart['datasets'].sum { |ds| ds['data'].sum }
-    assert_select '#sla-detail-state-tabs a', text: /\AAll \(5\)\z/
+    assert_select '#sla-detail-state-tabs button', text: /\AAll \(5\)\z/
   end
 
   # --- redesign pass: Export CSV, search, per-page ----------------------------------------------
@@ -606,7 +649,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_match %r{\Atext/csv}, @response.content_type
     rows = CSV.parse(@response.body, headers: true)
     assert_equal 5, rows.size
-    ticket_ids = rows.map { |r| r['Ticket'] }
+    ticket_ids = rows.map { |r| r[I18n.t(:field_sla_detail_ticket)] }
     assert_includes ticket_ids, issues[:breached].id.to_s
   end
 
@@ -624,7 +667,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
     assert_response :success
     rows = CSV.parse(@response.body, headers: true)
-    refute_includes rows.map { |r| r['Ticket'] }, other_issue.id.to_s
+    refute_includes rows.map { |r| r[I18n.t(:field_sla_detail_ticket)] }, other_issue.id.to_s
   end
 
   test "the detail table search box filters by ticket subject" do
