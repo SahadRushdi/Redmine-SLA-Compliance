@@ -9,11 +9,11 @@
 # the two configuration surfaces read as the same product.
 #
 # The one structural difference from the project tab: there, every section is a slice of ONE record
-# and all the panels can live in one page. Here two of the four sections are separate CRUD
+# and all the panels can live in one page. Here two of the three sections are separate CRUD
 # resources with their own controllers, routes and forms, and Redmine hosts the settings form
 # inside its own <form> (app/views/settings/plugin.html.erb) — forms cannot nest. So:
 #
-#   general / access             -> panels on the plugin settings page, swapped client-side
+#   general                      -> a panel on the plugin settings page, swapped client-side
 #   target_options / calendars   -> their own pages, rendering this same shell and sidebar
 #
 # Which means the sidebar is present and correct on every page of the module either way, which was
@@ -27,7 +27,6 @@ module SlaAdminHelper
   # configured; the two lookups follow in the order the policy form consumes them.
   SECTIONS = [
     { key: 'general',            panel: true },
-    { key: 'access',             panel: true },
     { key: 'target_options',     panel: false },
     { key: 'business_calendars', panel: false }
   ].freeze
@@ -76,8 +75,6 @@ module SlaAdminHelper
   # html_safe correct here too.
   SECTION_ICON_PATHS = {
     'general' => SlaPoliciesHelper::SECTION_ICON_PATHS['general'],
-    'access' => '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>' \
-                '<path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
     'target_options' => SlaPoliciesHelper::SECTION_ICON_PATHS['targets'],
     'business_calendars' => '<rect x="3" y="4" width="18" height="18" rx="2"/>' \
                             '<line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>' \
@@ -133,8 +130,7 @@ module SlaAdminHelper
 
   # Title case only — never uppercased via CSS (CLAUDE.md).
   # Header cells only. Body cells are styled by CSS (`.sla-admin-rows td`, see
-  # partials/_admin_settings.css), not by a matching helper, because the access allow-list's rows
-  # are re-rendered by sla_access_form.js and must not need a copy of these class strings.
+  # partials/_admin_settings.css) so the two lookup tables' rows cannot drift apart.
   def sla_admin_th_classes
     'tw-px-4 tw-py-3 tw-font-medium tw-text-gray-700 tw-whitespace-nowrap'
   end

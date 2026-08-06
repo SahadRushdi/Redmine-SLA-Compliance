@@ -2,7 +2,7 @@
 
 require_relative '../test_helper'
 
-# Copy density on the admin module's six screens.
+# Copy density on the admin module's screens.
 #
 # Every card already carries a short, clear heading; each was also paired with a two- or
 # three-sentence paragraph that mostly restated it. Those are now one-line captions. The detail
@@ -18,8 +18,7 @@ class SlaAdminCopyTest < ActiveSupport::TestCase
   CAPTION_KEYS = %i[
     text_sla_sweep_interval_hint
     text_sla_unclassified_priority_hint
-    text_sla_viewer_users_hint
-    text_sla_manager_users_hint
+    text_sla_access_roles_hint
     text_sla_target_options_hint
     text_sla_target_option_details
     text_sla_code_hint

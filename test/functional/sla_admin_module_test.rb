@@ -19,7 +19,6 @@ module SlaAdminModuleAssertions
   def sla_section_hrefs
     {
       'general' => sla_settings_path(section: 'general'),
-      'access' => sla_settings_path(section: 'access'),
       'target_options' => sla_target_options_path,
       'business_calendars' => sla_business_calendars_path
     }
@@ -32,7 +31,7 @@ module SlaAdminModuleAssertions
 
     assert_select '.sla-admin-module', 1, 'the page must render inside the admin module shell'
     assert_select 'nav .sla-section-link', hrefs.size,
-                  'all four sections must be reachable from every page of the module'
+                  'every section must be reachable from every page of the module'
     hrefs.each_value { |href| assert_select 'nav .sla-section-link[href=?]', href, 1 }
 
     assert_select 'nav .sla-section-link.is-active', 1, 'exactly one entry may be active'
@@ -87,23 +86,23 @@ class SlaAdminSettingsPageTest < ActionController::TestCase
     assert_module_shell('general')
   end
 
-  test "both panel sections are in the DOM, with only the current one visible" do
-    # Not merely a rendering detail: one form spans both panels and posts every field on the page
+  test "every panel section is in the DOM, with only the current one visible" do
+    # Not merely a rendering detail: one form spans every panel and posts every field on the page
     # in one submit, so a panel that was omitted rather than hidden would post nothing and its
-    # settings would be cleared on the next save.
+    # settings would be cleared on the next save. General has been the only panel since Access
+    # control was folded into it (2026-08-06); the assertion is written against the helper so a
+    # second panel coming back is covered without editing it.
     get_page
 
-    assert_select '[data-sla-admin-panel]', 2
+    assert_select '[data-sla-admin-panel]', SlaAdminHelper::PANEL_KEYS.size
     assert_select '[data-sla-admin-panel=?]:not(.hidden)', 'general'
-    assert_select '[data-sla-admin-panel=?].hidden', 'access'
   end
 
-  test "the requested section opens instead of the first one" do
-    get_page(section: 'access')
+  test "the requested section opens" do
+    get_page(section: 'general')
 
-    assert_module_shell('access')
-    assert_select '[data-sla-admin-panel=?]:not(.hidden)', 'access'
-    assert_select '[data-sla-admin-panel=?].hidden', 'general'
+    assert_module_shell('general')
+    assert_select '[data-sla-admin-panel=?]:not(.hidden)', 'general'
   end
 
   test "an unknown section falls back to the first panel rather than showing nothing" do
@@ -119,7 +118,7 @@ class SlaAdminSettingsPageTest < ActionController::TestCase
     # to switch to, stranding the user on the settings page.
     get_page
 
-    assert_select '.sla-section-link[data-sla-admin-section]', 2
+    assert_select '.sla-section-link[data-sla-admin-section]', SlaAdminHelper::PANEL_KEYS.size
     assert_select '.sla-section-link[href=?][data-sla-admin-section]', sla_target_options_path, 0
     assert_select '.sla-section-link[href=?][data-sla-admin-section]',
                   sla_business_calendars_path, 0
@@ -164,16 +163,15 @@ class SlaAdminSettingsPageTest < ActionController::TestCase
   end
 
   test "saving from a panel returns to that panel" do
-    patch :update, params: { settings: {}, section: 'access' }
+    patch :update, params: { settings: {}, section: 'general' }
 
-    assert_redirected_to sla_settings_path(section: 'access')
+    assert_redirected_to sla_settings_path(section: 'general')
   end
 
-  test "the module script reaches the page alongside the access picker's own" do
+  test "the module script and the scoped stylesheet reach the page" do
     get_page
 
     assert_select 'script[src*=?]', 'sla_admin', 1
-    assert_select 'script[src*=?]', 'sla_access_form', 1
     assert_select 'link[href*=?]', 'tailwind.output', 1
   end
 end
@@ -352,7 +350,7 @@ class SlaAdminBusinessCalendarsPagesTest < ActionController::TestCase
     assert_select '[data-sla-admin-panel]', 0, 'this page renders no panels'
     assert_select '[data-sla-admin-section]', 0,
                   'so no sidebar link here may be marked for in-place panel switching'
-    assert_select '.sla-section-link[href=?]', sla_settings_path(section: 'access'), 1
+    assert_select '.sla-section-link[href=?]', sla_settings_path(section: 'general'), 1
   end
 
   test "an empty list shows an empty state, not a warning banner" do

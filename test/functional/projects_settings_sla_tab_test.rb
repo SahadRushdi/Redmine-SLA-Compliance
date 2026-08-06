@@ -541,58 +541,71 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select revert_delete_form_selector(child), 0
   end
 
-  # --- Step 5.1: the user allow-list ------------------------------------------------------------
+  # --- Step 5.1: the SLA access roles -----------------------------------------------------------
   #
   # "A non-permitted role sees neither the tab nor the dashboard; an admin can grant access to a
-  # chosen role and it takes effect." These cover the TAB half for users granted individually
-  # rather than through a role — the case Redmine's role-only permission model cannot express.
+  # chosen role and it takes effect." These cover the TAB half of that, for a role that ticks NO
+  # SLA permission of its own and is granted purely by being named in the plugin settings.
   #
-  # All of them log in as rhill (user 4): active, but a member of no project and holding no role.
-  # Anything they can see here was granted by the allow-list and by nothing else.
+  # All of them log in as rhill (user 4): active, and a member of no project until a test makes
+  # them one. Anything they can see here was granted by that membership plus the role list.
 
-  def list!(list, *user_ids)
-    Setting.plugin_redmine_sla_compliance = {
-      "sla_#{list}_user_ids" => user_ids.map(&:to_s)
-    }
+  def sla_role!
+    @sla_role ||= Role.create!(name: 'SLA Access Test Role', permissions: [])
   end
 
-  test "a listed manager gets the tab and both sections with no role at all" do
+  def member!(project = @project)
+    Member.create!(principal: User.find(4), project: project, roles: [sla_role!])
+  end
+
+  def configure_sla_role!
+    Setting.plugin_redmine_sla_compliance = { 'sla_access_role_ids' => [sla_role!.id.to_s] }
+  end
+
+  def grant!(project = @project)
+    member!(project)
+    configure_sla_role!
+  end
+
+  test "a member holding an SLA access role gets the tab and both sections" do
     @request.session[:user_id] = 4
-    list!(:manager, 4)
+    grant!
 
     get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
 
-    assert_response :success, 'a listed manager must be able to open the Settings page itself'
+    assert_response :success, 'a granted member must be able to open the Settings page itself'
     assert_select '#tab-content-sla_policy .sla-plugin' do
       assert_select '#sla-policy-form'
       assert_select '#sla-notification-form'
     end
   end
 
-  test "a listed viewer is dashboard-only and never sees the tab" do
+  test "holding a role that is not an SLA access role never sees the tab" do
     @request.session[:user_id] = 4
-    list!(:viewer, 4)
+    member! # the membership without naming the role in the settings
 
     get :settings, params: { id: @project.identifier }
 
-    # The viewer list grants the dashboard only, so the page hosting the tab stays closed to them.
+    # The role ticks no permission of its own, so until it is named in the settings it opens
+    # nothing — not the tab, and not the page that hosts it.
     assert_response :forbidden
   end
 
-  test "an unlisted user with no role sees neither the tab nor the Settings page" do
+  test "a user with no role at all sees neither the tab nor the Settings page" do
     @request.session[:user_id] = 4
 
     get :settings, params: { id: @project.identifier }
     assert_response :forbidden
   end
 
-  test "granting a manager takes effect immediately, with no restart" do
+  test "granting a role takes effect immediately, with no restart" do
     @request.session[:user_id] = 4
+    member!
 
     get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
-    assert_response :forbidden, 'precondition: not listed yet'
+    assert_response :forbidden, 'precondition: the role is not named in the settings yet'
 
-    list!(:manager, 4)
+    configure_sla_role!
     get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
     assert_response :success
     assert_select '#sla-policy-form'
@@ -602,11 +615,11 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_response :forbidden, 'revoking must apply just as immediately'
   end
 
-  test "a listed manager sees only the SLA tab, not the rest of Project Settings" do
+  test "a granted member sees only the SLA tab, not the rest of Project Settings" do
     # Claiming projects/settings for :edit_sla_policy opens the page, but every other tab is
-    # still filtered by its own permission — a listed manager must not gain project admin.
+    # still filtered by its own permission — a granted member must not gain project admin.
     @request.session[:user_id] = 4
-    list!(:manager, 4)
+    grant!
 
     get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
 

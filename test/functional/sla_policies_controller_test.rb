@@ -84,24 +84,29 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_response :forbidden
   end
 
-  # --- Step 5.1: the user allow-list --------------------------------------------------------
-  # rhill (user 4) holds no role and no membership, so only the allow-list can let them through.
+  # --- Step 5.1: the SLA access roles ----------------------------------------------------------
+  # rhill (user 4) holds no role and no membership, so nothing but the grant below can let them
+  # through. The role itself ticks NO permissions — being named in the plugin settings is the
+  # whole of what makes it work.
 
-  test "a listed manager can save the policy with no role" do
+  test "a member holding an SLA access role can save the policy" do
+    role = Role.create!(name: 'SLA Access Test Role', permissions: [])
+    Member.create!(principal: User.find(4), project: @project, roles: [role])
+    Setting.plugin_redmine_sla_compliance = { 'sla_access_role_ids' => [role.id.to_s] }
     @request.session[:user_id] = 4
-    Setting.plugin_redmine_sla_compliance = { 'sla_manager_user_ids' => ['4'] }
 
     put :update, params: general_params
 
     assert_redirected_to settings_project_path(@project, tab: 'sla_policy', section: 'general')
-    assert policy.present?, 'a listed manager must be able to save the policy'
+    assert policy.present?, 'a granted member must be able to save the policy'
   ensure
     Setting.plugin_redmine_sla_compliance = {}
   end
 
-  test "a listed viewer is dashboard-only and cannot save the policy" do
+  test "holding a role that is not an SLA access role cannot save the policy" do
+    role = Role.create!(name: 'SLA Unlisted Test Role', permissions: [])
+    Member.create!(principal: User.find(4), project: @project, roles: [role])
     @request.session[:user_id] = 4
-    Setting.plugin_redmine_sla_compliance = { 'sla_viewer_user_ids' => ['4'] }
 
     put :update, params: general_params
 

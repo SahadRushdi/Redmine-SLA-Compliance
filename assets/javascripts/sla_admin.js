@@ -106,6 +106,22 @@
     return window.slaTomSelect ? window.slaTomSelect.guard(instance) : instance;
   }
 
+  // Chip multi-selects (the SLA access roles on General). Same data attribute and same Tom Select
+  // options as the policy form's status pickers, so the two read as one control across the two
+  // configuration surfaces; kept here rather than shared with sla_policy_form.js because that file
+  // is not loaded on the admin pages and pulling it in would bring its tracker / clone / definition
+  // table logic along for nothing.
+  function initChips() {
+    document.querySelectorAll('select[data-sla-chips]').forEach(function (el) {
+      if (el.tomselect || !window.TomSelect) { return; }
+
+      guard(new TomSelect(el, {
+        plugins: ['remove_button'],
+        placeholder: el.getAttribute('data-sla-chip-placeholder') || ''
+      }));
+    });
+  }
+
   // Native <select> popups are OS-rendered and cannot be themed to match the rest of the scoped
   // Flowbite UI; Tom Select replaces them with the same styled dropdown used across the plugin.
   function initSingleSelects() {
@@ -208,6 +224,7 @@
   document.addEventListener('DOMContentLoaded', function () {
     bindSectionNav();
     bindReveals();
+    initChips();
     initSingleSelects();
     initDateChips();
     initSortableTables();

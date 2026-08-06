@@ -108,9 +108,7 @@ en:
   # SLA Policy tab's own section strings further down this file.
   text_sla_admin_intro: "Instance-wide settings shared by every project's SLA policy."
   label_sla_admin_section_general: "General"
-  text_sla_admin_section_general: "Sweep interval & priority"
-  label_sla_admin_section_access: "Access control"
-  text_sla_admin_section_access: "SLA viewers & managers"
+  text_sla_admin_section_general: "Access roles, sweep & priority"
   label_sla_admin_section_target_options: "Target options"
   text_sla_admin_section_target_options: "Selectable target durations"
   label_sla_admin_section_business_calendars: "Business calendars"
@@ -178,14 +176,12 @@ en:
   label_sla_unclassified_priority_auto: "Auto-detect (a priority literally named \"None\", if any)"
   text_sla_unclassified_priority_hint: "Always excluded from SLA"
 
-  # --- Access control (Phase 5, Step 5.1) --------------------------------------------------
-  label_sla_access_control: "Access control"
-  text_sla_access_control_hint: "Grant SLA access to individual users, without a role."
-  field_sla_viewer_users: "SLA viewers"
-  text_sla_viewer_users_hint: "Read-only dashboard access"
-  field_sla_manager_users: "SLA managers"
-  text_sla_manager_users_hint: "Viewer access, plus editing the policy"
-  label_sla_no_users_added: "No users added yet."
+  # --- SLA access roles (Phase 5, Step 5.1) ------------------------------------------------
+  # On the General section. Replaced the per-user "SLA viewers" / "SLA managers" allow-lists and
+  # the Access control section they lived in (2026-08-06).
+  field_sla_access_roles: "SLA access roles"
+  text_sla_access_roles_hint: "Members with these roles see the dashboard and policy"
+  label_sla_access_roles_placeholder: "Select roles"
 
   # --- SLA Policy tab (Phase 4) ------------------------------------------------------------
   label_sla_policy: "SLA Policy"

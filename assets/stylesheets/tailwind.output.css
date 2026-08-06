@@ -985,9 +985,8 @@
 }
 /* --- Data tables ------------------------------------------------------------------------------
  *
- * Cell padding and row separators live here, not on the cells as utilities, because the access
- * allow-list table's rows are re-rendered by sla_access_form.js — which must not carry a copy of
- * those Tailwind class strings. The lookup tables use the same class so all three match.
+ * Cell padding and row separators for the two lookup tables (target options, business calendars),
+ * stated once here rather than as utilities on every cell so the two cannot drift apart.
  */
 .sla-plugin .sla-admin-rows tr + tr {
   border-top: 1px solid #f3f4f6; /* gray-100 */
@@ -1004,21 +1003,9 @@
   text-align: right;
   white-space: nowrap;
 }
-/* Sortable header on the access allow-lists. A pointer + no text selection is the whole affordance;
- * the direction arrow is text, filled in by sla_access_form.js.
- *
- * The lookup tables' sortable headers need no class of their own: they mirror the dashboard's
+/* The lookup tables' sortable headers need no class of their own: they mirror the dashboard's
  * ticket detail table, which carries `tw-cursor-pointer tw-select-none` as utilities and lets
  * sla_table_sort.js paint the icon. */
-.sla-plugin .sla-admin-sortable {
-  cursor: pointer;
-  -webkit-user-select: none;
-     -moz-user-select: none;
-          user-select: none;
-}
-.sla-plugin .sla-admin-sortable:hover {
-  color: #2563eb; /* primary-600 */
-}
 /* Short machine-ish identifiers in a table cell (a target option's Code). */
 .sla-plugin .sla-admin-code {
   display: inline-block;
@@ -1031,8 +1018,7 @@
 }
 /* --- Row actions ------------------------------------------------------------------------------
  *
- * Icon-only edit/delete buttons. Written as CSS (not utilities) for the same reason as the rows
- * above: sla_access_form.js renders this exact markup for its own delete control.
+ * Icon-only edit/delete buttons, shared by both lookup tables' rows.
  */
 .sla-plugin .sla-admin-row-actions {
   display: flex;
@@ -1089,12 +1075,6 @@
   background-color: #eff6ff; /* primary-50 */
   color: #2563eb; /* primary-600 */
   font-weight: 500;
-}
-/* --- Pagination ------------------------------------------------------------------------------ */
-/* Redmine's own `.pagination` markup (core CSS styles it); only the gap above it is ours. */
-.sla-plugin .sla-admin-pagination {
-  display: block;
-  margin-top: 0.75rem;
 }
 .sla-plugin *, .sla-plugin ::before, .sla-plugin ::after {
   --tw-border-spacing-x: 0;
@@ -2740,10 +2720,5 @@
   }
   .sla-plugin .lg\:tw-items-start {
     align-items: flex-start;
-  }
-}
-@media (min-width: 1280px) {
-  .sla-plugin .xl\:tw-grid-cols-2 {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

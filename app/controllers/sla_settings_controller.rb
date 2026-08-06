@@ -37,9 +37,16 @@ class SlaSettingsController < ApplicationController
 
   before_action :require_admin
 
-  # Scalar settings, and the two access allow-lists which post as arrays of user ids.
+  # Scalar settings, and the SLA access roles, which post as an array of role ids.
   PERMITTED_SETTINGS = %i[sweep_interval_minutes unclassified_priority_id].freeze
-  PERMITTED_LIST_SETTINGS = { sla_viewer_user_ids: [], sla_manager_user_ids: [] }.freeze
+  PERMITTED_LIST_SETTINGS = { sla_access_role_ids: [] }.freeze
+
+  # Keys of settings this module no longer has a field for. #update merges over the stored hash
+  # (see there for why), which on its own would preserve a removed setting's last value forever —
+  # so a retired key is dropped here instead, on the first save after the upgrade. Nothing reads
+  # these two; they are the per-user SLA viewer / manager allow-lists that `sla_access_role_ids`
+  # replaced on 2026-08-06.
+  RETIRED_SETTINGS = %w[sla_viewer_user_ids sla_manager_user_ids].freeze
 
   def show
     @settings = stored_settings
@@ -48,11 +55,12 @@ class SlaSettingsController < ApplicationController
   def update
     # Merged over the stored hash rather than replacing it: this form does not carry every key the
     # plugin may keep in there, and a blind replace would silently drop anything it doesn't render.
-    Setting.plugin_redmine_sla_compliance = stored_settings.merge(settings_params)
+    Setting.plugin_redmine_sla_compliance =
+      stored_settings.except(*RETIRED_SETTINGS).merge(settings_params)
 
     flash[:notice] = l(:notice_successful_update)
     # Back to the section the user was on — sla_admin.js keeps the hidden `section` field in step
-    # with the open panel, so saving from Access control does not bounce you to General.
+    # with the open panel, so saving from another panel does not bounce you to General.
     redirect_to sla_settings_path(section: requested_section)
   end
 
