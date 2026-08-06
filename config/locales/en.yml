@@ -294,6 +294,9 @@ en:
   text_sla_clone_from_project_card: "Choose a project to copy an existing SLA policy from. Pre-fills every section — General, SLA Targets for all its trackers, Measurement Rules, Exclusions and Notifications. Review them in the sidebar, then press Save Policy to apply the whole set."
   field_sla_clone_source: "Project"
   label_sla_clone_source_blank: "— Select a project —"
+  # Under a preselected dropdown, so a filled-in picker reads as history rather than as an action
+  # about to happen — nothing is copied again until Load is pressed.
+  text_sla_cloned_from_hint: "These settings were cloned from %{project}."
   button_sla_clone_load: "Load"
   text_sla_clone_confirm_overwrite: "Loading will replace everything currently entered in every section of this policy, not just this one. Continue?"
 

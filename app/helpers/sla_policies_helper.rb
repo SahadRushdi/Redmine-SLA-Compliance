@@ -246,27 +246,54 @@ module SlaPoliciesHelper
   end
 
   # The trackers whose target tables are displayed — one table each, all saved by the single SLA
-  # Targets submit. Explicit request params win (the picker posts `tracker_ids[]`, and the AJAX
-  # re-render of a newly added table posts a single `tracker_id`), else every tracker that already
-  # has definitions, else the project's first tracker so the section is never empty.
+  # Targets submit. Explicit request params win (the picker posts `definitions[tracker_ids][]`, and
+  # the AJAX re-render of a newly added table posts a single `tracker_id`); otherwise the set is
+  # rebuilt from what was saved, and failing everything the project's first tracker so the section
+  # is never empty.
   #
   # Selection is only about WHICH trackers are on screen and therefore saved; deselecting one hides
   # it and leaves its stored targets alone (see SlaPoliciesController#replace_tracker_definitions!).
   # Clearing a tracker's targets is done by setting its rows to "not tracked", not by hiding it.
   def sla_selected_trackers(project, policy)
     trackers = project.trackers.sorted.to_a
-    requested = Array(params[:tracker_ids].presence || params[:tracker_id].presence).map(&:to_i)
+    requested = sla_requested_tracker_ids
     selected =
       if requested.any?
         trackers.select { |tracker| requested.include?(tracker.id) }
       else
-        trackers.select do |tracker|
-          policy.sla_definitions.any? { |definition| definition.tracker_id == tracker.id }
-        end
+        ids = sla_saved_tracker_ids(policy)
+        trackers.select { |tracker| ids.include?(tracker.id) }
       end
 
     selected.presence || Array(trackers.first)
   end
+
+  # What was SAVED, as a union of two sources — which is the whole fix for "I added a tracker, saved,
+  # and it was gone":
+  #
+  #   * the picker's own saved selection (migration 009). Before it existed the displayed set was
+  #     derived purely from the definitions below, so a tracker added and saved with every target
+  #     still on "not tracked" wrote no definition, left no trace, and disappeared on the redirect.
+  #   * every tracker that HAS definitions. This half is not redundant and must never be dropped: a
+  #     tracker with stored targets is being applied to real tickets, so hiding it — because it
+  #     happens to be missing from a selection saved before it, or one saved by an older version —
+  #     would leave an SLA in force that the settings page does not show anywhere.
+  #
+  # nil (never saved) therefore behaves exactly as this method did before the column existed.
+  def sla_saved_tracker_ids(policy)
+    from_definitions = policy.sla_definitions.map(&:tracker_id)
+    (policy.selected_tracker_ids_or_nil.to_a | from_definitions).uniq
+  end
+  private :sla_saved_tracker_ids
+
+  # Tracker ids named by THIS request: the picker's own array, or the single `tracker_id` the AJAX
+  # per-table re-render sends. `definitions[tracker_ids][]` is the picker's real parameter name —
+  # this used to read a top-level `params[:tracker_ids]` that nothing has ever posted.
+  def sla_requested_tracker_ids
+    raw = params.dig(:definitions, :tracker_ids).presence || params[:tracker_id].presence
+    Array(raw).map(&:to_i)
+  end
+  private :sla_requested_tracker_ids
 
   # <option> list for one target dropdown: a leading "not tracked" blank, then the admin lookup
   # (numeric durations by seconds, Best Effort rows by the 'best_effort' sentinel — a Best Effort
@@ -318,6 +345,20 @@ module SlaPoliciesHelper
            .where(id: SlaPolicy.select(:project_id))
            .where.not(id: project.id)
            .sorted
+  end
+
+  # The project this policy was last cloned from (migration 009), or nil. It preselects the Clone
+  # card's dropdown, which otherwise reopened on "— Select a project —" and left the provenance of a
+  # whole configuration knowable only to whoever ran the clone, at the moment they ran it.
+  #
+  # Resolved against +sources+ — the list actually in the dropdown — rather than looked up directly,
+  # because this is deliberately a plain id and not a foreign key: the source project may since have
+  # been archived, had its policy removed, or become one this user may not edit. In any of those
+  # cases it is not an option on this page, and preselecting an id that has no <option> would render
+  # as no selection anyway. Returning nil says so honestly.
+  def sla_cloned_from_project(policy, sources)
+    id = policy.cloned_from_project_id
+    id.present? ? sources.detect { |source| source.id == id } : nil
   end
 
   # Notification settings shown in the tab's second section (4.6).

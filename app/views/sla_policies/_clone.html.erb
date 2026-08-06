@@ -5,9 +5,13 @@
 <%# %>
 <%# The picker is NOT a form param — the Load button fetches a prefilled re-render, and %>
 <%# clone_source_id (hidden, in _form) is what rides along on save. %>
-<%# Locals: project. %>
+<%# Locals: project, policy. %>
 <% sources = sla_clone_source_projects(project) %>
 <% if sources.any? %>
+  <%# Preselected to whichever project this policy was last cloned from, so the card reopens saying %>
+  <%# where the configuration came from instead of "— Select a project —". nil when nothing was %>
+  <%# cloned, or when the recorded source is no longer a project this user can pick from. %>
+  <% cloned_from = sla_cloned_from_project(policy, sources) %>
   <%= render layout: 'sla_policies/card',
              locals: { title: l(:label_sla_clone_from_project_card),
                        description: l(:text_sla_clone_from_project_card) } do %>
@@ -22,9 +26,17 @@
       <%# blank, seemingly broken first row. Either way the empty option must exist, so that no %>
       <%# project is preselected and Load can't act on one the user never chose. %>
       <%= select_tag 'sla_clone_picker',
-            options_from_collection_for_select(sources, :id, :name),
+            options_from_collection_for_select(sources, :id, :name, cloned_from&.id),
             prompt: l(:label_sla_clone_source_blank), id: 'sla-clone-source',
             class: sla_input_classes, data: { sla_select: true } %>
+      <%# Says what the preselection MEANS. Without it a filled-in dropdown reads as a pending %>
+      <%# action ("this is about to be loaded") rather than as history ("this is where these %>
+      <%# settings came from") — nothing is re-copied until Load is pressed. %>
+      <% if cloned_from %>
+        <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500">
+          <%= l(:text_sla_cloned_from_hint, project: cloned_from.name) %>
+        </p>
+      <% end %>
     </div>
 
     <div class="tw-mt-4">

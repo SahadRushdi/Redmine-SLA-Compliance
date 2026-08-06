@@ -88,6 +88,11 @@ class SlaPoliciesController < ApplicationController
         source = clone_source || (forking_from_inherited? ? inherited_seed_source : nil)
         seed_scalars_from!(source, clone: clone_source.present?) if source
         @sla_policy.assign_attributes(policy_params)
+        # Provenance, recorded here rather than in #apply_clone_source! so it is written for the
+        # clone itself, not for the section that happens to host the Clone card. Never cleared by a
+        # later ordinary save: "this configuration came from X" stays true until another clone
+        # replaces it, which is exactly the question the Clone card's dropdown reopens on.
+        @sla_policy.cloned_from_project_id = clone_source.project_id if clone_source
         # Saving any policy section writes configuration onto this row, which by definition makes
         # it self-defining — the case that matters is a project that first used the tri-state
         # control (leaving a lightweight row) and then edited a field here.
@@ -318,10 +323,25 @@ class SlaPoliciesController < ApplicationController
 
       @sla_policy.sla_status_mappings.create!(role: mapping.role, status_id: mapping.status_id)
     end
+    copy_tracker_selection_from!(source)
     return unless definitions
 
     @sla_policy.sla_definitions.delete_all
     copy_definitions_from!(source)
+  end
+
+  # The source's tracker selection, restricted to trackers THIS project has enabled — a copied
+  # reference to a tracker the project cannot use would select a table it can never render. Skipped
+  # when the source has no saved selection (nil), so a clone from an older policy leaves this row
+  # deriving its tables from the definitions rather than asserting an empty picker.
+  #
+  # A `targets` save then overwrites this with the posted picker (#replace_tracker_definitions!
+  # runs after), which is right: what the user reviewed on screen wins over what was copied.
+  def copy_tracker_selection_from!(source)
+    source_ids = source.selected_tracker_ids_or_nil
+    return if source_ids.nil?
+
+    @sla_policy.update!(selected_tracker_ids: source_ids & @project.trackers.ids)
   end
 
   # Shared by the fork above and Step 4.7's clone: the source's definitions, restricted to trackers
@@ -382,6 +402,13 @@ class SlaPoliciesController < ApplicationController
   def replace_tracker_definitions!
     tracker_ids = Array(params.dig(:definitions, :tracker_ids)).map(&:to_i).uniq &
                   @project.trackers.ids
+
+    # Persist the picker itself, not just what it produced. The displayed set used to be derived
+    # from the definitions alone, so a tracker added and saved with every target still on
+    # "not tracked" wrote nothing (an all-blank row creates no record, by design) and was gone by
+    # the time the redirect landed. Written even when the list is empty — [] is a real answer here,
+    # distinct from the nil that means "this row predates the column" (see migration 009).
+    @sla_policy.update!(selected_tracker_ids: tracker_ids)
     return if tracker_ids.empty?
 
     previous = @sla_policy.sla_definitions.where(tracker_id: tracker_ids).group_by(&:tracker_id)

@@ -355,6 +355,40 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select '#sla-stale-threshold-source', text: I18n.t(:text_sla_stale_threshold_unset_anywhere)
   end
 
+  # The render half of the "I add a tracker, save, and it is gone" bug (the save half is covered in
+  # SlaPoliciesControllerTest). A tracker the picker saved with NO targets set has no definitions to
+  # be derived from, so before migration 009 nothing on this page knew it had ever been chosen.
+  test "a saved tracker with no targets still renders its Priority Targets table" do
+    policy = SlaPolicy.create!(project_id: @project.id, enabled: true)
+    targetless = @project.trackers.sorted.second
+    policy.update!(selected_tracker_ids: [targetless.id])
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select "#sla-definitions-table-#{targetless.id}", 1
+    assert_select "select[name='definitions[tracker_ids][]'] option[selected][value='#{targetless.id}']", 1
+  end
+
+  # The Clone card reopens saying where the configuration came from, instead of on a blank picker
+  # that leaves the provenance of a whole policy knowable only to whoever ran the clone.
+  test "the clone picker preselects the project the policy was cloned from" do
+    source_project = Project.find(2)
+    source_project.enable_module!(:sla_compliance)
+    member = Member.find_or_initialize_by(user_id: 2, project_id: source_project.id)
+    member.role_ids = (member.role_ids + [@role.id]).uniq
+    member.save!
+    SlaPolicy.create!(project_id: source_project.id, enabled: true)
+    SlaPolicy.create!(project_id: @project.id, enabled: true,
+                      cloned_from_project_id: source_project.id)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select "#sla-clone-source option[selected][value='#{source_project.id}']", 1
+    assert_select '.sla-plugin', text: /#{Regexp.escape(source_project.name)}/
+  end
+
   test "every configured target type gets its own column, header and dropdown per priority" do
     get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
     assert_response :success
