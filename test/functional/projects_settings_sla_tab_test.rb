@@ -345,14 +345,25 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
                   I18n.t(:label_sla_stale_threshold_placeholder_inherited, days: 4)
   end
 
-  # A project's OWN value must not be described as something it inherits — the line answers
-  # "what applies if this box is empty", which is the parent's answer, never its own.
-  test "a project's own value is not reported as inherited from itself" do
+  # There is ONE status line under the field now, so it has to report the state the project is
+  # ACTUALLY in. It used to always answer "what would apply if this box were empty" — the parent's
+  # answer — which put "Not set — never flagged stale" directly beneath a field showing a number.
+  test "a project with its own value says so, not that nothing is set" do
     SlaPolicy.create!(project_id: @project.id, enabled: true, stale_threshold_days: 9)
 
     get_measurement_section
 
-    assert_select '#sla-stale-threshold-source', text: I18n.t(:text_sla_stale_threshold_unset_anywhere)
+    assert_select '#sla-stale-threshold-source', text: I18n.t(:text_sla_stale_threshold_own)
+  end
+
+  # The consolidation: one line, never a second static paragraph restating how empty behaves.
+  test "the stale card carries exactly one line under its field" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true, stale_threshold_days: 9)
+
+    get_measurement_section
+
+    assert_select '#sla-stale-threshold-source', 1
+    assert_select "[data-sla-panel='measurement'] p", text: /Leave empty to inherit/, count: 0
   end
 
   # The render half of the "I add a tracker, save, and it is gone" bug (the save half is covered in

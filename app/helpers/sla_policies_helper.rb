@@ -224,9 +224,10 @@ module SlaPoliciesHelper
          : l(:label_sla_stale_threshold_placeholder_unset)
   end
 
-  # The line under the field naming WHICH project an inherited number comes from. Without it
-  # "Inherited: 7" is a number with no author.
-  def sla_stale_threshold_source_text(inherited)
+  def sla_stale_threshold_source_text(project, policy, inherited)
+    own = sla_inherited_policy_source(project).blank? && policy.stale_threshold_days.present?
+    return l(:text_sla_stale_threshold_own) if own
+
     days, source = inherited
     return l(:text_sla_stale_threshold_unset_anywhere) if days.nil?
 

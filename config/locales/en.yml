@@ -244,14 +244,11 @@ en:
 
   label_sla_definitions_section: "SLA Targets per Tracker and Priority"
   label_sla_tracker_card: "Tracker Selection"
-  text_sla_tracker_card: "Pick every tracker you want to set targets for. Each one gets its own table below, and all of them are saved together."
+  text_sla_tracker_card: "Each tracker gets its own targets table below."
   label_sla_priority_targets_card: "Priority Targets — %{tracker}"
-  # One line above ALL the tracker tables, replacing a per-table caption that restated the heading
-  # ("SLA time targets for the X tracker by priority level") once per selected tracker. It carries
-  # the one thing the headings do not already say: what an all-empty row means.
-  text_sla_priority_targets_intro: "A priority with every target unset is excluded from SLA tracking."
+  text_sla_priority_targets_intro: "A priority with every target unset is also excluded."
   field_sla_trackers: "Trackers"
-  text_sla_tracker_selection_hint: "Only the trackers shown here are written when you save. Removing one hides its table and leaves its saved targets untouched — to clear them, set every target to \"not tracked\" instead."
+  text_sla_tracker_selection_hint: "Removing a tracker hides its table; its saved targets are kept."
   label_sla_priority: "Priority"
   label_sla_target_response: "Response"
   label_sla_target_workaround: "Workaround"
@@ -272,9 +269,13 @@ en:
   # Also the input's aria-label — the card heading is its visible name now.
   field_sla_stale_threshold_days_project: "Stale after"
   label_sla_days_suffix: "days of inactivity"
-  text_sla_stale_threshold_project_hint: "Leave empty to inherit; a value here also covers subprojects."
-  text_sla_stale_threshold_inherited: "Currently inheriting %{days} days from %{source}."
-  text_sla_stale_threshold_unset_anywhere: "Not set anywhere — open tickets in this project are never flagged stale."
+  # ONE dynamic status line under the field, replacing a static "leave empty to inherit" hint that
+  # sat beneath it. Three states, and it must state the one that is actually true: the old line
+  # always answered "what would apply if this box were empty", so a project with its own value read
+  # "Not set anywhere — never flagged stale" directly under a field showing a number.
+  text_sla_stale_threshold_own: "Set for this project; subprojects without their own inherit it."
+  text_sla_stale_threshold_inherited: "Inheriting %{days} days from %{source}."
+  text_sla_stale_threshold_unset_anywhere: "Not set — tickets in this project are never flagged stale."
   label_sla_stale_threshold_placeholder_inherited: "Inherited: %{days}"
   label_sla_stale_threshold_placeholder_unset: "Not set"
 
@@ -291,7 +292,7 @@ en:
   # Picking a project and pressing Load are one action, so they are one card with one description
   # (formerly split across "Project Selection" and "Clone Policy").
   label_sla_clone_from_project_card: "Clone from existing project"
-  text_sla_clone_from_project_card: "Choose a project to copy an existing SLA policy from. Pre-fills every section — General, SLA Targets for all its trackers, Measurement Rules, Exclusions and Notifications. Review them in the sidebar, then press Save Policy to apply the whole set."
+  text_sla_clone_from_project_card: "Copy another project's whole SLA policy into this one."
   field_sla_clone_source: "Project"
   label_sla_clone_source_blank: "— Select a project —"
   # Under a preselected dropdown, so a filled-in picker reads as history rather than as an action

@@ -35,30 +35,34 @@
   <%# The admin-designated unclassified priority gets this notice INSTEAD of a table row: it can %>
   <%# never hold a target, so a disabled row was only ever dead space. It sits here, above the %>
   <%# tables, because it is a property of the priority list and so identical for every tracker. %>
+  <%# %>
+  <%# It carries BOTH exclusion rules, because they answer one question — "what is left out of SLA %>
+  <%# tracking on this page?" The second line used to be a bare paragraph between this banner and %>
+  <%# the first Priority Targets card, with no card and no heading of its own. %>
   <% if sla_unclassified_priority.present? %>
     <div class="tw-flex tw-items-start tw-gap-3 tw-mb-5 tw-p-3 tw-rounded-lg tw-border
                 tw-border-amber-200 tw-bg-amber-50 tw-text-sm tw-text-amber-800">
       <span class="tw-mt-0.5 tw-text-amber-500"><%= sla_info_icon %></span>
-      <p class="tw-m-0">
-        <span class="tw-font-semibold"><%= h sla_unclassified_priority.name %></span>
-        <span class="tw-mx-1 tw-inline-block tw-px-2 tw-py-0.5 tw-text-xs tw-font-medium
-                     tw-text-amber-800 tw-bg-amber-100 tw-rounded">
-          <%= l(:label_sla_unclassified_badge) %>
-        </span>
-        <%# Linked only for admins — Administration → SLA Compliance is the one place this %>
-        <%# setting lives, and anyone else following the link would just be bounced with a 403. %>
-        <%# (It pointed at settings/plugin/redmine_sla_compliance until that page was retired on %>
-        <%# 2026-08-05; that URL now 404s.) %>
-        <% target = l(:label_sla_admin_settings_link) %>
-        <% target = link_to(target, sla_settings_path,
-                            class: 'tw-font-medium tw-underline') if User.current.admin? %>
-        <%= l(:text_sla_unclassified_notice, link: target).html_safe %>
-      </p>
+      <div class="tw-min-w-0">
+        <p class="tw-m-0">
+          <span class="tw-font-semibold"><%= h sla_unclassified_priority.name %></span>
+          <span class="tw-mx-1 tw-inline-block tw-px-2 tw-py-0.5 tw-text-xs tw-font-medium
+                       tw-text-amber-800 tw-bg-amber-100 tw-rounded">
+            <%= l(:label_sla_unclassified_badge) %>
+          </span>
+          <%# Linked only for admins — Administration → SLA Compliance is the one place this %>
+          <%# setting lives, and anyone else following the link would just be bounced with a 403. %>
+          <%# (It pointed at settings/plugin/redmine_sla_compliance until that page was retired on %>
+          <%# 2026-08-05; that URL now 404s.) %>
+          <% target = l(:label_sla_admin_settings_link) %>
+          <% target = link_to(target, sla_settings_path,
+                              class: 'tw-font-medium tw-underline') if User.current.admin? %>
+          <%= l(:text_sla_unclassified_notice, link: target).html_safe %>
+        </p>
+        <p class="tw-mt-1 tw-mb-0"><%= l(:text_sla_priority_targets_intro) %></p>
+      </div>
     </div>
   <% end %>
-
-  <%# Said once, above every tracker's table, instead of once per table. %>
-  <p class="tw-mt-0 tw-mb-3 tw-text-sm tw-text-gray-500"><%= l(:text_sla_priority_targets_intro) %></p>
 
   <div id="sla-definitions-tables">
     <% selected.each do |tracker| %>
