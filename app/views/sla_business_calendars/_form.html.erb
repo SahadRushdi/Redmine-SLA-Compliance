@@ -36,23 +36,28 @@
 <%= render layout: 'sla_policies/card',
            locals: { title: l(:field_sla_working_hours),
                      description: l(:text_sla_working_hours_hint) } do %>
-  <%# Kept as text inputs with an HH:MM pattern rather than <input type="time">: the values are %>
-  <%# stored as plain strings and existing rows may hold "9:00", which a time input silently %>
-  <%# refuses to display (it requires zero-padded HH:MM) — the field would open blank and a save %>
-  <%# would wipe a working calendar. %>
+  <%# Native time pickers. The browser supplies the clock UI, the hour/minute spinners and the %>
+  <%# 12h/24h presentation the OS locale calls for, and can only ever post a valid 24-hour HH:MM %>
+  <%# or nothing — which is what removes the formatting error rather than merely reporting it. %>
+  <%# This is Flowbite's own Timepicker: a styled <input type="time">, not a JS widget. %>
+  <%# %>
+  <%# The values are stored as plain strings, and a time input renders BLANK for any value it %>
+  <%# cannot parse — a row holding "9:00" would open empty and the next save would wipe a working %>
+  <%# calendar. Hence normalized_work_time here: rows written before the format was validated are %>
+  <%# padded for display, so the picker shows the hour that is actually in effect. %>
   <div class="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 tw-gap-x-5 tw-max-w-lg">
     <%= render layout: 'sla_admin/field',
                locals: { label: l(:field_sla_work_start_time),
                          field_id: 'sla_business_calendar_work_start_time' } do %>
-      <%= f.text_field :work_start_time, class: sla_input_classes, placeholder: 'HH:MM',
-                       pattern: '[0-9]{1,2}:[0-9]{2}', inputmode: 'numeric' %>
+      <%= f.time_field :work_start_time, class: sla_input_classes,
+                       value: SlaBusinessCalendar.normalized_work_time(@calendar.work_start_time) %>
     <% end %>
 
     <%= render layout: 'sla_admin/field',
                locals: { label: l(:field_sla_work_end_time),
                          field_id: 'sla_business_calendar_work_end_time' } do %>
-      <%= f.text_field :work_end_time, class: sla_input_classes, placeholder: 'HH:MM',
-                       pattern: '[0-9]{1,2}:[0-9]{2}', inputmode: 'numeric' %>
+      <%= f.time_field :work_end_time, class: sla_input_classes,
+                       value: SlaBusinessCalendar.normalized_work_time(@calendar.work_end_time) %>
     <% end %>
   </div>
 <% end %>

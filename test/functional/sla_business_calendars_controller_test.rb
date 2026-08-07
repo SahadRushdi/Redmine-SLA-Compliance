@@ -85,6 +85,50 @@ class SlaBusinessCalendarsControllerTest < ActionController::TestCase
     assert_equal [], calendar.holidays
   end
 
+  # The form posts from a native time picker, which can only send a padded HH:MM — but a payload
+  # from anywhere else still has to arrive as the 'HH:MM' Sla::BusinessHoursCalculator parses.
+  test "create normalises working hours posted as bare digits" do
+    post :create, params: {
+      sla_business_calendar: { name: 'Digits', working_days: %w[1 2 3 4 5],
+                               work_start_time: '9', work_end_time: '1730' }
+    }
+    assert_redirected_to sla_business_calendars_path
+    calendar = SlaBusinessCalendar.order(:id).last
+    assert_equal '09:00', calendar.work_start_time
+    assert_equal '17:30', calendar.work_end_time
+  end
+
+  test "create rejects a working hour that is not a time" do
+    assert_no_difference 'SlaBusinessCalendar.count' do
+      post :create, params: {
+        sla_business_calendar: { name: 'Bad hours', working_days: %w[1],
+                                 work_start_time: '25:00', work_end_time: '17:00' }
+      }
+    end
+    assert_response :success
+    assert_sla_form_error(/Work start/)
+  end
+
+  test "the working hours fields are time pickers" do
+    get :edit, params: { id: make_calendar(work_start_time: '08:30').id }
+
+    assert_select 'input#sla_business_calendar_work_start_time[type=?][value=?]', 'time', '08:30'
+    assert_select 'input#sla_business_calendar_work_end_time[type=?]', 'time'
+  end
+
+  # A time input renders BLANK for a value it cannot parse, and the next save would then wipe the
+  # calendar's hours. Rows written before the format was validated can hold "9:00", so the form
+  # pads on the way out — without this the picker opens empty on exactly the rows that already
+  # have working hours set.
+  test "a legacy unpadded working hour still displays in the picker" do
+    calendar = make_calendar
+    calendar.update_columns(work_start_time: '9:00') # bypasses the normalising validation
+
+    get :edit, params: { id: calendar.id }
+
+    assert_select 'input#sla_business_calendar_work_start_time[value=?]', '09:00'
+  end
+
   test "destroy is blocked while a policy references the calendar" do
     calendar = make_calendar
     SlaPolicy.create!(project_id: 1, enabled: true, coverage_hours: 'business_hours',

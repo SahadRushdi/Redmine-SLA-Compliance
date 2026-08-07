@@ -142,14 +142,22 @@
   }
 
   // Free-entry chips for a list of ISO dates (the business calendar's holidays).
+  //
+  // `create` and `createFilter` are NOT interchangeable, and swapping them is silent: Tom Select
+  // treats a `create` function as the thing that BUILDS the option and ignores any return value
+  // that isn't an object, so a predicate there offers "Add 2026-08-24…" in the dropdown and then
+  // does nothing when you click it. Validation belongs in `createFilter` alone.
   function initDateChips() {
     document.querySelectorAll('select[data-sla-date-chips]').forEach(function (el) {
       if (el.tomselect || !window.TomSelect) { return; }
 
       guard(new TomSelect(el, {
         plugins: ['remove_button'],
-        create: isIsoDate,
+        create: true,
         createFilter: isIsoDate,
+        // A typed-but-not-yet-entered date is committed when the field loses focus, so clicking
+        // Save straight after typing adds the holiday instead of discarding it.
+        createOnBlur: true,
         persist: false,
         // Pasting a list (from the textarea this replaced, or a spreadsheet column) splits into
         // one chip per date rather than a single unusable chip.
@@ -160,6 +168,10 @@
       }));
     });
   }
+
+  // (The business calendar's work start / end fields need no script: they are native time pickers,
+  // which cannot produce a malformed value for one to correct. The blur formatter that briefly
+  // lived here was for the text inputs they replaced.)
 
   // --- Client-side column sorting ---------------------------------------------------------------
   // The lookup tables are small and never paginate, so the whole table is already on the page and

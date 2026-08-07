@@ -53,6 +53,7 @@
 .sla-plugin input[type='text']:focus,
 .sla-plugin input[type='number']:focus,
 .sla-plugin input[type='url']:focus,
+.sla-plugin input[type='time']:focus,
 .sla-plugin select:focus,
 .sla-plugin textarea:focus {
   border-color: #2563eb; /* primary-600 — the only intentional blue in UI chrome */
@@ -138,13 +139,28 @@
  * (an *element* selector, so it wins wherever nothing here overrides it) combined with this
  * plugin's own `tw-p-2.5` (10px) padding utility squeezed the visible text area of every
  * select/url/number input down to a few pixels — the "clipped to dots" look in screenshots.
+ *
+ * `time` is in that theme rule's selector list too (it names every text-like type: datetime, date,
+ * month, time, week, number, url, tel, color, search, email, text, password), so the business
+ * calendar's work start / end pickers need the same unclamping or they arrive squashed — and a
+ * squashed time input hides its own clock affordance, which is the whole point of using one.
  */
 .sla-plugin select,
 .sla-plugin input[type='text'],
 .sla-plugin input[type='url'],
-.sla-plugin input[type='number'] {
+.sla-plugin input[type='number'],
+.sla-plugin input[type='time'] {
   height: auto;
   min-height: 2.625rem; /* 42px: matches tw-p-2.5 (10px) + tw-text-sm line-height once unclamped */
+}
+/* The browser's own clock/stepper affordance. It is the control's only visible cue that this is a
+   picker rather than a text box, so make it read as clickable; `color-scheme: light` pins it to the
+   light rendering the rest of this plugin's chrome assumes, regardless of the OS theme. */
+.sla-plugin input[type='time'] {
+  color-scheme: light;
+}
+.sla-plugin input[type='time']::-webkit-calendar-picker-indicator {
+  cursor: pointer;
 }
 .sla-plugin input[type='radio'] {
   -webkit-appearance: none;
