@@ -124,24 +124,23 @@ en:
   label_sla_target_option_new: "New target option"
   text_sla_target_options_hint: "Durations every project's SLA policy picks from"
   field_sla_target_type: "Target type"
-  field_sla_code: "Code"
-  text_sla_code_hint: "Unique per target type, e.g. 4h"
   field_sla_option_label: "Label"
-  field_sla_seconds: "Duration (seconds)"
-  text_sla_seconds_hint: "Seconds, e.g. 14400 = 4h"
   field_sla_duration: "Duration"
-  field_sla_position: "Position"
+  # The duration is entered as an amount plus one of these units and stored as seconds. Days is
+  # not optional decoration: the lookup holds 24h / 48h / 72h targets.
+  field_sla_duration_unit: "Unit"
+  label_sla_duration_unit_minutes: "Minutes"
+  label_sla_duration_unit_hours: "Hours"
+  label_sla_duration_unit_days: "Days"
   field_sla_basis: "Basis"
   label_sla_basis_calendar: "Calendar (wall-clock time)"
   label_sla_basis_business: "Business (working time)"
   text_sla_basis_hint: "Wall-clock or working time"
   field_sla_best_effort: "Best Effort"
   text_sla_best_effort_hint: "No deadline — never breaches"
-  text_sla_seconds_best_effort_hint: "Leave blank when Best Effort is checked."
   # Card titles / helper lines on the target option form, and its empty state.
   label_sla_target_option_details: "Option details"
-  text_sla_target_option_details: "Name, type and ordering"
-  text_sla_position_hint: "Lower numbers appear first"
+  text_sla_target_option_details: "Name, type and basis"
   text_sla_target_option_duration_card: "Time allowed before the target is missed"
   label_sla_no_target_options_yet: "No target options yet"
   text_sla_no_target_options_yet: "The durations projects pick from when setting their targets."
@@ -386,3 +385,12 @@ en:
   field_sla_chat_assignee: "Assigned To"
   field_sla_chat_start_date: "Start Date"
   field_sla_chat_due_date: "Due Date"
+
+  # --- Model attribute names -------------------------------------------------------------------
+  # Validation messages are built from the attribute name, so `seconds` would report itself as
+  # "Seconds must be greater than 0" — a column the target option form no longer mentions, since
+  # the duration is entered as days + hours/minutes. Name it after what is on screen instead.
+  activerecord:
+    attributes:
+      sla_target_option:
+        seconds: "Duration"

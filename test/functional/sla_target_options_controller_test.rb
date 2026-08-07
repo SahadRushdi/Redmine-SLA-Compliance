@@ -105,13 +105,77 @@ class SlaTargetOptionsControllerTest < ActionController::TestCase
     assert_nil option.seconds, 'Best Effort must never carry a numeric duration'
   end
 
+  # --- Duration entered as an amount + a unit (2026-08-07) ------------------------------------
+
+  test "create multiplies the posted amount and unit into seconds" do
+    post :create, params: {
+      sla_target_option: { target_type: 'resolution', label: '4 Hours',
+                           duration_amount: '4', duration_unit: 'hours' }
+    }
+    assert_redirected_to sla_target_options_path
+    assert_equal 14_400, SlaTargetOption.order(:id).last.seconds
+  end
+
+  # The reason Days is one of the units: the live lookup holds 24h, 48h and 72h targets.
+  test "create accepts a duration longer than a day" do
+    post :create, params: {
+      sla_target_option: { target_type: 'resolution', label: '72 Hours',
+                           duration_amount: '3', duration_unit: 'days' }
+    }
+    assert_equal 259_200, SlaTargetOption.order(:id).last.seconds
+  end
+
+  test "the edit form is filled from the stored seconds" do
+    option = make_option(code: '48h', label: '48 Hours', seconds: 172_800)
+    get :edit, params: { id: option.id }
+
+    assert_select 'input[name=?][value=?]', 'sla_target_option[duration_amount]', '2'
+    assert_select 'select[name=?] option[selected][value=?]',
+                  'sla_target_option[duration_unit]', 'days'
+  end
+
+  test "create derives a code from the label now that the form has no code field" do
+    post :create, params: {
+      sla_target_option: { target_type: 'response', label: '30 Minutes',
+                           duration_amount: '30', duration_unit: 'minutes' }
+    }
+    assert_redirected_to sla_target_options_path
+    option = SlaTargetOption.order(:id).last
+    assert_equal '30-minutes', option.code
+    assert_equal 1_800, option.seconds
+  end
+
+  # Position is no longer on the form; an existing row must keep the ordering it was given.
+  test "update leaves a position the form no longer posts untouched" do
+    option = make_option(position: 3)
+    put :update, params: { id: option.id,
+                           sla_target_option: { target_type: 'response', label: '4 Hours',
+                                                duration_amount: '4', duration_unit: 'hours' } }
+
+    assert_redirected_to sla_target_options_path
+    assert_equal 3, option.reload.position
+  end
+
+  # The message names the field as the form labels it — "Duration", not the `seconds` column it is
+  # validated on, which nobody types any more (activerecord.attributes.sla_target_option.seconds).
   test "create rejects a non-Best-Effort option with no seconds value" do
     assert_no_difference 'SlaTargetOption.count' do
       post :create, params: { sla_target_option: { target_type: 'response', code: 'x',
                                                    label: 'x' } }
     end
     assert_response :success
-    assert_sla_form_error(/Seconds/)
+    assert_sla_form_error(/Duration/)
+  end
+
+  test "a duration left blank on the form is reported, not saved as zero" do
+    assert_no_difference 'SlaTargetOption.count' do
+      post :create, params: {
+        sla_target_option: { target_type: 'response', label: 'Nothing entered',
+                             duration_amount: '', duration_unit: 'hours' }
+      }
+    end
+    assert_response :success
+    assert_sla_form_error(/Duration/)
   end
 
   test "create persists the basis" do

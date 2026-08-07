@@ -75,16 +75,9 @@
  * ticket detail table, which carries `tw-cursor-pointer tw-select-none` as utilities and lets
  * sla_table_sort.js paint the icon. */
 
-/* Short machine-ish identifiers in a table cell (a target option's Code). */
-.sla-admin-code {
-  display: inline-block;
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
-  background-color: #f3f4f6; /* gray-100 */
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.75rem;
-  color: #374151; /* gray-700 */
-}
+/* (`.sla-admin-code` lived here for the target options' Code column. That column is gone — the
+ * code is derived from the label now and never shown — and nothing else in the module renders a
+ * machine identifier in a cell.) */
 
 /* --- Row actions ------------------------------------------------------------------------------
  *

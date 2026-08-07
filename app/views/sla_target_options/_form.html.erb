@@ -8,6 +8,10 @@
 <%= render layout: 'sla_policies/card',
            locals: { title: l(:label_sla_target_option_details),
                      description: l(:text_sla_target_option_details) } do %>
+  <%# Two things the admin decides, side by side — WHICH target this duration is offered for and %>
+  <%# WHAT its time is measured against — then the name they will see it under, spanning both %>
+  <%# columns. Code and Position are no longer asked for: code is derived from the label %>
+  <%# (SlaTargetOption#assign_code) and position keeps whatever the row already has. %>
   <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-x-5">
     <%= render layout: 'sla_admin/field',
                locals: { label: l(:field_sla_target_type), field_id: 'sla_target_option_target_type',
@@ -18,9 +22,11 @@
     <% end %>
 
     <%= render layout: 'sla_admin/field',
-               locals: { label: l(:field_sla_code), field_id: 'sla_target_option_code',
-                         hint: l(:text_sla_code_hint), required: true } do %>
-      <%= f.text_field :code, class: sla_input_classes %>
+               locals: { label: l(:field_sla_basis), field_id: 'sla_target_option_basis',
+                         hint: l(:text_sla_basis_hint), required: true } do %>
+      <%= f.select :basis,
+                   SlaTargetOption::BASES.map { |b| [l("label_sla_basis_#{b}"), b] },
+                   {}, class: sla_input_classes, data: { sla_select: true } %>
     <% end %>
 
     <%# Spans both columns: the label is the human-facing name of the option and gets the room. %>
@@ -31,20 +37,6 @@
         <%= f.text_field :label, class: sla_input_classes %>
       <% end %>
     </div>
-
-    <%= render layout: 'sla_admin/field',
-               locals: { label: l(:field_sla_basis), field_id: 'sla_target_option_basis',
-                         hint: l(:text_sla_basis_hint), required: true } do %>
-      <%= f.select :basis,
-                   SlaTargetOption::BASES.map { |b| [l("label_sla_basis_#{b}"), b] },
-                   {}, class: sla_input_classes, data: { sla_select: true } %>
-    <% end %>
-
-    <%= render layout: 'sla_admin/field',
-               locals: { label: l(:field_sla_position), field_id: 'sla_target_option_position',
-                         hint: l(:text_sla_position_hint) } do %>
-      <%= f.number_field :position, class: sla_input_classes %>
-    <% end %>
   </div>
 <% end %>
 
@@ -67,12 +59,27 @@
                checked: @target_option.best_effort?, reveals: '!duration' %>
   </div>
 
+  <%# An amount and its unit, never raw seconds — the model multiplies the two into the stored %>
+  <%# `seconds` (SlaTargetOption#compose_seconds_from_duration_parts) and divides it back out to %>
+  <%# fill these fields when editing, choosing the largest unit that divides exactly so the editor %>
+  <%# opens on the same reading the list column shows ("2d" -> 2 Days). %>
+  <%# %>
+  <%# The units go up to Days deliberately: the lookup holds 24h, 48h and 72h targets, and anything %>
+  <%# capped at hours makes those the longest thing anyone can comfortably enter. %>
   <div data-sla-reveal="duration" class="tw-mt-5 <%= 'hidden' if @target_option.best_effort? %>">
-    <div class="tw-w-full md:tw-w-64">
+    <div class="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 tw-gap-x-5 tw-max-w-md">
       <%= render layout: 'sla_admin/field',
-                 locals: { label: l(:field_sla_seconds), field_id: 'sla_target_option_seconds',
-                           hint: l(:text_sla_seconds_hint) } do %>
-        <%= f.number_field :seconds, min: 1, class: sla_input_classes %>
+                 locals: { label: l(:field_sla_duration),
+                           field_id: 'sla_target_option_duration_amount' } do %>
+        <%= f.number_field :duration_amount, min: 1, step: 1, class: sla_input_classes %>
+      <% end %>
+
+      <%= render layout: 'sla_admin/field',
+                 locals: { label: l(:field_sla_duration_unit),
+                           field_id: 'sla_target_option_duration_unit' } do %>
+        <%= f.select :duration_unit,
+                     SlaTargetOption::DURATION_UNITS.keys.map { |u| [l("label_sla_duration_unit_#{u}"), u] },
+                     {}, class: sla_input_classes, data: { sla_select: true } %>
       <% end %>
     </div>
   </div>

@@ -15,20 +15,19 @@
   <% if @target_options.any? %>
     <%# Every named column sorts client-side; the trailing row-actions column has no name and no %>
     <%# sort. The page still arrives in the controller's order (target_type, position, seconds). %>
+    <%# Code and Position are not columns here: neither is on the form any more (code is derived %>
+    <%# from the label, position keeps whatever the row has), and a column nobody can change is %>
+    <%# not information — it is furniture. Both are still stored, and the list still arrives in %>
+    <%# the controller's (target_type, position, seconds) order. %>
     <%= render layout: 'sla_admin/data_table',
                locals: { headers: [[l(:field_sla_target_type), 'target_type'],
-                                   [l(:field_sla_code), 'code'],
                                    [l(:field_sla_option_label), 'label'],
                                    [l(:field_sla_duration), 'duration', 'number'],
                                    [l(:field_sla_basis), 'basis'],
-                                   [l(:field_sla_position), 'position', 'number'],
                                    ['', nil]] } do %>
       <% @target_options.each do |option| %>
         <tr>
           <td><%= sla_admin_badge(sla_target_type_label(option.target_type)) %></td>
-          <%# Codes are terminal-ish identifiers ("4h", "2d") — monospace so they are scannable %>
-          <%# as a column and visibly distinct from the human label beside them. %>
-          <td><code class="sla-admin-code"><%= h option.code %></code></td>
           <td class="tw-font-medium tw-text-gray-900"><%= h option.label %></td>
           <%# Sorts by raw seconds while displaying "2d" / a Best Effort badge. Best Effort has no %>
           <%# seconds, so the value is blank and the row sorts LAST in both directions — a target %>
@@ -41,7 +40,6 @@
             <% end %>
           </td>
           <td><%= sla_admin_badge(l("label_sla_basis_#{option.basis}")) %></td>
-          <td class="tw-text-gray-500"><%= option.position %></td>
           <td>
             <%= render 'sla_admin/row_actions',
                        edit_path: edit_sla_target_option_path(option),

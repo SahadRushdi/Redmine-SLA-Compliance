@@ -227,12 +227,16 @@ class SlaAdminTargetOptionsPagesTest < ActionController::TestCase
     make_option
     get :index
 
-    %w[target_type code label duration basis position].each do |key|
+    %w[target_type label duration basis].each do |key|
       assert_select "thead th[data-sla-sort=?]", key, 1, "#{key} must be sortable"
     end
-    # Six named columns plus the unnamed row-actions column, which must not be sortable.
-    assert_select 'thead th', 7
-    assert_select 'thead th[data-sla-sort]', 6
+    # Four named columns plus the unnamed row-actions column, which must not be sortable.
+    # Code and Position are no longer columns: neither is editable anywhere any more.
+    assert_select 'thead th', 5
+    assert_select 'thead th[data-sla-sort]', 4
+    %w[code position].each do |key|
+      assert_select "thead th[data-sla-sort=?]", key, 0, "#{key} is no longer a column"
+    end
     assert_select 'table[data-sla-sortable-table]', 1, 'the script binds on this attribute'
   end
 
@@ -241,8 +245,8 @@ class SlaAdminTargetOptionsPagesTest < ActionController::TestCase
     get :index
 
     # Same hook and the same starting state as the dashboard's ticket detail table.
-    assert_select 'thead th[data-sla-sort] .sla-sort-icon', 6
-    assert_select 'thead th[data-sla-sort][aria-sort=?]', 'none', 6
+    assert_select 'thead th[data-sla-sort] .sla-sort-icon', 4
+    assert_select 'thead th[data-sla-sort][aria-sort=?]', 'none', 4
   end
 
   test "the numeric columns declare themselves numeric" do
@@ -251,8 +255,7 @@ class SlaAdminTargetOptionsPagesTest < ActionController::TestCase
     get :index
 
     assert_select "thead th[data-sla-sort=?][data-sla-sort-type=?]", 'duration', 'number'
-    assert_select "thead th[data-sla-sort=?][data-sla-sort-type=?]", 'position', 'number'
-    assert_select "thead th[data-sla-sort=?][data-sla-sort-type=?]", 'code', 'text'
+    assert_select "thead th[data-sla-sort=?][data-sla-sort-type=?]", 'label', 'text'
   end
 
   test "duration sorts by raw seconds, not by the text it displays" do
@@ -299,11 +302,16 @@ class SlaAdminTargetOptionsPagesTest < ActionController::TestCase
 
     assert_module_shell('target_options')
     assert_select 'select[name=?]', 'sla_target_option[target_type]'
-    assert_select 'input[name=?]', 'sla_target_option[code]'
     assert_select 'input[name=?]', 'sla_target_option[label]'
     assert_select 'select[name=?]', 'sla_target_option[basis]'
-    assert_select 'input[name=?]', 'sla_target_option[seconds]'
-    assert_select 'input[name=?]', 'sla_target_option[position]'
+    # The duration is entered as an amount + a unit and multiplied into `seconds` by the model.
+    assert_select 'input[name=?]', 'sla_target_option[duration_amount]'
+    assert_select 'select[name=?]', 'sla_target_option[duration_unit]'
+    # Removed from the form: code is derived from the label, position keeps what the row has,
+    # and nobody types a duration in seconds any more.
+    assert_select 'input[name=?]', 'sla_target_option[code]', 0
+    assert_select 'input[name=?]', 'sla_target_option[position]', 0
+    assert_select 'input[name=?]', 'sla_target_option[seconds]', 0
     # Best Effort is a switch now; it still posts the checkbox pair the controller casts.
     assert_select 'input[type=hidden][name=?][value=?]', 'sla_target_option[best_effort]', '0'
     assert_select 'input[type=checkbox][name=?]', 'sla_target_option[best_effort]'

@@ -21,12 +21,9 @@ class SlaAdminCopyTest < ActiveSupport::TestCase
     text_sla_access_roles_hint
     text_sla_target_options_hint
     text_sla_target_option_details
-    text_sla_code_hint
     text_sla_basis_hint
-    text_sla_position_hint
     text_sla_target_option_duration_card
     text_sla_best_effort_hint
-    text_sla_seconds_hint
     text_sla_business_calendars_hint
     text_sla_calendar_details
     text_sla_working_days_hint

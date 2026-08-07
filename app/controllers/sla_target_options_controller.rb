@@ -69,9 +69,18 @@ class SlaTargetOptionsController < ApplicationController
     render_404
   end
 
+  # The form now asks for a duration as an amount + a unit (`duration_amount` / `duration_unit`,
+  # multiplied into `seconds` by the model) and no longer offers Code or Position at all — code is derived
+  # from the label, and position keeps whatever the row already has.
+  #
+  # Those three are still PERMITTED, not dropped: they are the payload the form posted until
+  # 2026-08-07, and a script or bookmarked form sending them must keep working exactly as before —
+  # same reasoning as `holidays_text` on the business calendar. A posted `code` also wins over the
+  # derived one, so the curated codes in the lookup can still be set deliberately.
   def target_option_params
     permitted = params.require(:sla_target_option)
-                      .permit(:target_type, :code, :label, :seconds, :position, :best_effort, :basis)
+                      .permit(:target_type, :code, :label, :basis, :best_effort,
+                              :duration_amount, :duration_unit, :seconds, :position)
     permitted[:seconds] = nil if ActiveRecord::Type::Boolean.new.cast(permitted[:best_effort])
     permitted
   end
