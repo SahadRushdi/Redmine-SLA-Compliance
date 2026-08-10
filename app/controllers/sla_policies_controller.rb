@@ -345,11 +345,9 @@ class SlaPoliciesController < ApplicationController
   end
 
   # Shared by the fork above and Step 4.7's clone: the source's definitions, restricted to trackers
-  # this project has enabled and never including the unclassified priority (which can hold no
-  # target — see Sla::PolicyContext#definition_for).
+  # this project has enabled.
   def copy_definitions_from!(source)
     source.sla_definitions.where(tracker_id: @project.trackers.ids)
-          .where.not(priority_id: Sla::PluginSettings.unclassified_priority_id)
           .find_each do |definition|
       @sla_policy.sla_definitions.create!(
         definition.attributes.slice(*SlaDefinition::COPY_ATTRIBUTES)
@@ -429,14 +427,10 @@ class SlaPoliciesController < ApplicationController
   # is excluded.
   def create_tracker_definitions!(tracker_id, rows, previous)
     allowed_priority_ids = IssuePriority.active.ids
-    unclassified_priority_id = Sla::PluginSettings.unclassified_priority_id
 
     rows.each do |priority_id, targets|
       priority_id = priority_id.to_i
       next unless allowed_priority_ids.include?(priority_id)
-      # Defense in depth: the form never renders inputs for the unclassified priority (it's
-      # shown disabled), but never trust the client — reject a forged/stale submission for it too.
-      next if priority_id == unclassified_priority_id
 
       attributes = definition_targets(targets, previous[priority_id])
       next if attributes.empty?

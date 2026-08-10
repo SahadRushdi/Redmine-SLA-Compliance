@@ -44,18 +44,9 @@ module Sla
       @configured_tracker_ids.include?(tracker_id)
     end
 
-    # The SlaDefinition for this exact tracker x priority, or nil (⇒ not_tracked). The
-    # admin-designated "unclassified" priority (Sla::PluginSettings#unclassified_priority_id) is
-    # always treated as untracked, even if a stray SlaDefinition row exists for it — the plan and
-    # the spec both call for this priority to be unconditionally excluded from SLA evaluation.
+    # The SlaDefinition for this exact tracker x priority, or nil (⇒ not_tracked).
     def definition_for(tracker_id, priority_id)
-      return nil if unclassified_priority?(priority_id)
-
       @definition_by_key[[tracker_id, priority_id]]
-    end
-
-    def unclassified_priority?(priority_id)
-      priority_id.present? && priority_id == PluginSettings.unclassified_priority_id
     end
 
     # Journal authors that are not a real person — consumed by the Update Frequency target, which

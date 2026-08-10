@@ -3,7 +3,7 @@
 require_relative '../../test_helper'
 
 # Global, admin-configurable plugin settings (Administration → SLA Compliance),
-# backed by Redmine's own plugin-settings hash — no plugin table for these two values.
+# backed by Redmine's own plugin-settings hash — no plugin table for these values.
 class Sla::PluginSettingsTest < ActiveSupport::TestCase
   fixtures :enumerations, :users, :email_addresses
 
@@ -36,26 +36,6 @@ class Sla::PluginSettingsTest < ActiveSupport::TestCase
   test "sweep_interval_minutes clamps an absurdly large value to the max" do
     Setting.plugin_redmine_sla_compliance = { 'sweep_interval_minutes' => '999999' }
     assert_equal 1440, Sla::PluginSettings.sweep_interval_minutes
-  end
-
-  # --- unclassified_priority_id ---------------------------------------------------------------
-
-  test "unclassified_priority_id auto-detects a priority literally named 'None' (case-insensitive)" do
-    none = IssuePriority.create!(name: 'NoNe', type: 'IssuePriority', position: 99)
-    assert_equal none.id, Sla::PluginSettings.unclassified_priority_id
-  end
-
-  test "unclassified_priority_id is nil when nothing is configured and no priority is named 'None'" do
-    assert_nil Sla::PluginSettings.unclassified_priority_id
-  end
-
-  test "an explicitly configured id wins over auto-detection" do
-    none = IssuePriority.create!(name: 'None', type: 'IssuePriority', position: 99)
-    other = IssuePriority.find(4) # Low, from fixtures
-    Setting.plugin_redmine_sla_compliance = { 'unclassified_priority_id' => other.id.to_s }
-
-    assert_equal other.id, Sla::PluginSettings.unclassified_priority_id
-    assert_not_equal none.id, Sla::PluginSettings.unclassified_priority_id
   end
 
   # --- the Step 5.1 SLA access roles -----------------------------------------------------------

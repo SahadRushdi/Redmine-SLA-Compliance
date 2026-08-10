@@ -130,10 +130,18 @@ class SlaAdminSettingsPageTest < ActionController::TestCase
     get_page
 
     assert_select 'input[name=?]', 'settings[sweep_interval_minutes]'
-    assert_select 'select[name=?]', 'settings[unclassified_priority_id]'
+    assert_select 'select[name=?]', 'settings[unclassified_priority_id]', 0
     # Removed on request, together with the fallback it fed — a Google Chat webhook is a
     # per-project setting only now.
     assert_select 'input[name=?]', 'settings[google_chat_webhook]', 0
+  end
+
+  test "saving retires a previously stored unclassified priority setting" do
+    Setting.plugin_redmine_sla_compliance = { 'unclassified_priority_id' => '4' }
+
+    patch :update, params: { settings: { sweep_interval_minutes: '15' } }
+
+    assert_nil Setting.plugin_redmine_sla_compliance['unclassified_priority_id']
   end
 
   test "malformed input is a no-op, not a 500" do

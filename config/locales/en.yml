@@ -171,10 +171,6 @@ en:
 
   field_sla_sweep_interval_minutes: "Sweep interval (minutes)"
   text_sla_sweep_interval_hint: "1–1440 minutes, default 15"
-  field_sla_unclassified_priority: "Unclassified priority"
-  label_sla_unclassified_priority_auto: "Auto-detect (a priority literally named \"None\", if any)"
-  text_sla_unclassified_priority_hint: "Always excluded from SLA"
-
   # --- SLA access roles (Phase 5, Step 5.1) ------------------------------------------------
   # On the General section. Replaced the per-user "SLA viewers" / "SLA managers" allow-lists and
   # the Access control section they lived in (2026-08-06).
@@ -258,11 +254,6 @@ en:
   text_sla_definitions_hint: "A priority with every target unset is excluded from SLA tracking. Saving updates the selected trackers only."
   text_sla_no_target_options: "No target duration options defined yet — an administrator can add them under Administration → SLA Compliance."
   text_sla_no_trackers: "This project has no trackers enabled."
-  label_sla_unclassified_badge: "Unclassified"
-  text_sla_unclassified_row_hint: "Always excluded from SLA evaluation (Administration → SLA Compliance)."
-  text_sla_unclassified_notice: "Always excluded from SLA evaluation. Configure global exclusions in %{link}."
-  label_sla_admin_settings_link: "Administration → SLA Compliance"
-
   label_sla_stale_card: "Stale Tickets"
   text_sla_stale_card: "Days of inactivity before an open ticket is flagged stale."
   # Also the input's aria-label — the card heading is its visible name now.
@@ -360,7 +351,7 @@ en:
   field_stale_email_recipients: "Recipients"
   field_stale_email_frequency: "Frequency"
   field_stale_threshold_days: "Stale after (days of inactivity)"
-  text_sla_stale_threshold_hint: "A ticket excluded from SLA (unclassified priority or unset target) with no comment or status change for this many days is included in THIS PROJECT'S email digest. The dashboard's Stale card uses the instance-wide threshold under Administration → SLA Compliance instead."
+  text_sla_stale_threshold_hint: "A ticket excluded from SLA because its applicable target is unset, with no comment or status change for this many days, is included in THIS PROJECT'S email digest. The dashboard's Stale card uses the instance-wide threshold under Administration → SLA Compliance instead."
   label_sla_frequency_daily: "Daily"
   label_sla_frequency_weekly: "Weekly"
   label_sla_frequency_monthly: "Monthly"

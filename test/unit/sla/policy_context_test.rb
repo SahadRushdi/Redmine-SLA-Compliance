@@ -2,10 +2,7 @@
 
 require_relative '../../test_helper'
 
-# Sla::PolicyContext — per-project config resolution, including the admin-designated
-# "unclassified" priority exclusion (Phase 4 hardening): `definition_for` must return nil for
-# that priority even when a stray SlaDefinition row exists for it, so the classifier is forced
-# into no_sla/not_tracked regardless of what was (or wasn't) saved.
+# Sla::PolicyContext — per-project configuration resolution.
 class Sla::PolicyContextTest < ActiveSupport::TestCase
   fixtures :projects, :enumerations, :trackers
 
@@ -41,23 +38,14 @@ class Sla::PolicyContextTest < ActiveSupport::TestCase
     assert_equal definition, context.definition_for(TRACKER, PRIORITY)
   end
 
-  test "definition_for returns nil for the admin-designated unclassified priority, even with a saved row" do
+  test "definition_for treats a priority named None like every other configured priority" do
     none = IssuePriority.create!(name: 'None', type: 'IssuePriority', position: 99)
-    SlaDefinition.create!(sla_policy: @policy, tracker_id: TRACKER, priority_id: none.id,
-                          response_seconds: 3600) # a stray/legacy row, e.g. saved before this fix
+    definition = SlaDefinition.create!(sla_policy: @policy, tracker_id: TRACKER, priority_id: none.id,
+                                       response_seconds: 3600)
 
     context = Sla::PolicyContext.new(@policy)
 
-    assert_nil context.definition_for(TRACKER, none.id),
-               'the unclassified priority must never resolve to a definition'
-  end
-
-  test "unclassified_priority? reflects Sla::PluginSettings" do
-    none = IssuePriority.create!(name: 'None', type: 'IssuePriority', position: 99)
-    context = Sla::PolicyContext.new(@policy)
-
-    assert context.unclassified_priority?(none.id)
-    refute context.unclassified_priority?(PRIORITY)
+    assert_equal definition, context.definition_for(TRACKER, none.id)
   end
 
   test "a nil policy yields an empty, not-configured context" do

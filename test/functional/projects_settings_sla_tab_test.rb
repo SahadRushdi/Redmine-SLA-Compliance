@@ -270,35 +270,23 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
 
   # --- Section bodies ---------------------------------------------------------------------------
 
-  # The unclassified priority can never hold a target (enforced in
-  # SlaPoliciesController#replace_tracker_definitions!), so the Priority Targets card states that
-  # once in a notice rather than rendering a permanently disabled row. Rendering inputs for it
-  # would be worse than redundant — it would invite a submission the server is bound to discard.
-  test "the unclassified priority is a notice above the table, never a row with inputs" do
-    none = IssuePriority.active.first
+  test "every active Redmine priority gets target controls without global priority configuration" do
+    none = IssuePriority.create!(name: 'None', type: 'IssuePriority', position: 99)
+    # A stale value from an older plugin version must no longer hide that priority.
     Setting.plugin_redmine_sla_compliance = { 'unclassified_priority_id' => none.id.to_s }
-    classified = IssuePriority.active.detect { |p| p.id != none.id }
 
     get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
     assert_response :success
 
     tracker_id = @project.trackers.sorted.first.id
     assert_select '[data-sla-panel="targets"]' do
-      assert_select "select[name^='definitions[rows][#{tracker_id}][#{none.id}]']", 0,
-                    'no input may be offered for a priority whose submission is always rejected'
-      assert_select "select[name='definitions[rows][#{tracker_id}][#{classified.id}][response]']", 1,
-                    'other priorities must still get their target dropdowns'
+      IssuePriority.active.each do |priority|
+        assert_select "select[name='definitions[rows][#{tracker_id}][#{priority.id}][response]']", 1
+      end
+      assert_select '.tw-bg-amber-50', 0, 'the removed unclassified-priority notice must not render'
     end
-  end
-
-  test "with no unclassified priority configured every active priority gets a row" do
-    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
-    assert_response :success
-
-    tracker_id = @project.trackers.sorted.first.id
-    IssuePriority.active.each do |priority|
-      assert_select "select[name='definitions[rows][#{tracker_id}][#{priority.id}][response]']", 1
-    end
+  ensure
+    Setting.plugin_redmine_sla_compliance = {}
   end
 
   # --- Step 6.2a: the Stale threshold field, and the "what happens if I leave this empty" line ---

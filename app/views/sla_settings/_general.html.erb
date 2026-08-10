@@ -51,23 +51,6 @@
   </div>
 <% end %>
 
-<%= render layout: 'sla_policies/setting_card',
-           locals: { title: l(:field_sla_unclassified_priority),
-                     description: l(:text_sla_unclassified_priority_hint) } do %>
-  <%# data-sla-select swaps the native <select> for the same Tom Select dropdown used across the %>
-  <%# rest of the plugin — a native popup is OS-rendered and cannot be themed to match. %>
-  <div class="tw-w-full md:tw-w-80">
-    <%= select_tag 'settings[unclassified_priority_id]',
-          options_for_select(
-            [[l(:label_sla_unclassified_priority_auto), '']] +
-              IssuePriority.all.map { |p| [p.name, p.id] },
-            settings['unclassified_priority_id'].presence
-          ),
-          id: 'settings_unclassified_priority_id', class: sla_input_classes,
-          'aria-label': l(:field_sla_unclassified_priority), data: { sla_select: true } %>
-  </div>
-<% end %>
-
 <%# The instance-wide "Default Google Chat webhook" that used to sit here is gone, along with the %>
 <%# fallback it fed (SlaNotificationSetting.google_chat_webhook_for). A webhook is now a per-project %>
 <%# setting only — Project Settings → SLA Policy → Notifications. %>

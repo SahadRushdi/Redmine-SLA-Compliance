@@ -1,17 +1,12 @@
 <%# One row per active priority, for ONE tracker's table (see _definition_table). A priority with %>
-<%# every target unset gets no SlaDefinition row (it is excluded / unclassified). %>
+<%# every target unset gets no SlaDefinition row (it is excluded from SLA tracking). %>
 <%# %>
 <%# Field names are nested under the tracker id — definitions[rows][<tracker>][<priority>][<type>] %>
 <%# — so several trackers' tables can post together in one submit. %>
 <%# %>
-<%# The admin-designated "unclassified" priority (Administration → SLA Compliance) gets %>
-<%# no row at all: no SlaDefinition can ever be saved for it (enforced server-side too, see %>
-<%# SlaPoliciesController#replace_tracker_definitions!), so it is called out once in the notice %>
-<%# above the table instead of occupying a permanently disabled row. %>
 <%# Locals: policy, tracker. %>
 <% definitions = sla_definition_map(policy, tracker) %>
 <% IssuePriority.active.each do |priority| %>
-  <% next if sla_unclassified_priority?(priority.id) %>
   <% definition = definitions[priority.id] %>
   <tr class="tw-border-b tw-border-gray-200">
     <%# Priority is rendered as its plain name. It deliberately carries NO severity colouring: any %>

@@ -148,11 +148,11 @@ class SlaDashboardController < ApplicationController
   end
 
   # Union of the priorities configured across every selected tracker (a multi-tracker selection
-  # can span several via per-project inheritance), minus the admin's "unclassified" priority.
+  # can span several via per-project inheritance).
   def configured_priorities(project_ids, tracker_ids)
     priority_ids = effective_policies(project_ids).flat_map do |p|
       p.sla_definitions.where(tracker_id: tracker_ids).distinct.pluck(:priority_id)
-    end.uniq - [Sla::PluginSettings.unclassified_priority_id]
+    end.uniq
     IssuePriority.where(id: priority_ids).sorted
   end
 

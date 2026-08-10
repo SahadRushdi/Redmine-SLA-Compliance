@@ -17,7 +17,6 @@ class SlaAdminCopyTest < ActiveSupport::TestCase
   # genuinely needs a couple of extra words is not a test failure, but a sentence is.
   CAPTION_KEYS = %i[
     text_sla_sweep_interval_hint
-    text_sla_unclassified_priority_hint
     text_sla_access_roles_hint
     text_sla_target_options_hint
     text_sla_target_option_details
@@ -34,8 +33,8 @@ class SlaAdminCopyTest < ActiveSupport::TestCase
   MAX_CAPTION_WORDS = 10
 
   # The nav renders these on one line with `text-overflow: ellipsis`, so an over-long one is
-  # silently truncated mid-word — which is precisely what "Sweep interval & unclassified priority"
-  # was doing. Bound measured against the longest that renders in full at the nav's width.
+  # silently truncated mid-word. Bound measured against the longest that renders in full at the
+  # nav's width.
   MAX_SIDEBAR_SUBTITLE_CHARS = 30
 
   # "e.g." and "i.e." carry full stops that are not sentence ends — a naive split counts

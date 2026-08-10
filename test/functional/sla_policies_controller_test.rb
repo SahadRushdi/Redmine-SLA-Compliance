@@ -700,8 +700,9 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_equal 28_800, definition.resolution_seconds
   end
 
-  test "a posted row for the admin-designated unclassified priority is rejected" do
+  test "a priority named None can be assigned SLA targets" do
     none = IssuePriority.create!(name: 'None', type: 'IssuePriority', position: 99)
+    # Simulate a stale setting saved by an older plugin version.
     Setting.plugin_redmine_sla_compliance = { 'unclassified_priority_id' => none.id.to_s }
 
     put :update, params: targets_params(
@@ -709,7 +710,8 @@ class SlaPoliciesControllerTest < ActionController::TestCase
                      rows: { @trackers.first.id.to_s => { none.id.to_s => { response: @opt_1h.seconds.to_s } } } }
     )
 
-    assert_equal 0, policy.sla_definitions.where(priority_id: none.id).count
+    definition = policy.sla_definitions.find_by!(priority_id: none.id)
+    assert_equal @opt_1h.seconds, definition.response_seconds
   ensure
     Setting.plugin_redmine_sla_compliance = {}
   end
@@ -832,23 +834,6 @@ class SlaPoliciesControllerTest < ActionController::TestCase
 
     assert_equal 2, policy.cloned_from_project_id, 'the record itself survives'
     assert_nil @controller.view_context.send(:sla_cloned_from_project, policy, sources)
-  end
-
-  test "cloning skips a source definition saved for the unclassified priority" do
-    source = build_clone_source
-    none = IssuePriority.create!(name: 'None', type: 'IssuePriority', position: 99)
-    source.sla_definitions.create!(tracker_id: @trackers.first.id, priority_id: none.id,
-                                   response_seconds: 3600)
-    Setting.plugin_redmine_sla_compliance = { 'unclassified_priority_id' => none.id.to_s }
-
-    put :update, params: targets_params(
-      { clone_source_id: '2',
-        definitions: { tracker_ids: [@trackers.second.id.to_s], rows: { @trackers.second.id.to_s => {} } } }
-    )
-
-    assert_equal 0, policy.sla_definitions.where(priority_id: none.id).count
-  ensure
-    Setting.plugin_redmine_sla_compliance = {}
   end
 
   # A clone means the WHOLE policy, not the section hosting the button. This used to hold only for

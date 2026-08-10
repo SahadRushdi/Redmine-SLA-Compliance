@@ -72,12 +72,8 @@ module Sla
 
     def build_definitions(policy)
       tracker_ids = @project.trackers.ids
-      unclassified_priority_id = Sla::PluginSettings.unclassified_priority_id
       @source.sla_definitions.each do |definition|
         next unless tracker_ids.include?(definition.tracker_id)
-        # The unclassified priority can hold no target and gets no form row, so a stale one on the
-        # source would select its tracker's table while showing nothing in it.
-        next if definition.priority_id == unclassified_priority_id
 
         policy.sla_definitions.build(definition.attributes.slice(*SlaDefinition::COPY_ATTRIBUTES))
       end

@@ -99,8 +99,8 @@ module Sla
       true
     end
 
-    # Step 2.8's exact scope: "unclassified priority or unset target" — both surface as
-    # no_sla/not_tracked (never not_configured, which means the tracker isn't under SLA at all and
+    # Step 2.8's excluded scope surfaces as no_sla/not_tracked (never not_configured, which means
+    # the tracker isn't under SLA at all and
     # so has no "excluded ticket that needs triage" signal to report).
     def excluded_not_tracked?(result)
       result.primary_state == 'no_sla' && result.no_sla_reason == 'not_tracked'

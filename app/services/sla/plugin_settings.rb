@@ -2,9 +2,9 @@
 
 module Sla
   # Reads the plugin's GLOBAL settings (Administration → SLA Compliance), which are
-  # instance-wide rather than per-project — the sweep cadence and the "which priority means
-  # unclassified" mapping both fit that shape, unlike everything in Phase 4's per-project policy
-  # tab. Backed by Redmine's own plugin-settings mechanism (`Setting.plugin_redmine_sla_compliance`,
+  # instance-wide rather than per-project — the sweep cadence and access roles fit that shape,
+  # unlike everything in Phase 4's per-project policy tab. Backed by Redmine's own plugin-settings
+  # mechanism (`Setting.plugin_redmine_sla_compliance`,
   # declared in init.rb), so no extra table or migration is needed for these.
   #
   # Centralised here (rather than reading `Setting.plugin_redmine_sla_compliance` inline in the
@@ -26,22 +26,6 @@ module Sla
         return DEFAULT_SWEEP_INTERVAL_MINUTES unless raw.positive?
 
         raw.clamp(MIN_SWEEP_INTERVAL_MINUTES, MAX_SWEEP_INTERVAL_MINUTES)
-      end
-
-      # The IssuePriority ID that represents "None / unclassified" (plan Step 4.4 and the spec
-      # PDF's terminology table both call for this priority to always be excluded from SLA
-      # evaluation). Priorities are a single global list in Redmine — not scoped per project or
-      # tracker — so this is a global setting, stored as an ID per Global Rule 2 (never a label).
-      #
-      # If the admin hasn't explicitly picked one, auto-detect a priority literally named "None"
-      # (case-insensitively) as a zero-config default matching this plugin's reference customer
-      # setup (see the spec PDF's priority table) — a convenience default, not a hardcoded rule:
-      # an admin can point this at any priority, or clear it if the concept doesn't apply.
-      def unclassified_priority_id
-        configured = settings['unclassified_priority_id'].presence
-        return configured.to_i if configured
-
-        IssuePriority.where('LOWER(name) = ?', 'none').first&.id
       end
 
       # NOTE: there was a `default_google_chat_webhook` here — an instance-wide fallback webhook for
