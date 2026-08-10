@@ -2,17 +2,23 @@
 
 require_relative '../test_helper'
 
-# Step 5.1 — the admin screen itself: Administration → Plugins → SLA Compliance → Configure.
+# Step 5.1 — the admin screen itself: Administration → SLA Compliance → General → SLA access roles.
 #
-# Renders and saves through Redmine's own SettingsController#plugin, which is what actually hosts
-# the plugin's settings partial. That makes this the end-to-end proof of the admin flow: the
-# partial renders (helper wiring, routes, PluginSettings readers), the pickers carry what the
-# Tom Select JS needs, and a saved list round-trips into a real permission.
+# Renders and saves through SlaSettingsController, the plugin's own page. (It used to be Redmine's
+# SettingsController#plugin; that host was dropped on 2026-08-05 because it could never highlight
+# the module's own sidebar entry — see SlaSettingsController.) This is the end-to-end proof of the
+# admin flow: the page renders (helper wiring, routes, PluginSettings readers), the picker carries
+# what the Tom Select JS needs, and a saved role round-trips into a real permission.
+#
+# The control was two per-USER allow-lists ("SLA viewers" / "SLA managers") on their own Access
+# control section until 2026-08-06; it is now one role picker on General.
 class SlaPluginSettingsPageTest < ActionController::TestCase
-  tests SettingsController
+  tests SlaSettingsController
 
   fixtures :projects, :users, :email_addresses, :roles, :members, :member_roles,
            :enabled_modules, :enumerations
+
+  PICKER = 'select#settings_sla_access_role_ids'
 
   setup do
     @request.session[:user_id] = 1 # admin
@@ -24,118 +30,85 @@ class SlaPluginSettingsPageTest < ActionController::TestCase
   end
 
   def get_settings_page
-    get :plugin, params: { id: 'redmine_sla_compliance' }
+    get :show, params: { section: 'general' }
   end
 
   # --- rendering ------------------------------------------------------------------------------
 
-  test "the configure page renders both user pickers" do
+  test "the settings page renders the role picker as a multi-select" do
     get_settings_page
 
     assert_response :success
-    # Search-only boxes now, not the value carrier -- no `multiple`, no options; granted users
-    # are shown in the table below instead.
-    assert_select 'select#sla-viewer-users'
-    assert_select 'select#sla-viewer-users[multiple]', 0
-    assert_select 'select#sla-manager-users'
-    assert_select 'select#sla-manager-users[multiple]', 0
+    assert_select "#{PICKER}[multiple]", 1
+    assert_select "#{PICKER}[name='settings[sla_access_role_ids][]']", 1
   end
 
-  test "the settings page offers exactly the two access lists and no others" do
+  test "the picker offers every givable role and nothing else" do
     get_settings_page
 
-    assert_response :success
-    assert_select '[data-sla-access-list]', 2,
-                  'the user pickers are the access grants only — there is no system-account list'
+    Role.givable.each do |role|
+      assert_select "#{PICKER} option[value='#{role.id}']", 1, role.name
+    end
+    # The builtin Non-member / Anonymous roles must never be offerable: granting one would hand
+    # SLA access to everyone who can open the project, member or not.
+    [Role.non_member, Role.anonymous].each do |builtin|
+      assert_select "#{PICKER} option[value='#{builtin.id}']", 0, builtin.name
+    end
   end
 
-  test "the scoped assets and picker JS reach the page" do
-    # Without these the pickers still render, but as bare unstyled multi-selects with no search
-    # and no chips — a silent degradation the other assertions here would not catch.
+  test "the picker is a Tom Select chip control, not a bare multi-select" do
+    # Without this attribute the control still renders, but as an unstyled native multi-select
+    # with no chips and no search — a silent degradation nothing else here would catch.
     get_settings_page
 
-    assert_select 'script[src*="sla_access_form"]', 1
+    assert_select "#{PICKER}[data-sla-chips]", 1
+  end
+
+  test "the scoped assets and the module JS reach the page" do
+    get_settings_page
+
+    assert_select 'script[src*="sla_admin"]', 1
     assert_select 'script[src*="tom-select"]', 1
     assert_select 'link[href*="tailwind.output"]', 1
   end
 
-  test "each picker is wired to the user-search endpoint the JS reads" do
+  test "the picker posts a blank sentinel so clearing every chip persists" do
     get_settings_page
 
-    %w[sla-viewer-users sla-manager-users].each do |id|
-      assert_select "select##{id}[data-sla-user-search='#{sla_access_users_path}']", 1,
-                    "#{id} must tell sla_access_form.js where to search"
-    end
+    assert_select "input[type=hidden][name='settings[sla_access_role_ids][]'][value='']", 1,
+                  'the list must still post [] when emptied'
   end
 
-  test "each picker posts a blank sentinel so clearing every chip persists" do
-    get_settings_page
-
-    %w[viewer manager].each do |list|
-      assert_select "input[type=hidden][name='settings[sla_#{list}_user_ids][]'][value='']", 1,
-                    "#{list} list must still post [] when emptied"
-    end
-  end
-
-  test "already-listed users post as hidden inputs, not preselected chips" do
-    Setting.plugin_redmine_sla_compliance = {
-      'sla_viewer_user_ids' => %w[4],
-      'sla_manager_user_ids' => %w[2]
-    }
+  test "already-configured roles come back selected" do
+    Setting.plugin_redmine_sla_compliance = { 'sla_access_role_ids' => %w[1 3] }
 
     get_settings_page
 
     assert_response :success
-    assert_select "[data-sla-access-list='viewer'] input[type=hidden]" \
-                  "[name='settings[sla_viewer_user_ids][]'][value='4']"
-    assert_select "[data-sla-access-list='manager'] input[type=hidden]" \
-                  "[name='settings[sla_manager_user_ids][]'][value='2']"
-    assert_select "[data-sla-access-list='viewer'] input[type=hidden]" \
-                  "[name='settings[sla_viewer_user_ids][]'][value='2']", 0,
-                  'the two lists must not bleed into each other'
+    assert_select "#{PICKER} option[value='1'][selected]", 1
+    assert_select "#{PICKER} option[value='3'][selected]", 1
+    assert_select "#{PICKER} option[value='2'][selected]", 0,
+                  'an unconfigured role must not come back selected'
   end
 
-  test "already-listed users also render in the plain table below the picker" do
-    Setting.plugin_redmine_sla_compliance = { 'sla_viewer_user_ids' => %w[4] }
-
-    get_settings_page
-
-    rhill = User.find(4)
-    assert_select 'table td', text: rhill.name
-    assert_select 'table td', text: rhill.login
-    assert_select 'table td', text: rhill.mail
-    # sla_access_form.js reads this JSON seed on boot and takes over from there.
-    assert_select "[data-sla-access-list='viewer'][data-sla-users*='#{rhill.name}']"
-  end
-
-  test "the table headers are sortable and each row carries a delete button" do
-    Setting.plugin_redmine_sla_compliance = { 'sla_viewer_user_ids' => %w[4] }
-
-    get_settings_page
-
-    assert_select "[data-sla-access-list='viewer'] th[data-sla-sort='name']"
-    assert_select "[data-sla-access-list='viewer'] th[data-sla-sort='login']"
-    assert_select "[data-sla-access-list='viewer'] th[data-sla-sort='mail']"
-    assert_select "[data-sla-access-list='viewer'] [data-sla-empty].hidden"
-  end
-
-  test "the empty-state message shows for a list with nobody on it" do
-    get_settings_page
-
-    assert_select "[data-sla-access-list='viewer'] [data-sla-empty]:not(.hidden)"
-    assert_select "[data-sla-access-list='viewer'] table tbody tr", 0
-  end
-
-  test "a stale id for a deleted user does not break the page" do
-    Setting.plugin_redmine_sla_compliance = { 'sla_viewer_user_ids' => %w[4 999999] }
+  test "a stale id for a deleted role does not break the page" do
+    Setting.plugin_redmine_sla_compliance = { 'sla_access_role_ids' => %w[1 999999] }
 
     get_settings_page
 
     assert_response :success
-    assert_select "[data-sla-access-list='viewer'] input[type=hidden]" \
-                  "[name='settings[sla_viewer_user_ids][]'][value='4']"
-    assert_select "[data-sla-access-list='viewer'] input[type=hidden]" \
-                  "[name='settings[sla_viewer_user_ids][]'][value='999999']", 0
+    assert_select "#{PICKER} option[value='1'][selected]", 1
+    assert_select "#{PICKER} option[value='999999']", 0
+  end
+
+  test "the Access control section is gone from the sidebar" do
+    get_settings_page
+
+    assert_response :success
+    assert_select '[data-sla-admin-section]', 1,
+                  'General is the only panel section left; access was folded into it'
+    assert_select "[data-sla-admin-section='access']", 0
+    assert_select "[data-sla-admin-panel='access']", 0
   end
 
   test "the page is admin-only" do
@@ -146,50 +119,67 @@ class SlaPluginSettingsPageTest < ActionController::TestCase
 
   # --- saving ---------------------------------------------------------------------------------
 
-  test "saving persists both lists" do
-    post :plugin, params: { id: 'redmine_sla_compliance',
-                            settings: { 'sla_viewer_user_ids' => ['', '4', '7'],
-                                        'sla_manager_user_ids' => ['', '2'] } }
+  test "saving persists the selected roles" do
+    patch :update, params: { settings: { 'sla_access_role_ids' => ['', '1', '3'] } }
 
-    assert_redirected_to plugin_settings_path('redmine_sla_compliance')
-    assert_equal [4, 7], Sla::PluginSettings.viewer_user_ids
-    assert_equal [2], Sla::PluginSettings.manager_user_ids
+    assert_redirected_to sla_settings_path
+    assert_equal [1, 3], Sla::PluginSettings.access_role_ids
   end
 
   test "saving with every chip removed clears the list" do
-    Setting.plugin_redmine_sla_compliance = { 'sla_viewer_user_ids' => %w[4] }
+    Setting.plugin_redmine_sla_compliance = { 'sla_access_role_ids' => %w[1] }
 
     # What the form posts once the admin removes every chip: the sentinel alone.
-    post :plugin, params: { id: 'redmine_sla_compliance',
-                            settings: { 'sla_viewer_user_ids' => [''] } }
+    patch :update, params: { settings: { 'sla_access_role_ids' => [''] } }
 
-    assert_equal [], Sla::PluginSettings.viewer_user_ids
+    assert_equal [], Sla::PluginSettings.access_role_ids
+  end
+
+  test "saving drops the retired per-user allow-lists from the stored hash" do
+    # #update merges over the stored settings, so without RETIRED_SETTINGS these keys would sit
+    # in a production settings hash forever. Nothing reads them, but leaving stale grants behind
+    # is not a state to keep.
+    Setting.plugin_redmine_sla_compliance = {
+      'sla_viewer_user_ids' => %w[4],
+      'sla_manager_user_ids' => %w[2],
+      'sweep_interval_minutes' => '20'
+    }
+
+    patch :update, params: { settings: { 'sla_access_role_ids' => ['', '1'] } }
+
+    stored = Setting.plugin_redmine_sla_compliance
+    assert_not stored.key?('sla_viewer_user_ids')
+    assert_not stored.key?('sla_manager_user_ids')
+    assert_equal '20', stored['sweep_interval_minutes'],
+                 'a setting this form does not render must still survive the save'
   end
 
   # --- the whole point: saving here grants access there ----------------------------------------
 
-  test "adding a user on this page grants them SLA access immediately" do
+  test "naming a role on this page grants its members SLA access immediately" do
     project = Project.find(1)
     project.enable_module!(:sla_compliance)
-    rhill = User.find(4) # no role, no membership
+    role = Role.create!(name: 'SLA Access Test Role', permissions: [])
+    rhill = User.find(4) # no role, no membership until now
+    Member.create!(principal: rhill, project: project, roles: [role])
 
     assert_not rhill.allowed_to?(:view_sla_dashboard, project), 'precondition: no access'
 
-    post :plugin, params: { id: 'redmine_sla_compliance',
-                            settings: { 'sla_viewer_user_ids' => ['', '4'] } }
+    patch :update, params: { settings: { 'sla_access_role_ids' => ['', role.id.to_s] } }
 
     assert rhill.allowed_to?(:view_sla_dashboard, project),
            'a saved grant must apply with no restart'
-    assert_not rhill.allowed_to?(:edit_sla_policy, project),
-               'the viewer list must stay dashboard-only'
+    assert rhill.allowed_to?(:edit_sla_policy, project),
+           'the dashboard and the policy settings are one grant now, not two'
   end
 
-  test "adding several users at once grants them all" do
+  test "naming a role grants every member who holds it, with no per-user administration" do
     project = Project.find(1)
     project.enable_module!(:sla_compliance)
+    role = Role.create!(name: 'SLA Access Test Role', permissions: [])
+    [4, 7].each { |id| Member.create!(principal: User.find(id), project: project, roles: [role]) }
 
-    post :plugin, params: { id: 'redmine_sla_compliance',
-                            settings: { 'sla_manager_user_ids' => ['', '4', '7'] } }
+    patch :update, params: { settings: { 'sla_access_role_ids' => ['', role.id.to_s] } }
 
     [4, 7].each do |id|
       assert User.find(id).allowed_to?(:edit_sla_policy, project), "user #{id}"

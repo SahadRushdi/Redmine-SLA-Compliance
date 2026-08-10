@@ -9,6 +9,22 @@
 
 <%# Shared template for both SlaDashboardController#index (project-level, @project set) and %>
 <%# #cross_project (top-level, @project nil). %>
+<%#
+  TYPE SCALE — one ladder for BOTH tabs. Anything added to this dashboard picks a rung from here
+  rather than inventing a size, which is what let the two tabs drift apart:
+
+    tw-text-xl   bold  gray-900   page title (h1, once per page) — same rung as the SLA Policy
+                                  Settings page's title, so the two plugin pages match
+    tw-text-4xl  bold  state hue  a summary card's headline figure — the largest thing on the page
+    tw-text-base semibold gray-900  panel headings (Tickets by Priority, Compliance Split,
+                                    Ticket-Level Detail, Created vs Resolved)
+    tw-text-sm   semibold gray-700/900  tab labels, pill-group buttons, summary card labels
+    tw-text-sm   normal   gray-700   table body text
+    tw-text-xs   normal   gray-500   summary card captions, chart legends, secondary/muted text
+
+  Colour follows the same rule: a state's hue (SlaComplianceHelper::SLA_CARD_* maps) is the ONLY
+  place colour is used for meaning; everything else is gray-900 / gray-700 / gray-500 by rung.
+%>
 <div class="sla-plugin">
   <%# tw-bg-gray-50: Redmine's own #content background is plain white (application.css), same as %>
   <%# every card below (tw-bg-white) - without this, a white card separated only by a 1px %>

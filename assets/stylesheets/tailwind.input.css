@@ -12,8 +12,10 @@
  *     No separate flowbite-datepicker package/stylesheet is used anymore — this file supplies
  *     both structure (grid layout, cell sizing, popup positioning) and color, self-contained.
  *   - _tom_select.css — the Tom Select chip multi-select skin (Step 4.4/6.1).
- *   - _settings_nav.css — the SLA Policy settings sidebar's section links (active/inactive state
- *     as one toggled class, so the JS carries no Tailwind class strings).
+ *   - _settings_nav.css — the SLA Policy settings sidebar's section links (active/inactive/locked
+ *     state as one toggled class each, so the JS carries no Tailwind class strings).
+ *   - _locked_section.css — the <fieldset disabled> wrapper that makes a configuration section
+ *     read-only while SLA tracking is off, plus the fieldset resets Preflight isn't there to do.
  *   - _option_card.css — radio buttons presented as selectable tiles. Also CSS rather than
  *     utilities, but for a different reason: the :checked state has to reach an ANCESTOR, which
  *     Tailwind's sibling-based `peer-checked:` variant cannot express.
@@ -22,6 +24,15 @@
  *   - _detail_table.css — the ticket-level detail table's compact (in-card) vs expanded (modal)
  *     column/control visibility, toggled by a single `.sla-detail-expanded` class on the one
  *     table node that gets moved into the modal on expand.
+ *   - _admin_settings.css — the Administration → SLA Compliance module's shared chrome (data-table
+ *     rows/row actions, breadcrumb links, working-day chips) plus the one rule that has to reach
+ *     OUTSIDE the plugin wrapper, to neutralise the `box tabular settings` container Redmine wraps
+ *     around every plugin settings partial.
+ *   - _pill_group.css — the dashboard's segmented "pick one of these" button groups (date-range
+ *     presets, trend granularity). Active/inactive is ONE class (`is-active`) that
+ *     sla_dashboard_filters.js toggles, for the same reason _settings_nav.css and
+ *     _chart_legend.css do it that way: no Tailwind class strings in the JS, so the server-rendered
+ *     state and the click-rendered state cannot drift apart.
  * postcss-import inlines these before Tailwind/scoping run, so they get the exact same
  * `.sla-plugin` treatment as everything else in this file.
  */
@@ -29,9 +40,12 @@
 @import 'partials/_datepicker.css';
 @import 'partials/_tom_select.css';
 @import 'partials/_settings_nav.css';
+@import 'partials/_locked_section.css';
 @import 'partials/_option_card.css';
 @import 'partials/_chart_legend.css';
 @import 'partials/_detail_table.css';
+@import 'partials/_pill_group.css';
+@import 'partials/_admin_settings.css';
 
 @tailwind base;
 @tailwind components;

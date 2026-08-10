@@ -1,0 +1,14 @@
+<%# One sidebar-navigable section that lives on the plugin settings page. LAYOUT partial — %>
+<%# locals: key (section key), current (the key visible on load). %>
+<%# %>
+<%# Both panels are always in the DOM; only the current one is visible, and sla_admin.js swaps %>
+<%# them client-side. That is deliberate: Redmine's settings form posts EVERY field on the page in %>
+<%# one submit, so a panel that was merely not rendered would post nothing and its settings would %>
+<%# be wiped on the next Apply. Hiding rather than omitting also means switching sections costs no %>
+<%# round-trip and never discards unsaved edits in the other one. %>
+<section data-sla-admin-panel="<%= key %>" class="<%= 'hidden' unless key == current %>">
+  <%= render 'sla_admin/breadcrumb',
+             crumbs: [[l(:label_sla_compliance_settings), nil],
+                      [sla_admin_section_label(key), nil]] %>
+  <%= yield %>
+</section>

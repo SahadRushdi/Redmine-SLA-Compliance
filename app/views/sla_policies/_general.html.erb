@@ -20,40 +20,44 @@
     <%= hidden_field_tag 'tab', 'sla_policy' %>
     <%= hidden_field_tag 'section', 'general' %>
 
+    <%# Both settings on this section are a single control apiece, so each is ONE row — name and
+        helper line on the left, control on the right — rather than a titled card wrapping a
+        field that restates the title. See sla_policies/_setting_card.html.erb. %>
     <% if inherited_source.blank? %>
-      <%= render layout: 'sla_policies/card',
-                 locals: { title: l(:label_sla_status_card),
-                           description: l(:text_sla_status_card) } do %>
-        <%= render 'sla_policies/switch_row', name: 'sla_policy[enabled]',
-                   checked: policy.enabled?, title: l(:field_sla_tracking),
-                   description: l(:text_sla_tracking_hint) %>
+      <%= render layout: 'sla_policies/setting_card',
+                 locals: { title: l(:field_sla_tracking),
+                           description: l(:text_sla_tracking_hint) } do %>
+        <%= render 'sla_compliance/toggle', name: 'sla_policy[enabled]', checked: policy.enabled? %>
       <% end %>
     <% end %>
 
-    <%= render layout: 'sla_policies/card',
+    <%= render layout: 'sla_policies/setting_card',
                locals: { title: l(:label_sla_coverage_card),
-                         description: l(:text_sla_coverage_card) } do %>
-      <div class="tw-mb-4">
-        <label for="sla_policy_coverage_hours" class="<%= sla_label_classes %>"><%= l(:field_sla_coverage_schedule) %></label>
+                         description: l(:text_sla_coverage_schedule_hint) } do %>
+      <%# The row's own title is the label now, so the select carries its field name as an %>
+      <%# aria-label instead of a visible <label> that would repeat it. %>
+      <div class="tw-w-full md:tw-w-80">
         <%= select_tag 'sla_policy[coverage_hours]',
               options_for_select(SlaPolicy::COVERAGE_HOURS.map { |c| [l("label_coverage_#{c}"), c] },
                                  policy.coverage_hours),
-              id: 'sla_policy_coverage_hours', class: sla_input_classes, data: { sla_select: true } %>
-        <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500"><%= l(:text_sla_coverage_schedule_hint) %></p>
-      </div>
+              id: 'sla_policy_coverage_hours', class: sla_input_classes,
+              'aria-label': l(:field_sla_coverage_schedule), data: { sla_select: true } %>
 
-      <div id="sla-calendar-field" class="<%= 'hidden' unless policy.business_hours? %>">
-        <label for="sla_policy_business_calendar_id" class="<%= sla_label_classes %>"><%= l(:field_business_calendar) %></label>
-        <% calendars = SlaBusinessCalendar.order(:name).to_a %>
-        <% if calendars.any? %>
-          <%= select_tag 'sla_policy[business_calendar_id]',
-                options_for_select([['', '']] + calendars.map { |c| [c.name, c.id] },
-                                   policy.business_calendar_id),
-                id: 'sla_policy_business_calendar_id', class: sla_input_classes,
-                data: { sla_select: true } %>
-        <% else %>
-          <p class="tw-text-sm tw-text-gray-500"><%= l(:text_sla_no_business_calendars) %></p>
-        <% end %>
+        <%# Dependent field: revealed by sla_policy_form.js only while Business Hours is selected, %>
+        <%# so it stacks under the control it depends on rather than sitting in a card of its own. %>
+        <div id="sla-calendar-field" class="tw-mt-3 <%= 'hidden' unless policy.business_hours? %>">
+          <label for="sla_policy_business_calendar_id" class="<%= sla_label_classes %>"><%= l(:field_business_calendar) %></label>
+          <% calendars = SlaBusinessCalendar.order(:name).to_a %>
+          <% if calendars.any? %>
+            <%= select_tag 'sla_policy[business_calendar_id]',
+                  options_for_select([['', '']] + calendars.map { |c| [c.name, c.id] },
+                                     policy.business_calendar_id),
+                  id: 'sla_policy_business_calendar_id', class: sla_input_classes,
+                  data: { sla_select: true } %>
+          <% else %>
+            <p class="tw-text-sm tw-text-gray-500"><%= l(:text_sla_no_business_calendars) %></p>
+          <% end %>
+        </div>
       </div>
     <% end %>
 
@@ -64,19 +68,23 @@
   <%# further ancestor also has one to fall back to (otherwise there'd be nothing to revert TO). %>
   <%# It lives here (a policy-lifecycle action, not a field) and OUTSIDE the form above, because %>
   <%# button_to emits its own form and forms cannot nest. %>
+  <%# %>
+  <%# Rendered as a settings row like everything else on this section — name, one-line consequence, %>
+  <%# action on the right — rather than a bare button with a caption trailing under it, where it %>
+  <%# read as loose text below the card stack rather than as an action belonging to this page. %>
   <% if policy.persisted? && project.parent.present? %>
     <% ancestor_project, = SlaPolicy.source_for(project.parent) %>
     <% if ancestor_project.present? %>
-      <div class="tw-mt-2 tw-mb-8">
-        <%= button_to l(:button_sla_revert_to_inherited), project_sla_policy_path(project),
-              method: :delete,
+      <%= render layout: 'sla_policies/setting_card',
+                 locals: { title: l(:button_sla_revert_to_inherited),
+                           description: l(:text_sla_revert_hint, project: ancestor_project.name) } do %>
+        <%# form_class strips button_to's default `button_to` class, which Purplemine2 styles; the %>
+        <%# button carries the plugin's own primary classes instead. %>
+        <%= button_to l(:button_sla_revert), project_sla_policy_path(project),
+              method: :delete, form_class: '',
               data: { confirm: l(:text_sla_revert_confirm, project: ancestor_project.name) },
-              class: 'tw-text-gray-700 tw-bg-white tw-border tw-border-gray-300 hover:tw-bg-gray-100 ' \
-                     'tw-font-medium tw-rounded-lg tw-text-sm tw-px-4 tw-py-2 tw-cursor-pointer' %>
-        <p class="tw-mt-1 tw-text-xs tw-text-gray-500">
-          <%= l(:text_sla_revert_hint, project: ancestor_project.name) %>
-        </p>
-      </div>
+              class: sla_primary_button_classes %>
+      <% end %>
     <% end %>
   <% end %>
 <% end %>

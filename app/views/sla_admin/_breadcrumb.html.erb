@@ -1,0 +1,27 @@
+<%# "SLA Compliance › Target options › New target option" trail above a section's content. %>
+<%# Locals: crumbs — an array of [label, path] pairs. A nil path renders that crumb as the current %>
+<%# position (bold, not a link); it should be the last one. %>
+<%# %>
+<%# This is the module's answer to "the browser Back button was the only way back": every page %>
+<%# below a section list states where it is and links to its parent. %>
+<nav class="tw-flex tw-flex-wrap tw-items-center tw-gap-2 tw-mb-4 tw-text-sm" aria-label="Breadcrumb">
+  <% crumbs.each_with_index do |(label, path), index| %>
+    <% if index.positive? %>
+      <svg class="tw-w-3.5 tw-h-3.5 tw-text-gray-300 tw-shrink-0" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+           aria-hidden="true">
+        <polyline points="9 18 15 12 9 6"/>
+      </svg>
+    <% end %>
+    <% if path.present? %>
+      <%= link_to label, path, class: 'sla-admin-crumb' %>
+    <% elsif index == crumbs.size - 1 %>
+      <%# The current position: the only crumb given full contrast. %>
+      <span class="tw-font-medium tw-text-gray-900"><%= label %></span>
+    <% else %>
+      <%# An ancestor with no page of its own (the module root) — muted, matching the project %>
+      <%# tab's own breadcrumb rather than competing with the current position for emphasis. %>
+      <span class="tw-text-gray-400"><%= label %></span>
+    <% end %>
+  <% end %>
+</nav>

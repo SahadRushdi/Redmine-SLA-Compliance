@@ -1,0 +1,19 @@
+<%# Validation summary for a record that failed to save. Locals: record. %>
+<%# %>
+<%# Replaces Redmine's `error_messages_for`, whose `#errorExplanation` markup is styled by the %>
+<%# core/theme stylesheets and looks nothing like the rest of this module. Renders nothing when %>
+<%# the record has no errors, so callers can render it unconditionally. %>
+<% if record.errors.any? %>
+  <div class="tw-mb-5 tw-rounded-lg tw-border tw-border-solid tw-border-red-200 tw-bg-red-50
+              tw-p-4 tw-text-sm tw-text-red-800" role="alert">
+    <%# Own i18n key rather than Rails' activerecord.errors.template.header: that key lives in the %>
+    <%# ActiveRecord locale and is not guaranteed to be loaded/translated in a Redmine plugin's %>
+    <%# locale scope, and a missing-translation string here would be shown on every failed save. %>
+    <p class="tw-m-0 tw-font-medium"><%= l(:text_sla_form_errors, count: record.errors.count) %></p>
+    <ul class="tw-mt-2 tw-mb-0 tw-list-disc tw-ps-5">
+      <% record.errors.full_messages.each do |message| %>
+        <li><%= message %></li>
+      <% end %>
+    </ul>
+  </div>
+<% end %>

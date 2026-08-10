@@ -5,12 +5,16 @@
 <%# not yet met anything. %>
 <%# Denominator is Counts#evaluated (met + breached), NOT total — a No-SLA ticket resolved in the %>
 <%# window was never evaluated and must not drag the percentage down. %>
-<div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-shadow-sm tw-p-5 tw-h-full tw-flex tw-flex-col tw-justify-center">
-  <p class="tw-text-sm tw-font-semibold tw-text-gray-500"><%= sla_card_label(:met_window) %></p>
-  <p class="tw-text-4xl tw-font-bold tw-text-green-600 tw-mt-2">
-    <span id="sla-met-window-percentage"><%= sla_percentage(@window_counts.met, @window_counts.evaluated) %></span>%
-  </p>
-  <p class="tw-text-sm tw-text-gray-500 tw-mt-2">
-    <%= l(:text_sla_met_in_target, met: @window_counts.met, total: @window_counts.evaluated) %>
-  </p>
-</div>
+<%# %>
+<%# Same _summary_card anatomy as the Open Tickets tab's row (icon tile, label, big number, muted %>
+<%# caption) so the two tabs share one card design and one type scale. The surface is overridden to %>
+<%# white: this card stands alone beside the chart rather than in a row of five, where the tinted %>
+<%# fills exist to tell the five states apart at a glance. %>
+<%= render 'sla_dashboard/summary_card',
+      state: :met, label: sla_card_label(:met_window),
+      surface: 'tw-bg-white tw-border-gray-200',
+      value: safe_join([
+        content_tag(:span, sla_percentage(@window_counts.met, @window_counts.evaluated), id: 'sla-met-window-percentage'),
+        '%'
+      ]),
+      caption: l(:text_sla_met_in_target, met: @window_counts.met, total: @window_counts.evaluated) %>

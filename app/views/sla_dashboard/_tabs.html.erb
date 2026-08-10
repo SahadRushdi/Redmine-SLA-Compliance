@@ -1,20 +1,25 @@
 <%# Two-tab switcher (client-side, sla_dashboard_tabs.js). Open Tickets = current live state; %>
 <%# SLA Trend = the date-scoped view. Purely presentational buttons: both panels stay in the DOM %>
-<%# and the JS toggles `.hidden` + the active underline, so switching tabs never reloads. The %>
-<%# active tab is remembered in sessionStorage so a date-range change (which reloads the page from %>
-<%# the SLA Trend tab) comes back on the same tab. Explicit tw-bg-transparent / hover:tw-bg-transparent %>
-<%# / tw-shadow-none defeat Purplemine2's global blue button:hover rule. %>
-<div class="tw-mb-6 tw-border-b tw-border-gray-200">
-  <nav id="sla-dashboard-tabs" class="tw-flex tw-flex-wrap tw-gap-6" role="tablist"
+<%# and the JS toggles `.hidden` + the active pill, so switching tabs never reloads. The active tab %>
+<%# is remembered in sessionStorage so a date-range change (which reloads the page from the SLA %>
+<%# Trend tab) comes back on the same tab. %>
+<%# %>
+<%# Segmented control, not an underline: an underline on a page that also carries pill groups %>
+<%# (date presets, granularity, detail-table states) read as decoration rather than as "these are %>
+<%# the two views of this page". The active tab is a raised WHITE pill inside a gray-100 track — %>
+<%# the same active/inactive language the granularity group uses, one step stronger. %>
+<%# Explicit tw-bg-transparent / hover:tw-bg-transparent / tw-shadow-none on the inactive state %>
+<%# defeat Purplemine2's global blue button:hover and permanent button box-shadow rules; the active %>
+<%# state re-states tw-shadow-sm after them for the same reason. %>
+<div class="tw-mb-6">
+  <nav id="sla-dashboard-tabs" class="tw-inline-flex tw-flex-wrap tw-gap-1 tw-p-1 tw-bg-gray-100 tw-rounded-xl" role="tablist"
        data-sla-default-tab="open">
-    <% tabs = [['open', l(:label_sla_tab_open_tickets), l(:label_sla_tab_badge_live), 'tw-bg-green-100 tw-text-green-700'],
-               ['trend', l(:label_sla_tab_sla_trend), l(:label_sla_tab_badge_scoped), 'tw-bg-primary-100 tw-text-primary-700']] %>
-    <% tabs.each_with_index do |(key, label, badge, badge_classes), i| %>
+    <% tabs = [['open', l(:label_sla_tab_open_tickets)], ['trend', l(:label_sla_tab_sla_trend)]] %>
+    <% tabs.each_with_index do |(key, label), i| %>
       <button type="button" data-sla-tab="<%= key %>" role="tab" aria-selected="<%= i.zero? %>"
-              class="sla-tab-btn tw-inline-flex tw-items-center tw-gap-2 tw-pb-3 -tw-mb-px tw-text-sm tw-font-semibold tw-bg-transparent hover:tw-bg-transparent tw-shadow-none tw-border-0 tw-border-b-2 tw-border-solid focus:tw-outline-none tw-transition-colors
-                     <%= i.zero? ? 'tw-text-primary-600 tw-border-primary-600' : 'tw-text-gray-500 tw-border-transparent hover:tw-text-gray-700' %>">
+              class="sla-tab-btn tw-inline-flex tw-items-center tw-gap-2 tw-px-4 tw-py-2 tw-rounded-lg tw-text-sm tw-font-semibold tw-border-0 focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-primary-300 tw-transition-colors
+                     <%= i.zero? ? 'tw-bg-white tw-text-gray-900 tw-shadow-sm' : 'tw-bg-transparent hover:tw-bg-transparent tw-text-gray-500 hover:tw-text-gray-700 tw-shadow-none' %>">
         <%= label %>
-        <span class="tw-text-[10px] tw-font-bold tw-uppercase tw-tracking-wide tw-px-1.5 tw-py-0.5 tw-rounded <%= badge_classes %>"><%= badge %></span>
       </button>
     <% end %>
   </nav>

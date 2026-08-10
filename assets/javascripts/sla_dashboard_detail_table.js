@@ -1,19 +1,17 @@
-/* SLA dashboard ticket-level detail table — client-side search + sorting + pagination (no page
- * reload). The controller renders the full filtered row set (state tab / main filters still
- * resubmit server-side, since they change which rows are in scope); this file searches, sorts and
- * paginates those already-rendered rows in place. Free-text search matches each row's
- * data-sla-search attribute (ticket id, project, tracker, title, status, assignee, result -
- * built server-side in _detail_table.html.erb) and updates on every keystroke. Sort direction is
- * shown by a grey up/down arrow on the active column header (never blue). Same IIFE /
+/* SLA dashboard ticket-level detail table — client-side state filter + search + sorting +
+ * pagination (no page reload for any of them). The controller renders every in-scope row once,
+ * across all SLA states; this file filters, sorts and paginates those already-rendered rows in
+ * place. Only the main dashboard filters still resubmit server-side, since they change which
+ * tickets are in scope at all.
+ *
+ * State pills match each row's data-sla-state / data-sla-at-risk; free-text search matches each
+ * row's data-sla-search attribute (ticket id, project, tracker, title, status, assignee, result —
+ * all built server-side in _detail_table.html.erb) and updates on every keystroke. Sort direction
+ * is shown by a grey up/down arrow on the active column header (never blue). Same IIFE /
  * idempotent-init / DOMContentLoaded convention as the other dashboard scripts. Plain ES5 for
  * parity with the rest of the plugin's JS. */
 (function () {
   'use strict';
-
-  // sessionStorage flag used to re-open the expand modal after a state-pill server reload (see
-  // initExpandModal), so filtering from inside the modal doesn't visibly drop the user back to the
-  // compact card.
-  var MODAL_OPEN_KEY = 'slaDetailModalOpen';
 
   // Rows per page for the compact in-card table. It is deliberately NOT one of the per-page
   // dropdown options (10/25/50/100) — that dropdown only governs the expanded modal; the compact
@@ -22,18 +20,6 @@
   var COMPACT_PAGE_SIZE = 6;
 
   function byId(id) { return document.getElementById(id); }
-
-  // Grey arrows only (no brand colour): neutral = both chevrons on an unsorted column, a single
-  // up/down arrow for the active sort direction.
-  var ICONS = {
-    neutral: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">' +
-             '<path d="M8 10l4-4 4 4" stroke-linecap="round" stroke-linejoin="round"/>' +
-             '<path d="M8 14l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    asc:  '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">' +
-          '<path d="M7 14l5-5 5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    desc: '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">' +
-          '<path d="M7 10l5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-  };
 
   // Mirrors Redmine::Pagination::Paginator#linked_pages (lib/redmine/pagination.rb) so this
   // client-side pager windows exactly like Redmine's own server-rendered ones (Spent time, issue
@@ -59,32 +45,6 @@
     return span;
   }
 
-  function cellValue(row, index) {
-    var cell = row.children[index];
-    if (!cell) { return ''; }
-    var explicit = cell.getAttribute('data-sla-sort-value');
-    return explicit !== null ? explicit : (cell.textContent || '').trim();
-  }
-
-  // Blanks always sort last, regardless of direction, for both numeric and text columns.
-  function compare(a, b, type, dir) {
-    var mul = dir === 'asc' ? 1 : -1;
-    if (type === 'number') {
-      var na = (a === '' || a == null) ? null : parseFloat(a);
-      var nb = (b === '' || b == null) ? null : parseFloat(b);
-      if (na === null && nb === null) { return 0; }
-      if (na === null) { return 1; }
-      if (nb === null) { return -1; }
-      if (na === nb) { return 0; }
-      return (na < nb ? -1 : 1) * mul;
-    }
-    var sa = (a || '').toLowerCase(), sb = (b || '').toLowerCase();
-    if (sa === '' && sb === '') { return 0; }
-    if (sa === '') { return 1; }
-    if (sb === '') { return -1; }
-    return sa.localeCompare(sb) * mul;
-  }
-
   function Table(root) {
     this.root = root;
     this.tbody = root.querySelector('#sla-detail-table-body');
@@ -98,6 +58,10 @@
     this.page = 1;
     this.sortKey = null;
     this.sortDir = 'asc';
+    // Seeded from whichever pill the server rendered active, so a bookmarked ?state=breached link
+    // opens filtered — the DOM, not a hard-coded 'all', is the starting truth.
+    var activePill = document.querySelector('[data-sla-state-filter].is-active');
+    this.stateFilter = activePill ? activePill.getAttribute('data-sla-state-filter') : 'all';
     // Pre-filled from the server (e.g. a bookmarked ?q= link) so the table is already filtered
     // to match the search box on first render, exactly like every other keystroke after that.
     this.searchQuery = this.searchInput ? this.searchInput.value.trim().toLowerCase() : '';
@@ -133,9 +97,21 @@
     return haystack.toLowerCase().indexOf(this.searchQuery) !== -1;
   };
 
+  // Mirrors the server's apply_state_filter / Sla::EffectiveState predicates exactly. `at_risk` is
+  // NOT a fourth state: it is a boolean flag on an effectively-met row, and data-sla-at-risk is
+  // already `effective_at_risk?` (at_risk AND met), so this reads that one attribute rather than
+  // re-deriving the conjunction here and risking a second, drifting definition.
+  Table.prototype.matchesState = function (row) {
+    if (this.stateFilter === 'all') { return true; }
+    if (this.stateFilter === 'at_risk') { return row.getAttribute('data-sla-at-risk') === 'true'; }
+    return row.getAttribute('data-sla-state') === this.stateFilter;
+  };
+
   Table.prototype.filteredRows = function () {
     var self = this;
-    return this.rows.filter(function (row) { return self.matchesSearch(row); });
+    return this.rows.filter(function (row) {
+      return self.matchesState(row) && self.matchesSearch(row);
+    });
   };
 
   Table.prototype.sortedRows = function () {
@@ -146,24 +122,31 @@
     var type = header ? header.getAttribute('data-sla-sort-type') : 'text';
     var dir = this.sortDir;
     return rows.sort(function (r1, r2) {
-      return compare(cellValue(r1, index), cellValue(r2, index), type, dir);
+      // Shared with the admin module's lookup tables — see assets/javascripts/sla_table_sort.js.
+      // Read here rather than captured at parse time, so script order cannot matter.
+      var shared = window.slaTableSort;
+      return shared.compare(shared.cellValue(r1, index), shared.cellValue(r2, index), type, dir);
     });
   };
 
-  // Shown in place of the table body when the search box has a value but nothing in the current
-  // state-tab scope matches it — distinct from the empty-state row rendered by the ERB template,
-  // which only appears when there were zero rows to begin with.
+  // Shown in place of the table body when rows exist but the current state pill and/or search box
+  // match none of them — distinct from the empty-state row rendered by the ERB template, which only
+  // appears when the server returned zero rows to begin with.
   Table.prototype.renderNoMatchRow = function (total) {
     if (!this.noMatchRow) {
       var td = document.createElement('td');
       td.colSpan = this.headers.length;
       td.className = 'tw-py-8 tw-text-center tw-text-gray-400';
-      td.textContent = this.root.getAttribute('data-l-no-search-match') || 'No matches.';
       var tr = document.createElement('tr');
       tr.appendChild(td);
       this.noMatchRow = tr;
     }
-    if (total === 0 && this.searchQuery) {
+    if (total === 0 && (this.searchQuery || this.stateFilter !== 'all')) {
+      // A search that matched nothing is a different dead end from a state pill with no tickets in
+      // it, so they do not share a message. Search wins when both are narrowing, since that is the
+      // one the user just typed.
+      var key = this.searchQuery ? 'data-l-no-search-match' : 'data-l-empty';
+      this.noMatchRow.firstChild.textContent = this.root.getAttribute(key) || 'No matches.';
       this.tbody.appendChild(this.noMatchRow);
     } else if (this.noMatchRow.parentNode) {
       this.noMatchRow.parentNode.removeChild(this.noMatchRow);
@@ -197,7 +180,8 @@
       var span = th.querySelector('.sla-sort-icon');
       if (!span) { return; }
       var active = th.getAttribute('data-sla-sort') === self.sortKey;
-      span.innerHTML = active ? ICONS[self.sortDir] : ICONS.neutral;
+      var icons = window.slaTableSort.ICONS;
+      span.innerHTML = active ? icons[self.sortDir] : icons.neutral;
       span.classList.toggle('tw-text-gray-600', active);
       span.classList.toggle('tw-text-gray-400', !active);
     });
@@ -247,8 +231,28 @@
     this.pager.appendChild(nav);
   };
 
+  // Switch the active SLA state filter. Repaints BOTH copies of the pill row (the compact card's
+  // and the modal's) rather than just the clicked one, so expanding or closing the modal can never
+  // land the user on a pill row that disagrees with the table under it.
+  Table.prototype.setState = function (state) {
+    this.stateFilter = state;
+    this.page = 1;
+    document.querySelectorAll('[data-sla-state-filter]').forEach(function (pill) {
+      pill.classList.toggle('is-active', pill.getAttribute('data-sla-state-filter') === state);
+    });
+    this.render();
+  };
+
   Table.prototype.bind = function () {
     var self = this;
+    // Queried from the document, not from this.root: the modal's copy of the pills lives outside
+    // the table node (it is part of the modal chrome, so it survives the table being moved in and
+    // out of it).
+    document.querySelectorAll('[data-sla-state-filter]').forEach(function (pill) {
+      pill.addEventListener('click', function () {
+        self.setState(pill.getAttribute('data-sla-state-filter'));
+      });
+    });
     this.headers.forEach(function (th) {
       th.addEventListener('click', function () {
         var key = th.getAttribute('data-sla-sort');
@@ -352,7 +356,6 @@
       tableNode.classList.remove('sla-detail-expanded');
       modal.classList.add('hidden');
       document.body.style.overflow = '';
-      try { sessionStorage.removeItem(MODAL_OPEN_KEY); } catch (e) { /* private mode */ }
       syncPerPageControl(10); // next modal open starts at 10 again
       if (table) {
         table.pageSize = COMPACT_PAGE_SIZE; // back to the compact 6-per-page in-card view
@@ -369,22 +372,10 @@
       if (e.key === 'Escape' && !modal.classList.contains('hidden')) { close(); }
     });
 
-    // The modal's own state pills are plain server links (same scope change as the compact card's):
-    // clicking one reloads the whole page. Flag the modal as open first so init() re-opens it after
-    // the reload, so filtering from inside the modal feels like it never left. The compact card's
-    // pills deliberately carry no such flag, so they never spring the modal open.
-    var modalTabs = modal.querySelector('[data-sla-modal-pills]');
-    if (modalTabs) {
-      modalTabs.querySelectorAll('a').forEach(function (link) {
-        link.addEventListener('click', function () {
-          try { sessionStorage.setItem(MODAL_OPEN_KEY, '1'); } catch (e) { /* private mode */ }
-        });
-      });
-    }
-
-    var reopen = false;
-    try { reopen = sessionStorage.getItem(MODAL_OPEN_KEY) === '1'; } catch (e) { /* private mode */ }
-    if (reopen) { open(); }
+    // The modal used to carry a sessionStorage "re-open me after the reload" flag, because its
+    // state pills were server links and clicking one threw the user back to the compact card
+    // mid-task. The pills filter in place now, so nothing here reloads and the flag has nothing
+    // left to paper over.
   }
 
   function init() {

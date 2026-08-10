@@ -14,8 +14,10 @@ class SlaDashboardControllerTest < ActionController::TestCase
   setup do
     @project = Project.find(1)
     @project.enable_module!(:sla_compliance)
-    @role = Role.find(1) # Manager — jsmith (user 2)
-    # rhill: active, no membership anywhere, no role. Anything they can do came from the list.
+    # A role with NO permissions of its own, so nothing it grants can be mistaken for the
+    # plugin's doing — the point of the feature is that the role need not know about SLA.
+    @role = Role.create!(name: 'SLA Access Test Role', permissions: [])
+    # rhill: active, no membership anywhere, no role. Anything they can do came from the grant.
     @user = User.find(4)
     @request.session[:user_id] = @user.id
     Setting.plugin_redmine_sla_compliance = {}
@@ -25,29 +27,42 @@ class SlaDashboardControllerTest < ActionController::TestCase
     Setting.plugin_redmine_sla_compliance = {}
   end
 
-  def list!(list, *user_ids)
-    Setting.plugin_redmine_sla_compliance = {
-      "sla_#{list}_user_ids" => user_ids.map(&:to_s)
-    }
+  # Both halves of an SLA grant: hold a role on the project, and have that role named in the
+  # plugin settings. Neither is sufficient alone — see Sla::AccessControlTest, which pulls the two
+  # apart; here they always travel together because every test below is about what a granted user
+  # then sees.
+  def grant_sla_access!(user = @user, project = @project, role = @role)
+    Member.create!(principal: user, project: project, roles: [role])
+    ids = Sla::PluginSettings.access_role_ids.map(&:to_s) | [role.id.to_s]
+    Setting.plugin_redmine_sla_compliance =
+      Setting.plugin_redmine_sla_compliance.merge('sla_access_role_ids' => ids)
   end
 
   # --- denied ---------------------------------------------------------------------------------
 
-  test "a user with no role and no listing cannot open the dashboard" do
+  test "a user with no role and no grant cannot open the dashboard" do
     get :index, params: { project_id: @project.id }
     assert_response :forbidden
   end
 
-  test "a role without view_sla_dashboard cannot open the dashboard" do
+  test "a role that is neither permitted nor granted cannot open the dashboard" do
     @request.session[:user_id] = 2 # jsmith, Manager on project 1, but no SLA permission
     get :index, params: { project_id: @project.id }
     assert_response :forbidden
   end
 
+  test "holding a role that is not in the SLA list cannot open the dashboard" do
+    Member.create!(principal: @user, project: @project, roles: [@role])
+
+    get :index, params: { project_id: @project.id }
+
+    assert_response :forbidden, 'the role must be named in the settings before it grants anything'
+  end
+
   # --- granted --------------------------------------------------------------------------------
 
-  test "a listed viewer opens the dashboard with no role and no membership" do
-    list!(:viewer, @user.id)
+  test "a member holding an SLA access role opens the dashboard" do
+    grant_sla_access!
 
     get :index, params: { project_id: @project.id }
 
@@ -55,15 +70,33 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_select '.sla-plugin'
   end
 
-  test "a listed manager opens the dashboard too" do
-    list!(:manager, @user.id)
+  # Redmine picks the highlighted menu entry by comparing each item's name to the controller's
+  # current_menu_item, which defaults to the CONTROLLER name (:sla_dashboard) — not the name the
+  # menu entry is registered under (:sla_compliance). Without the explicit `menu_item` declarations
+  # in SlaDashboardController the tab never highlighted while you were standing on the dashboard.
+  test "the project's SLA Compliance tab is marked selected while the dashboard is open" do
+    grant_sla_access!
 
     get :index, params: { project_id: @project.id }
+
     assert_response :success
+    assert_select '#main-menu a.sla-compliance.selected'
   end
 
-  test "a granted role opens the dashboard" do
-    @role.add_permission!(:view_sla_dashboard)
+  test "the cross-project dashboard selects the top-level SLA entry, not the project tab" do
+    grant_sla_access!
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+
+    get :cross_project
+
+    assert_response :success
+    assert_select '#main-menu a.sla-dashboard-all.selected'
+  end
+
+  test "a role that ticks the permission itself still opens the dashboard" do
+    # The other route in, unchanged by the SLA role list: an ordinary Redmine role with
+    # :view_sla_dashboard ticked on its own permission form.
+    Role.find(1).add_permission!(:view_sla_dashboard) # Manager — jsmith (user 2) holds it
     @request.session[:user_id] = 2
 
     get :index, params: { project_id: @project.id }
@@ -72,11 +105,11 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   # --- the "takes effect" half of the Done when -----------------------------------------------
 
-  test "granting and revoking a user takes effect immediately, with no restart" do
+  test "granting and revoking a role takes effect immediately, with no restart" do
     get :index, params: { project_id: @project.id }
-    assert_response :forbidden, 'precondition: not listed yet'
+    assert_response :forbidden, 'precondition: nothing granted yet'
 
-    list!(:viewer, @user.id)
+    grant_sla_access!
     get :index, params: { project_id: @project.id }
     assert_response :success, 'a saved grant must apply on the very next request'
 
@@ -85,8 +118,11 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_response :forbidden, 'revoking must apply just as immediately'
   end
 
-  test "several users can be granted at once" do
-    list!(:viewer, 4, 7) # rhill and someone, in one saved list
+  test "naming one role grants every member who holds it" do
+    # The point of moving from a user list to a role list: adding a person to the role is the
+    # whole of the administration, with no second list to keep in step.
+    grant_sla_access!
+    grant_sla_access!(User.find(7))
 
     get :index, params: { project_id: @project.id }
     assert_response :success
@@ -98,18 +134,20 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   # --- the guarantees -------------------------------------------------------------------------
 
-  test "a listed viewer is still refused when the module is disabled" do
+  test "a granted member is still refused when the module is disabled" do
     @project.disable_module!(:sla_compliance)
-    list!(:viewer, @user.id)
+    grant_sla_access!
 
     get :index, params: { project_id: @project.id }
     assert_response :forbidden
   end
 
-  test "a listed viewer cannot see a private project they are not a member of" do
-    private_project = Project.find(2) # OnlineStore — rhill is not a member
+  test "a granted role does not carry to a project the user holds no role on" do
+    # The no-leak guarantee: the grant follows the membership, not the person. OnlineStore is
+    # private and rhill is not a member, so the role they hold on eCookbook buys nothing here.
+    private_project = Project.find(2)
     private_project.enable_module!(:sla_compliance)
-    list!(:viewer, @user.id)
+    grant_sla_access!
 
     get :index, params: { project_id: private_project.id }
 
@@ -121,16 +159,16 @@ class SlaDashboardControllerTest < ActionController::TestCase
   test "the top-level dashboard 403s for a user with no permitted project anywhere" do
     # @project (1) has the module enabled but no SlaPolicy row in this setup, so it isn't
     # SLA-enabled even though the module is on — SlaPolicy.enabled_projects_for requires both.
-    list!(:viewer, @user.id)
+    grant_sla_access!
 
     get :cross_project
 
     assert_response :forbidden
   end
 
-  test "the top-level dashboard succeeds for a listed viewer with a permitted project, listing it" do
+  test "the top-level dashboard succeeds for a granted member with a permitted project, listing it" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
 
     get :cross_project
 
@@ -144,15 +182,18 @@ class SlaDashboardControllerTest < ActionController::TestCase
   test "the project-level Project filter includes an SLA-enabled descendant but excludes a non-descendant" do
     descendant = Project.find(3) # eCookbook Subproject 1, parent_id: 1, public
     # OnlineStore (2) has no parent -- not a descendant of @project (1). Give the user a real
-    # membership on it so it's otherwise fully eligible (visible, module-enabled, policy-enabled,
-    # allow-listed) -- the only thing that should exclude it here is base_scope, not visibility.
+    # membership on it, in the SLA access role, so it's otherwise fully eligible (visible,
+    # module-enabled, policy-enabled, granted) -- the only thing that should exclude it here is
+    # base_scope, not visibility.
     unrelated = Project.find(2)
     Member.create!(project: unrelated, principal: @user, role_ids: [@role.id])
     [@project, descendant, unrelated].each do |p|
       p.enable_module!(:sla_compliance)
       SlaPolicy.create!(project_id: p.id, enabled: true)
     end
-    list!(:viewer, @user.id)
+    # The grant follows the membership, so each project the filter may offer needs one.
+    grant_sla_access!
+    grant_sla_access!(@user, descendant)
 
     get :index, params: { project_id: @project.id }
 
@@ -165,7 +206,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
     leaf = Project.find(4) # eCookbook Subproject 2 -- public, no children in the fixture set
     leaf.enable_module!(:sla_compliance)
     SlaPolicy.create!(project_id: leaf.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!(@user, leaf)
 
     get :index, params: { project_id: leaf.id }
 
@@ -177,7 +218,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "a project_id outside the permitted set is silently dropped, not a 403" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
 
     get :index, params: { project_id: @project.id, project_ids: [Project.find(2).id] }
 
@@ -189,7 +230,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "a tracker_id not configured for the selected project is dropped" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
 
     get :index, params: { project_id: @project.id, tracker_ids: [999] }
 
@@ -201,7 +242,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "a malformed custom date range falls back to no date filter without a 500" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
 
     get :index, params: { project_id: @project.id, date_preset: 'custom', from: 'not-a-date', to: 'also-not-a-date' }
 
@@ -210,7 +251,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "an unrecognized date_preset falls back to this_week, not passed through verbatim" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
 
     get :index, params: { project_id: @project.id, date_preset: 'not-a-real-preset' }
 
@@ -223,7 +264,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "summary cards reconcile: total = met + breached + no_sla, and no_sla = not_configured + not_tracked" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
 
     tracker_id = @project.trackers.first.id
     met_issue = Issue.generate!(project: @project, tracker_id: tracker_id, author_id: 2)
@@ -256,7 +297,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
   def seed_idle_ticket(idle_days, stale_threshold_days: nil)
     SlaPolicy.create!(project_id: @project.id, enabled: true,
                       stale_threshold_days: stale_threshold_days)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     issue = Issue.generate!(project: @project, tracker_id: @project.trackers.first.id, priority_id: 4)
     issue.update_columns(updated_on: idle_days.days.ago)
     SlaResult.find_by!(issue_id: issue.id).update!(resolved_at: nil)
@@ -270,7 +311,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
     assert_response :success
     assert_select '#sla-card-stale-value', text: '—', count: 1
-    assert_select '#sla-card-stale-hint', text: I18n.t(:text_sla_card_stale_unset_hint)
+    assert_select '#sla-card-stale-hint', text: I18n.t(:label_sla_card_stale_unset_caption)
   end
 
   test "the project's own threshold counts its idle open tickets" do
@@ -280,7 +321,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
     assert_response :success
     assert_select '#sla-card-stale-value', text: '1'
-    assert_select '#sla-card-stale-hint', text: I18n.t(:text_sla_card_stale_hint)
+    assert_select '#sla-card-stale-hint', text: I18n.t(:label_sla_card_stale_caption)
   end
 
   test "a ticket idle for less than the project's threshold is not stale" do
@@ -295,7 +336,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "a resolved ticket is excluded from every open-ticket card" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     issues = seed_reconciled_dataset
     # Resolved per the engine's own resolved-role milestone, which is what sla_results records —
     # NOT issues.closed_on.
@@ -312,7 +353,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "the date range does not move any open-ticket card" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     seed_reconciled_dataset
 
     %w[this_week last_month last_3_months].each do |preset|
@@ -327,7 +368,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "the SLA Met card counts tickets resolved inside the window, excluding No SLA from its denominator" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     issues = seed_reconciled_dataset
     in_window = Time.zone.local(2026, 7, 10, 9, 0, 0)
     SlaResult.find_by!(issue_id: issues[:met].id).update!(resolved_at: in_window)
@@ -348,7 +389,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "an open ticket never appears in the SLA Met card, whatever the window" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     seed_reconciled_dataset # every row is unresolved
 
     get :index, params: { project_id: @project.id, date_preset: 'custom',
@@ -390,7 +431,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "renders exactly one donut, one priority bar, and one trend canvas element" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     seed_reconciled_dataset
 
     get :index, params: { project_id: @project.id }
@@ -403,7 +444,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "the donut's embedded data sums to @counts.total, with at_risk as a separate field, not a fourth category" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     seed_reconciled_dataset
 
     get :index, params: { project_id: @project.id }
@@ -418,7 +459,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "the shared legend container renders exactly once" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     seed_reconciled_dataset
 
     get :index, params: { project_id: @project.id }
@@ -428,7 +469,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "the priority chart's embedded totals reconcile with the summary cards for the same scope" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     seed_reconciled_dataset
 
     get :index, params: { project_id: @project.id }
@@ -442,33 +483,55 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "detail table state tabs show the same counts as the summary cards" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     seed_reconciled_dataset
 
     get :index, params: { project_id: @project.id }
 
     assert_select '#sla-detail-state-tabs' do
-      assert_select 'a', text: /\AAll \(5\)\z/
-      assert_select 'a', text: /\A#{Regexp.escape(I18n.t(:label_sla_card_met))} \(2\)\z/
-      assert_select 'a', text: /\ASLA Breached \(2\)\z/
-      assert_select 'a', text: /\AAt Risk \(1\)\z/
-      assert_select 'a', text: /\ANo SLA \(1\)\z/
+      assert_select 'button', text: /\AAll \(5\)\z/
+      assert_select 'button', text: /\A#{Regexp.escape(I18n.t(:label_sla_card_met))} \(2\)\z/
+      assert_select 'button', text: /\ASLA Breached \(2\)\z/
+      assert_select 'button', text: /\AAt Risk \(1\)\z/
+      assert_select 'button', text: /\ANo SLA \(1\)\z/
     end
   end
 
-  test "clicking a state tab preserves the active project/tracker/priority/date filters in its href" do
+  # The pills filter the already-rendered rows in place, like the search box, sorting and
+  # pagination beside them — they were the last control on this table that still cost a page load
+  # for data the browser already had.
+  test "state tabs are client-side filter buttons, not server links" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     seed_reconciled_dataset
 
     get :index, params: { project_id: @project.id, date_preset: 'this_month' }
 
-    assert_select "#sla-detail-state-tabs a[href*='date_preset=this_month']", minimum: 1
+    assert_select '#sla-detail-state-tabs a', 0, 'a pill that is a link reloads the whole page'
+    SlaDashboardController::DETAIL_STATES.each do |state|
+      assert_select "#sla-detail-state-tabs button[data-sla-state-filter='#{state}']", 1
+    end
+  end
+
+  # Every state's rows are on the page at once, because the pills filter what is already there.
+  test "the detail table renders rows for every state so the pills can filter client-side" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    grant_sla_access!
+    issues = seed_reconciled_dataset
+
+    get :index, params: { project_id: @project.id, state: 'breached' }
+
+    assert_response :success
+    assert_select '#sla-detail-table-body tr[data-sla-row]', 5,
+                  'a state param must no longer shrink the rendered row set'
+    assert_select "#sla-detail-row-#{issues[:met].id}", 1
+    # The requested state still decides which pill opens active, so a bookmarked link still works.
+    assert_select "button[data-sla-state-filter='breached'].is-active", minimum: 1
   end
 
   test "column headers are client-side sort triggers (typed, no server round-trip link)" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     seed_reconciled_dataset
 
     get :index, params: { project_id: @project.id, date_preset: 'this_month' }
@@ -481,7 +544,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "the detail table renders every matching row for client-side pagination (no server pager)" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     seed_reconciled_dataset
 
     get :index, params: { project_id: @project.id, date_preset: 'this_month' }
@@ -494,7 +557,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "deviation column is blank for every non-breach row and populated for the persisted breach row" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     issues = seed_reconciled_dataset
 
     get :index, params: { project_id: @project.id }
@@ -507,7 +570,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "the at-risk flag renders alongside the Met badge on an at-risk row, never replacing it" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     issues = seed_reconciled_dataset
 
     get :index, params: { project_id: @project.id }
@@ -520,7 +583,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "ticket and title links open in a new tab and point at Redmine's own issue_path" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     issues = seed_reconciled_dataset
 
     get :index, params: { project_id: @project.id }
@@ -529,21 +592,42 @@ class SlaDashboardControllerTest < ActionController::TestCase
                   minimum: 1
   end
 
-  test "a row whose cached primary_state is stale-met but live-breached sorts and filters as Breached, matching the cards" do
+  # The client-side pills filter on each row's data-sla-state, so THAT attribute is where the
+  # live-reclassification has to show up — a stale-met row whose breach_at has passed must carry
+  # state "breached", or the Breached pill would disagree with the badge on the row and with the
+  # summary cards. at_risk stays a flag on a met row, never a state of its own.
+  test "each row carries its effective state for the pills, live-reclassifying a stale-met breach" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     issues = seed_reconciled_dataset
 
-    get :index, params: { project_id: @project.id, state: 'breached' }
+    get :index, params: { project_id: @project.id }
 
-    assert_select "#sla-detail-row-#{issues[:breached].id}"
-    assert_select "#sla-detail-row-#{issues[:live_breached].id}"
-    assert_select "#sla-detail-row-#{issues[:met].id}", 0
+    assert_select "#sla-detail-row-#{issues[:breached].id}[data-sla-state='breached']"
+    assert_select "#sla-detail-row-#{issues[:live_breached].id}[data-sla-state='breached']"
+    assert_select "#sla-detail-row-#{issues[:met].id}[data-sla-state='met'][data-sla-at-risk='false']"
+    assert_select "#sla-detail-row-#{issues[:at_risk].id}[data-sla-state='met'][data-sla-at-risk='true']"
+    assert_select "#sla-detail-row-#{issues[:no_sla].id}[data-sla-state='no_sla']"
+  end
+
+  # CSV has no client to do the filtering, so ?state= must still narrow the export server-side.
+  test "CSV export still honours the state filter server-side" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    grant_sla_access!
+    issues = seed_reconciled_dataset
+
+    get :index, params: { project_id: @project.id, state: 'breached', format: 'csv' }
+
+    assert_response :success
+    ticket_ids = CSV.parse(@response.body, headers: true).map { |r| r[I18n.t(:field_sla_detail_ticket)] }
+    assert_includes ticket_ids, issues[:breached].id.to_s
+    assert_includes ticket_ids, issues[:live_breached].id.to_s
+    refute_includes ticket_ids, issues[:met].id.to_s
   end
 
   test "cards, donut total, priority-bar total, and detail table All count all agree for the same filtered scope" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     seed_reconciled_dataset
 
     get :index, params: { project_id: @project.id }
@@ -553,14 +637,14 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_equal 5, donut['total']
     priority_chart = parse_chart_data('sla-priority-chart')
     assert_equal 5, priority_chart['datasets'].sum { |ds| ds['data'].sum }
-    assert_select '#sla-detail-state-tabs a', text: /\AAll \(5\)\z/
+    assert_select '#sla-detail-state-tabs button', text: /\AAll \(5\)\z/
   end
 
   # --- redesign pass: Export CSV, search, per-page ----------------------------------------------
 
   test "the Export CSV button links to the current page with format csv, ignoring detail-table state/search/sort" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     seed_reconciled_dataset
 
     get :index, params: { project_id: @project.id, date_preset: 'this_month', state: 'breached', q: 'whatever' }
@@ -574,7 +658,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "format=csv returns a CSV listing every matching row, ignoring pagination" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     issues = seed_reconciled_dataset
 
     get :index, params: { project_id: @project.id, format: 'csv' }
@@ -583,7 +667,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_match %r{\Atext/csv}, @response.content_type
     rows = CSV.parse(@response.body, headers: true)
     assert_equal 5, rows.size
-    ticket_ids = rows.map { |r| r['Ticket'] }
+    ticket_ids = rows.map { |r| r[I18n.t(:field_sla_detail_ticket)] }
     assert_includes ticket_ids, issues[:breached].id.to_s
   end
 
@@ -592,7 +676,10 @@ class SlaDashboardControllerTest < ActionController::TestCase
     other = Project.find(3)
     other.enable_module!(:sla_compliance)
     SlaPolicy.create!(project_id: other.id, enabled: true)
-    list!(:viewer, @user.id)
+    # Granted on BOTH, so what keeps `other` out of the export below is the project filter under
+    # test and not a missing permission.
+    grant_sla_access!
+    grant_sla_access!(@user, other)
     seed_reconciled_dataset
     other_issue = Issue.generate!(project: other, tracker_id: other.trackers.first.id, author_id: 2)
     SlaResult.find_by!(issue_id: other_issue.id).update!(primary_state: 'met', no_sla_reason: nil)
@@ -601,12 +688,12 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
     assert_response :success
     rows = CSV.parse(@response.body, headers: true)
-    refute_includes rows.map { |r| r['Ticket'] }, other_issue.id.to_s
+    refute_includes rows.map { |r| r[I18n.t(:field_sla_detail_ticket)] }, other_issue.id.to_s
   end
 
   test "the detail table search box filters by ticket subject" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     tracker_id = @project.trackers.first.id
     matching = Issue.generate!(project: @project, tracker_id: tracker_id, author_id: 2, subject: 'Unique Search Target')
     other = Issue.generate!(project: @project, tracker_id: tracker_id, author_id: 2, subject: 'Something else entirely')
@@ -622,7 +709,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "the detail table search box matches an exact ticket id" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     tracker_id = @project.trackers.first.id
     matching = Issue.generate!(project: @project, tracker_id: tracker_id, author_id: 2)
     other = Issue.generate!(project: @project, tracker_id: tracker_id, author_id: 2)
@@ -638,7 +725,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "a search with no matches shows the empty state instead of every row" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     issues = seed_reconciled_dataset
 
     get :index, params: { project_id: @project.id, q: 'no-such-ticket-exists' }
@@ -649,7 +736,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   test "the per-page control offers the configured options; all rows render for client-side paging" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
-    list!(:viewer, @user.id)
+    grant_sla_access!
     tracker_id = @project.trackers.first.id
     4.times do
       issue = Issue.generate!(project: @project, tracker_id: tracker_id, author_id: 2)
@@ -679,7 +766,9 @@ class SlaDashboardControllerTest < ActionController::TestCase
     setup do
       @project = Project.find(1)
       @project.enable_module!(:sla_compliance)
-      @request.session[:user_id] = 4 # rhill
+      @role = Role.create!(name: 'SLA Menu Test Role', permissions: [])
+      @user = User.find(4) # rhill — no membership anywhere
+      @request.session[:user_id] = @user.id
       Setting.plugin_redmine_sla_compliance = {}
     end
 
@@ -687,14 +776,21 @@ class SlaDashboardControllerTest < ActionController::TestCase
       Setting.plugin_redmine_sla_compliance = {}
     end
 
-    test "the SLA menu entry is hidden from a user with no role and no listing" do
+    # Same two halves as the outer class's helper; repeated rather than shared because this is a
+    # separate TestCase against a different controller.
+    def grant_sla_access!
+      Member.create!(principal: @user, project: @project, roles: [@role])
+      Setting.plugin_redmine_sla_compliance = { 'sla_access_role_ids' => [@role.id.to_s] }
+    end
+
+    test "the SLA menu entry is hidden from a user with no role and no grant" do
       get :show, params: { id: @project.identifier }
       assert_response :success
       assert_select '#main-menu a.sla-compliance', 0
     end
 
-    test "a listed viewer is shown the SLA menu entry" do
-      Setting.plugin_redmine_sla_compliance = { 'sla_viewer_user_ids' => ['4'] }
+    test "a member holding an SLA access role is shown the SLA menu entry" do
+      grant_sla_access!
 
       get :show, params: { id: @project.identifier }
 
@@ -714,7 +810,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
     test "the top-level SLA menu entry is shown with at least one permitted, SLA-enabled project" do
       SlaPolicy.create!(project_id: @project.id, enabled: true)
-      Setting.plugin_redmine_sla_compliance = { 'sla_viewer_user_ids' => ['4'] }
+      grant_sla_access!
 
       get :index
 
@@ -724,7 +820,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
     test "the top-level SLA menu entry is hidden for an anonymous user even with a permitted project" do
       SlaPolicy.create!(project_id: @project.id, enabled: true)
-      Setting.plugin_redmine_sla_compliance = { 'sla_viewer_user_ids' => ['4'] }
+      grant_sla_access!
       @request.session[:user_id] = nil
 
       get :index

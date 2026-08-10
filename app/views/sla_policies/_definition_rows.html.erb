@@ -4,7 +4,7 @@
 <%# Field names are nested under the tracker id — definitions[rows][<tracker>][<priority>][<type>] %>
 <%# — so several trackers' tables can post together in one submit. %>
 <%# %>
-<%# The admin-designated "unclassified" priority (Administration → Plugins → SLA Compliance) gets %>
+<%# The admin-designated "unclassified" priority (Administration → SLA Compliance) gets %>
 <%# no row at all: no SlaDefinition can ever be saved for it (enforced server-side too, see %>
 <%# SlaPoliciesController#replace_tracker_definitions!), so it is called out once in the notice %>
 <%# above the table instead of occupying a permanently disabled row. %>

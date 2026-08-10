@@ -1,27 +1,90 @@
-<%= error_messages_for @calendar %>
+<%# Create/edit form for one business calendar. Locals: f (plain Rails builder — see the note in %>
+<%# new.html.erb), cancel_path, submit_label. %>
+<%= render 'sla_admin/form_errors', record: @calendar %>
 
-<div class="box tabular">
-  <p><%= f.text_field :name, required: true, size: 40 %></p>
-  <p>
-    <label><%= l(:field_sla_working_days) %></label>
-    <% selected_days = @calendar.working_days.to_a.map(&:to_i) %>
+<%= render layout: 'sla_policies/card',
+           locals: { title: l(:label_sla_calendar_details),
+                     description: l(:text_sla_calendar_details) } do %>
+  <div class="tw-w-full md:tw-w-96">
+    <%= render layout: 'sla_admin/field',
+               locals: { label: l(:field_name), field_id: 'sla_business_calendar_name',
+                         required: true } do %>
+      <%= f.text_field :name, class: sla_input_classes %>
+    <% end %>
+  </div>
+<% end %>
+
+<%= render layout: 'sla_policies/card',
+           locals: { title: l(:field_sla_working_days),
+                     description: l(:text_sla_working_days_hint) } do %>
+  <%# Seven checkboxes presented as selectable tiles, reusing .sla-option-card from the project %>
+  <%# policy form (the :has(input:checked) selector there is input-type agnostic, so it works for %>
+  <%# checkboxes unchanged) with a compact modifier so all seven fit one row. The param name and %>
+  <%# the 1..7 ISO values are unchanged — only the presentation of the same checkboxes. %>
+  <% selected_days = @calendar.working_days.to_a.map(&:to_i) %>
+  <div class="tw-flex tw-flex-wrap tw-gap-2">
     <% (1..7).each do |day| %>
-      <label class="block" style="margin-left: 180px;">
+      <label class="sla-option-card sla-option-card--compact" for="sla-working-day-<%= day %>">
         <%= check_box_tag 'sla_business_calendar[working_days][]', day,
                           selected_days.include?(day), id: "sla-working-day-#{day}" %>
-        <%= day_name(day % 7) %>
+        <span><%= sla_weekday_name(day) %></span>
       </label>
     <% end %>
-  </p>
-  <p><%= f.text_field :work_start_time, label: :field_sla_work_start_time, size: 5,
-                      placeholder: 'HH:MM' %></p>
-  <p><%= f.text_field :work_end_time, label: :field_sla_work_end_time, size: 5,
-                      placeholder: 'HH:MM' %></p>
-  <p>
-    <label for="sla_business_calendar_holidays_text"><%= l(:field_sla_holidays) %></label>
-    <%= text_area_tag 'sla_business_calendar[holidays_text]',
-                      @calendar.holidays.to_a.join("\n"),
-                      id: 'sla_business_calendar_holidays_text', rows: 8, cols: 20 %>
-    <em class="info"><%= l(:text_sla_holidays_hint) %></em>
-  </p>
-</div>
+  </div>
+<% end %>
+
+<%= render layout: 'sla_policies/card',
+           locals: { title: l(:field_sla_working_hours),
+                     description: l(:text_sla_working_hours_hint) } do %>
+  <%# Native time pickers. The browser supplies the clock UI, the hour/minute spinners and the %>
+  <%# 12h/24h presentation the OS locale calls for, and can only ever post a valid 24-hour HH:MM %>
+  <%# or nothing — which is what removes the formatting error rather than merely reporting it. %>
+  <%# This is Flowbite's own Timepicker: a styled <input type="time">, not a JS widget. %>
+  <%# %>
+  <%# The values are stored as plain strings, and a time input renders BLANK for any value it %>
+  <%# cannot parse — a row holding "9:00" would open empty and the next save would wipe a working %>
+  <%# calendar. Hence normalized_work_time here: rows written before the format was validated are %>
+  <%# padded for display, so the picker shows the hour that is actually in effect. %>
+  <div class="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 tw-gap-x-5 tw-max-w-lg">
+    <%= render layout: 'sla_admin/field',
+               locals: { label: l(:field_sla_work_start_time),
+                         field_id: 'sla_business_calendar_work_start_time' } do %>
+      <%= f.time_field :work_start_time, class: sla_input_classes,
+                       value: SlaBusinessCalendar.normalized_work_time(@calendar.work_start_time) %>
+    <% end %>
+
+    <%= render layout: 'sla_admin/field',
+               locals: { label: l(:field_sla_work_end_time),
+                         field_id: 'sla_business_calendar_work_end_time' } do %>
+      <%= f.time_field :work_end_time, class: sla_input_classes,
+                       value: SlaBusinessCalendar.normalized_work_time(@calendar.work_end_time) %>
+    <% end %>
+  </div>
+<% end %>
+
+<%= render layout: 'sla_policies/card',
+           locals: { title: l(:field_sla_holidays),
+                     description: l(:text_sla_holidays_chips_hint) } do %>
+  <%# Chip input instead of the free-text textarea this replaces. Two reasons beyond looks: each %>
+  <%# date is a discrete, individually removable value, and data-sla-date-chips makes sla_admin.js %>
+  <%# refuse to create a chip that isn't a YYYY-MM-DD date — the same rule the model enforces %>
+  <%# (SlaBusinessCalendar#holidays_are_valid), now stated before the round-trip instead of coming %>
+  <%# back as a validation error on the whole record. %>
+  <%# %>
+  <%# Every stored date is rendered as a SELECTED option, so with JavaScript unavailable this %>
+  <%# degrades to a native multi-select that still posts the existing list back unchanged rather %>
+  <%# than silently clearing it. %>
+  <% holidays = @calendar.holidays.to_a.map(&:to_s) %>
+  <%= render layout: 'sla_admin/field',
+             locals: { label: l(:field_sla_holidays), field_id: 'sla_business_calendar_holidays' } do %>
+    <%# Sentinel: keeps the [] param posted once the last chip is removed, so clearing the list %>
+    <%# persists as empty instead of leaving the stored holidays untouched. %>
+    <%= hidden_field_tag 'sla_business_calendar[holidays][]', '', id: nil %>
+    <%= select_tag 'sla_business_calendar[holidays][]',
+          options_for_select(holidays, holidays),
+          multiple: true, id: 'sla_business_calendar_holidays',
+          data: { sla_date_chips: true, sla_chip_placeholder: l(:text_sla_holidays_placeholder) } %>
+  <% end %>
+<% end %>
+
+<%= render 'sla_admin/form_actions', submit_label: submit_label, cancel_path: cancel_path %>

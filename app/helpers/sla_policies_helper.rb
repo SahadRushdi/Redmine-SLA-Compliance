@@ -79,6 +79,48 @@ module SlaPoliciesHelper
     l(:"text_sla_section_#{key}")
   end
 
+  # --- Locking the configuration sections while SLA tracking is off ---------------------------
+  # These four sections only describe how an ACTIVE policy behaves; with tracking off, nothing they
+  # hold is ever evaluated, so leaving them editable invites someone to spend an afternoon
+  # configuring a policy that does nothing. They stay VISIBLE and readable — only their controls
+  # are disabled (see sla_policies/_lock.html.erb). General is deliberately never lockable: it is
+  # where tracking gets switched back on, so locking it would be a one-way door.
+  LOCKABLE_SECTIONS = %w[targets measurement exclusions notifications].freeze
+
+  def sla_lockable_section?(key)
+    LOCKABLE_SECTIONS.include?(key)
+  end
+
+  # Whether those sections are locked right now, memoised per request.
+  def sla_tracking_off?(project)
+    return @sla_tracking_off if defined?(@sla_tracking_off)
+
+    @sla_tracking_off = !sla_tracking_on?(project)
+  end
+
+  # Read from the SAME value the General section's own control DISPLAYS, not from
+  # SlaPolicy.effective_for: the lock must never contradict the switch the user is looking at. The
+  # two differ in real cases — a project with no row at all shows the switch off (the column's DB
+  # default) while effective_for is also nil, but a clone prefill or a failed validation puts an
+  # unsaved policy on screen that no resolver walking the database would ever return.
+  def sla_tracking_on?(project)
+    # An inheriting project shows the TRI-STATE radios instead of the switch, so "on" there means
+    # resolving :inherit against the ancestor's decision — the same thing those radios spell out.
+    if sla_inherited_policy_source(project).present?
+      state = sla_enablement_state(project)
+      state == :inherit ? sla_inherited_enablement_on?(project) : state == :enabled
+    else
+      sla_policy_for_form(project).enabled?
+    end
+  end
+  private :sla_tracking_on?
+
+  # Is the General section on offer to this user? The locked banner links there, and a
+  # notifications-only manager can't go.
+  def sla_general_section_visible?(project)
+    sla_visible_sections(project).any? { |section| section[:key] == 'general' }
+  end
+
   # Feather-style 24×24 outline icons for the sidebar, keyed by section. Static developer-authored
   # markup (no user data), hence html_safe; `currentColor` lets the nav's active/inactive text
   # colour drive the icon colour with no extra classes.
@@ -109,6 +151,13 @@ module SlaPoliciesHelper
   def sla_copy_icon
     sla_inline_icon('<rect x="9" y="9" width="13" height="13" rx="2"/>' \
                     '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>')
+  end
+
+  # Padlock: on a locked sidebar entry (in place of that row's chevron) and leading the banner that
+  # explains the lock, so the two read as the same state rather than two unrelated warnings.
+  def sla_lock_icon(size_classes = 'tw-w-4 tw-h-4 tw-shrink-0')
+    sla_inline_icon('<rect x="3" y="11" width="18" height="11" rx="2"/>' \
+                    '<path d="M7 11V7a5 5 0 0 1 10 0v4"/>', size_classes)
   end
 
   # Circled "i" leading the amber unclassified-priority notice.
@@ -175,9 +224,10 @@ module SlaPoliciesHelper
          : l(:label_sla_stale_threshold_placeholder_unset)
   end
 
-  # The line under the field naming WHICH project an inherited number comes from. Without it
-  # "Inherited: 7" is a number with no author.
-  def sla_stale_threshold_source_text(inherited)
+  def sla_stale_threshold_source_text(project, policy, inherited)
+    own = sla_inherited_policy_source(project).blank? && policy.stale_threshold_days.present?
+    return l(:text_sla_stale_threshold_own) if own
+
     days, source = inherited
     return l(:text_sla_stale_threshold_unset_anywhere) if days.nil?
 
@@ -197,27 +247,54 @@ module SlaPoliciesHelper
   end
 
   # The trackers whose target tables are displayed — one table each, all saved by the single SLA
-  # Targets submit. Explicit request params win (the picker posts `tracker_ids[]`, and the AJAX
-  # re-render of a newly added table posts a single `tracker_id`), else every tracker that already
-  # has definitions, else the project's first tracker so the section is never empty.
+  # Targets submit. Explicit request params win (the picker posts `definitions[tracker_ids][]`, and
+  # the AJAX re-render of a newly added table posts a single `tracker_id`); otherwise the set is
+  # rebuilt from what was saved, and failing everything the project's first tracker so the section
+  # is never empty.
   #
   # Selection is only about WHICH trackers are on screen and therefore saved; deselecting one hides
   # it and leaves its stored targets alone (see SlaPoliciesController#replace_tracker_definitions!).
   # Clearing a tracker's targets is done by setting its rows to "not tracked", not by hiding it.
   def sla_selected_trackers(project, policy)
     trackers = project.trackers.sorted.to_a
-    requested = Array(params[:tracker_ids].presence || params[:tracker_id].presence).map(&:to_i)
+    requested = sla_requested_tracker_ids
     selected =
       if requested.any?
         trackers.select { |tracker| requested.include?(tracker.id) }
       else
-        trackers.select do |tracker|
-          policy.sla_definitions.any? { |definition| definition.tracker_id == tracker.id }
-        end
+        ids = sla_saved_tracker_ids(policy)
+        trackers.select { |tracker| ids.include?(tracker.id) }
       end
 
     selected.presence || Array(trackers.first)
   end
+
+  # What was SAVED, as a union of two sources — which is the whole fix for "I added a tracker, saved,
+  # and it was gone":
+  #
+  #   * the picker's own saved selection (migration 009). Before it existed the displayed set was
+  #     derived purely from the definitions below, so a tracker added and saved with every target
+  #     still on "not tracked" wrote no definition, left no trace, and disappeared on the redirect.
+  #   * every tracker that HAS definitions. This half is not redundant and must never be dropped: a
+  #     tracker with stored targets is being applied to real tickets, so hiding it — because it
+  #     happens to be missing from a selection saved before it, or one saved by an older version —
+  #     would leave an SLA in force that the settings page does not show anywhere.
+  #
+  # nil (never saved) therefore behaves exactly as this method did before the column existed.
+  def sla_saved_tracker_ids(policy)
+    from_definitions = policy.sla_definitions.map(&:tracker_id)
+    (policy.selected_tracker_ids_or_nil.to_a | from_definitions).uniq
+  end
+  private :sla_saved_tracker_ids
+
+  # Tracker ids named by THIS request: the picker's own array, or the single `tracker_id` the AJAX
+  # per-table re-render sends. `definitions[tracker_ids][]` is the picker's real parameter name —
+  # this used to read a top-level `params[:tracker_ids]` that nothing has ever posted.
+  def sla_requested_tracker_ids
+    raw = params.dig(:definitions, :tracker_ids).presence || params[:tracker_id].presence
+    Array(raw).map(&:to_i)
+  end
+  private :sla_requested_tracker_ids
 
   # <option> list for one target dropdown: a leading "not tracked" blank, then the admin lookup
   # (numeric durations by seconds, Best Effort rows by the 'best_effort' sentinel — a Best Effort
@@ -247,7 +324,7 @@ module SlaPoliciesHelper
       SlaTargetOption.order(:position, :seconds).group_by(&:target_type)
   end
 
-  # Is this the admin-designated "None / unclassified" priority (Administration → Plugins →
+  # Is this the admin-designated "None / unclassified" priority (Administration →
   # SLA Compliance)? Always excluded from SLA Definitions — see Sla::PolicyContext#definition_for.
   def sla_unclassified_priority?(priority_id)
     priority_id.present? && priority_id == Sla::PluginSettings.unclassified_priority_id
@@ -269,6 +346,20 @@ module SlaPoliciesHelper
            .where(id: SlaPolicy.select(:project_id))
            .where.not(id: project.id)
            .sorted
+  end
+
+  # The project this policy was last cloned from (migration 009), or nil. It preselects the Clone
+  # card's dropdown, which otherwise reopened on "— Select a project —" and left the provenance of a
+  # whole configuration knowable only to whoever ran the clone, at the moment they ran it.
+  #
+  # Resolved against +sources+ — the list actually in the dropdown — rather than looked up directly,
+  # because this is deliberately a plain id and not a foreign key: the source project may since have
+  # been archived, had its policy removed, or become one this user may not edit. In any of those
+  # cases it is not an option on this page, and preselecting an id that has no <option> would render
+  # as no selection anyway. Returning nil says so honestly.
+  def sla_cloned_from_project(policy, sources)
+    id = policy.cloned_from_project_id
+    id.present? ? sources.detect { |source| source.id == id } : nil
   end
 
   # Notification settings shown in the tab's second section (4.6).
@@ -303,8 +394,10 @@ module SlaPoliciesHelper
       'tw-rounded-lg tw-text-sm tw-px-5 tw-py-2.5 tw-cursor-pointer'
   end
 
-  # Neutral outlined button (Clone "Load", "Revert to inherited policy") — deliberately never blue,
-  # so the primary colour stays reserved for the one save action per section (Global Rule 7).
+  # Neutral outlined button (the Clone section's "Load"). Was also "Revert to inherited policy" on
+  # the reasoning that the primary colour should stay reserved for the one save action per section;
+  # that call was overruled — Revert is a deliberate, consequential action of its own and was being
+  # missed entirely as a grey outline, so it now uses sla_primary_button_classes above.
   def sla_secondary_button_classes
     'tw-inline-flex tw-items-center tw-gap-2 tw-text-gray-900 tw-bg-white tw-border ' \
       'tw-border-solid tw-border-gray-300 hover:tw-bg-gray-100 ' \

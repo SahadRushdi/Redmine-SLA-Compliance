@@ -1,15 +1,25 @@
 <%# Shared SLA state filter pills (All / SLA Met / SLA Breached / At Risk / No SLA) for the %>
-<%# ticket-level detail. Rendered BOTH beside the compact card heading and inside the expand modal %>
-<%# so both filter the exact same server scope identically. Each pill is a plain GET link that %>
-<%# carries the active project/tracker/priority/date filters forward (a server-side scope change, %>
-<%# not client-side) - the counts come from @counts, the single source every dashboard part reads. %>
-<%# When these are the modal's copy, sla_dashboard_detail_table.js flags the modal to re-open after %>
-<%# the reload so filtering from inside the modal feels seamless. %>
+<%# ticket-level detail. Rendered BOTH beside the compact card heading and inside the expand modal; %>
+<%# sla_dashboard_detail_table.js keeps the two copies in lockstep, so whichever one you click, both %>
+<%# show the same active pill and the one table below them is filtered the same way. %>
+<%# %>
+<%# CLIENT-SIDE, like the search, sorting and pagination already are: the controller renders rows %>
+<%# for EVERY state (SlaDashboardController#build_detail_table) and these buttons hide and show %>
+<%# those rows in place. They used to be plain GET links that reloaded the whole page for a filter %>
+<%# the browser already had every row for — the one control on this table that still did. %>
+<%# %>
+<%# Counts come from @counts, the single source every dashboard part reads, so they still describe %>
+<%# the whole server scope rather than whatever is currently on screen. %>
+<%# %>
+<%# `.sla-pill` (partials/_pill_group.css) rather than utilities: it is the same "pick one of these" %>
+<%# component the SLA Trend date presets use, and its whole reason for existing is that active state %>
+<%# has to be ONE class the JS can toggle — toggling the utilities instead loses to the inactive %>
+<%# state's own `hover:` variant on specificity, which is documented at length in that file. %>
 <% detail_states = [['all', l(:label_sla_detail_state_all), @counts.total]] +
      %w[met breached at_risk no_sla].map { |s| [s, sla_card_label(s.to_sym), @counts.public_send(s)] } %>
 <% detail_states.each do |state, label, count| %>
-  <%= link_to "#{label} (#{count})",
-        sla_detail_table_url(@filters, @project, state: state == 'all' ? nil : state, q: @search_query),
-        class: "tw-text-xs tw-font-medium tw-rounded-full tw-px-3 tw-py-1.5 tw-transition-colors #{
-          state == @state_filter ? 'tw-bg-primary-600 tw-text-white' : 'tw-bg-gray-100 tw-text-gray-600 hover:tw-bg-gray-200'}" %>
+  <button type="button" data-sla-state-filter="<%= state %>"
+          class="sla-pill<%= ' is-active' if state == @state_filter %>">
+    <%= "#{label} (#{count})" %>
+  </button>
 <% end %>

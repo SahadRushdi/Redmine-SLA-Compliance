@@ -1,8 +1,10 @@
 <%# Flowbite toggle switch, tw- prefixed and reused by every on/off setting in the plugin. %>
-<%# Locals: name (input name), checked (boolean); label (display text) optional — omit it when %>
-<%# the switch sits in a _switch_row, which supplies its own title/description on the left. %>
-<%# `reveals` (optional) names the [data-sla-reveal] block this switch shows/hides — see %>
-<%# sla_policies/_switch_row.html.erb. %>
+<%# Locals: name (input name), checked (boolean); label (display text) optional — omit it when the %>
+<%# switch is passed as the `control` of a sla_policies/_card or _setting_card, whose heading and %>
+<%# description are then its label. (The old _switch_row partial, which supplied a SECOND title and %>
+<%# description of its own under those cards' headings, is gone for exactly that reason.) %>
+<%# `reveals` (optional) names the [data-sla-reveal] block this switch shows/hides — typically the %>
+<%# card body it sits in the header of. %>
 <%# Posts '0' (hidden) or '1' like a Rails checkbox pair. %>
 <label class="tw-inline-flex tw-items-center tw-cursor-pointer tw-shrink-0">
   <%= hidden_field_tag name, '0', id: nil %>

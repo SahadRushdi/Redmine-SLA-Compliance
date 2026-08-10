@@ -1,6 +1,17 @@
-<h2><%= link_to l(:label_sla_business_calendars), sla_business_calendars_path %> &#187; <%= l(:label_sla_business_calendar_new) %></h2>
+<%= render layout: 'sla_admin/shell', locals: { current: 'business_calendars' } do %>
+  <%= render 'sla_admin/breadcrumb',
+             crumbs: [[l(:label_sla_compliance_settings), sla_admin_section_path('general')],
+                      [l(:label_sla_admin_section_business_calendars), sla_business_calendars_path],
+                      [l(:label_sla_business_calendar_new), nil]] %>
 
-<%= labelled_form_for @calendar, url: sla_business_calendars_path do |f| %>
-  <%= render 'form', f: f %>
-  <p><%= submit_tag l(:button_create) %></p>
+  <%= render 'sla_admin/page_header',
+             title: l(:label_sla_business_calendar_new),
+             description: l(:text_sla_business_calendars_hint) %>
+
+  <%# form_for, not labelled_form_for: Redmine's labelled builder emits its own <label> for every %>
+  <%# field, which would sit alongside the module's own field labels. See _form.html.erb. %>
+  <%= form_for @calendar, url: sla_business_calendars_path, html: { autocomplete: 'off' } do |f| %>
+    <%= render 'form', f: f, cancel_path: sla_business_calendars_path,
+               submit_label: l(:button_create) %>
+  <% end %>
 <% end %>

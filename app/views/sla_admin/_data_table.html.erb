@@ -1,0 +1,47 @@
+<%# A lookup table in a card. LAYOUT partial — render it with %>
+<%# `render layout: 'sla_admin/data_table', locals: { headers: [...] }` and a block holding the %>
+<%# <tr> rows; the card, scroll container, <table>, <thead> and <tbody> are supplied here so the %>
+<%# module's tables cannot drift apart. %>
+<%# %>
+<%# Locals: headers — an array of [label, sort_key, sort_type] triples. `sort_key` is nil for a %>
+<%# column that cannot be sorted (the trailing row-actions column, which has no name either — %>
+<%# pass ['', nil]); `sort_type` is 'number' or 'text' (default). %>
+<%# %>
+<%# Sorting is CLIENT-SIDE and identical to the dashboard's ticket detail table: the same <th> %>
+<%# hooks (data-sla-sort / data-sla-sort-type / .sla-sort-icon) driven by the same icons and %>
+<%# comparison from sla_table_sort.js, via sla_admin.js. A table with no sortable column simply %>
+<%# renders plain headers and is never bound. %>
+<%# %>
+<%# The scroll container is on the table, not the card: a narrow window scrolls the columns %>
+<%# sideways instead of the page. tw-overflow-hidden on the card would clip the sticky header %>
+<%# rounding, so the corners are rounded on the inner wrapper instead. %>
+<div class="tw-bg-white tw-border tw-border-solid tw-border-gray-200 tw-rounded-lg tw-shadow-sm">
+  <div class="tw-overflow-x-auto tw-rounded-lg">
+    <table class="<%= sla_admin_table_classes %>" data-sla-sortable-table>
+      <thead class="tw-bg-gray-50 tw-border-b tw-border-solid tw-border-gray-200">
+        <tr>
+          <%# Title case, never uppercase (CLAUDE.md) — the i18n value already carries the casing, %>
+          <%# and no text-transform is applied here, sortable or not. %>
+          <% headers.each do |label, sort_key, sort_type| %>
+            <% if sort_key.present? %>
+              <%# Click target, no href: the rows are already here, so sorting them is not a %>
+              <%# navigation. The grey icon is painted by sla_admin.js — neutral when inactive, a %>
+              <%# single arrow for the active column and direction. Never blue. %>
+              <th scope="col" data-sla-sort="<%= sort_key %>"
+                  data-sla-sort-type="<%= sort_type || 'text' %>" aria-sort="none"
+                  class="<%= sla_admin_th_classes %> tw-cursor-pointer tw-select-none">
+                <span class="tw-inline-flex tw-items-center tw-gap-1 hover:tw-text-gray-900">
+                  <%= label %>
+                  <span class="sla-sort-icon tw-inline-flex tw-text-gray-400" aria-hidden="true"></span>
+                </span>
+              </th>
+            <% else %>
+              <th scope="col" class="<%= sla_admin_th_classes %>"><%= label %></th>
+            <% end %>
+          <% end %>
+        </tr>
+      </thead>
+      <tbody class="sla-admin-rows"><%= yield %></tbody>
+    </table>
+  </div>
+</div>

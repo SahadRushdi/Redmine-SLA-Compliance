@@ -4,15 +4,14 @@
 <%# it, never added into the total; no_sla == not_configured + not_tracked. %>
 <%# Card values carry stable ids (also useful for functional tests, since assigns() isn't %>
 <%# available in this Rails version without rails-controller-testing). %>
+<%# Every card is the shared _summary_card partial — icon tile, short label, one big number, one %>
+<%# short caption. Nothing else: no boxed explanatory banner under the number, and no (i) tooltip %>
+<%# either. Each caption is the whole supporting text the card gets. %>
 <div class="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 lg:tw-grid-cols-5 tw-gap-4 tw-mb-6">
-  <div class="tw-rounded-xl tw-border tw-p-4 tw-flex tw-items-start tw-gap-3 tw-shadow-sm tw-transition-shadow hover:tw-shadow-md <%= sla_card_color_classes(:total) %>">
-    <span class="tw-inline-flex tw-items-center tw-justify-center tw-w-10 tw-h-10 tw-rounded-full tw-flex-shrink-0 <%= sla_card_icon_classes(:total) %>"><%= sla_card_icon(:total) %></span>
-    <div class="tw-min-w-0">
-      <p class="tw-text-sm tw-font-medium"><%= sla_card_label(:total) %></p>
-      <p class="tw-text-3xl tw-font-bold tw-mt-1" id="sla-card-total-value"><%= @counts.total %></p>
-      <p class="tw-text-xs tw-opacity-70 tw-mt-1"><%= l(:text_sla_card_reconciliation_hint) %></p>
-    </div>
-  </div>
+  <%= render 'sla_dashboard/summary_card',
+        state: :total, label: sla_card_label(:total), value: @counts.total,
+        value_id: 'sla-card-total-value',
+        caption: l(:label_sla_card_total_caption) %>
 
   <%# Stale replaces the SLA Met card on this current-state row (SLA Met now lives on the SLA Trend %>
   <%# tab). Count comes from Sla::StaleSummary: open tickets with no updates past the inactivity %>
@@ -20,45 +19,40 @@
   <%# %>
   <%# With no threshold configured the card shows an em dash, NOT 0 — "nobody has defined stale %>
   <%# here" and "nothing is stale" are different statements, and printing 0 would assert the second %>
-  <%# while meaning the first. The hint doubles as the instruction for fixing it. %>
-  <div class="tw-rounded-xl tw-border tw-p-4 tw-flex tw-items-start tw-gap-3 tw-shadow-sm tw-transition-shadow hover:tw-shadow-md <%= sla_card_color_classes(:stale) %>">
-    <span class="tw-inline-flex tw-items-center tw-justify-center tw-w-10 tw-h-10 tw-rounded-full tw-flex-shrink-0 <%= sla_card_icon_classes(:stale) %>"><%= sla_card_icon(:stale) %></span>
-    <div class="tw-min-w-0">
-      <p class="tw-text-sm tw-font-medium"><%= sla_card_label(:stale) %></p>
-      <%# Kept on one line each: these carry ids the functional tests match on exact text. %>
-      <p class="tw-text-3xl tw-font-bold tw-mt-1" id="sla-card-stale-value"><%= @stale.configured? ? @stale.count : '—' %></p>
-      <p class="tw-text-xs tw-opacity-70 tw-mt-1" id="sla-card-stale-hint"><%= @stale.configured? ? l(:text_sla_card_stale_hint) : l(:text_sla_card_stale_unset_hint) %></p>
-    </div>
-  </div>
+  <%# while meaning the first. The caption is the only place that distinction is stated now that the %>
+  <%# cards carry no tooltip, so the unset variant keeps the pointer to where it gets fixed. %>
+  <%= render 'sla_dashboard/summary_card',
+        state: :stale, label: sla_card_label(:stale),
+        value: @stale.configured? ? @stale.count : '—',
+        value_id: 'sla-card-stale-value',
+        caption: @stale.configured? ? l(:label_sla_card_stale_caption) : l(:label_sla_card_stale_unset_caption),
+        caption_id: 'sla-card-stale-hint' %>
 
-  <div class="tw-rounded-xl tw-border tw-p-4 tw-flex tw-items-start tw-gap-3 tw-shadow-sm tw-transition-shadow hover:tw-shadow-md <%= sla_card_color_classes(:breached) %>">
-    <span class="tw-inline-flex tw-items-center tw-justify-center tw-w-10 tw-h-10 tw-rounded-full tw-flex-shrink-0 <%= sla_card_icon_classes(:breached) %>"><%= sla_card_icon(:breached) %></span>
-    <div class="tw-min-w-0">
-      <p class="tw-text-sm tw-font-medium"><%= sla_card_label(:breached) %></p>
-      <p class="tw-text-3xl tw-font-bold tw-mt-1">
-        <span id="sla-card-breached-percentage"><%= sla_percentage(@counts.breached, @counts.total) %></span>%
-        <span class="tw-text-base tw-font-normal tw-opacity-70">(<span id="sla-card-breached-value"><%= @counts.breached %></span>)</span>
-      </p>
-    </div>
-  </div>
+  <%# The breached figure is a percentage with the raw count beside it, so it is assembled here %>
+  <%# rather than passed as a bare number — safe_join keeps the two spans' ids intact without %>
+  <%# hand-rolling html_safe over interpolated values. %>
+  <%= render 'sla_dashboard/summary_card',
+        state: :breached, label: sla_card_label(:breached),
+        value: safe_join([
+          content_tag(:span, sla_percentage(@counts.breached, @counts.total), id: 'sla-card-breached-percentage'),
+          '%',
+          content_tag(:span, safe_join(['(', content_tag(:span, @counts.breached, id: 'sla-card-breached-value'), ')']),
+                      class: 'tw-text-xl tw-font-semibold tw-opacity-80 tw-ml-1')
+        ]),
+        caption: l(:text_sla_card_breached_caption, count: @counts.breached, total: @counts.total) %>
 
-  <div class="tw-rounded-xl tw-border tw-p-4 tw-flex tw-items-start tw-gap-3 tw-shadow-sm tw-transition-shadow hover:tw-shadow-md <%= sla_card_color_classes(:at_risk) %>">
-    <span class="tw-inline-flex tw-items-center tw-justify-center tw-w-10 tw-h-10 tw-rounded-full tw-flex-shrink-0 <%= sla_card_icon_classes(:at_risk) %>"><%= sla_card_icon(:at_risk) %></span>
-    <div class="tw-min-w-0">
-      <p class="tw-text-sm tw-font-medium"><%= sla_card_label(:at_risk) %></p>
-      <p class="tw-text-3xl tw-font-bold tw-mt-1" id="sla-card-at-risk-value"><%= @counts.at_risk %></p>
-    </div>
-  </div>
+  <%= render 'sla_dashboard/summary_card',
+        state: :at_risk, label: sla_card_label(:at_risk), value: @counts.at_risk,
+        value_id: 'sla-card-at-risk-value',
+        caption: l(:label_sla_card_at_risk_caption) %>
 
-  <div class="tw-rounded-xl tw-border tw-p-4 tw-flex tw-items-start tw-gap-3 tw-shadow-sm tw-transition-shadow hover:tw-shadow-md <%= sla_card_color_classes(:no_sla) %>">
-    <span class="tw-inline-flex tw-items-center tw-justify-center tw-w-10 tw-h-10 tw-rounded-full tw-flex-shrink-0 <%= sla_card_icon_classes(:no_sla) %>"><%= sla_card_icon(:no_sla) %></span>
-    <div class="tw-min-w-0">
-      <p class="tw-text-sm tw-font-medium"><%= sla_card_label(:no_sla) %></p>
-      <p class="tw-text-3xl tw-font-bold tw-mt-1" id="sla-card-no-sla-value"><%= @counts.no_sla %></p>
-      <p class="tw-text-xs tw-mt-1">
-        <%= l(:label_sla_card_not_configured) %>: <span id="sla-card-not-configured-value"><%= @counts.not_configured %></span> ·
-        <%= l(:label_sla_card_not_tracked) %>: <span id="sla-card-not-tracked-value"><%= @counts.not_tracked %></span>
-      </p>
-    </div>
-  </div>
+  <%= render 'sla_dashboard/summary_card',
+        state: :no_sla, label: sla_card_label(:no_sla), value: @counts.no_sla,
+        value_id: 'sla-card-no-sla-value',
+        caption: safe_join([
+          "#{l(:label_sla_card_not_configured)}: ",
+          content_tag(:span, @counts.not_configured, id: 'sla-card-not-configured-value'),
+          " · #{l(:label_sla_card_not_tracked)}: ",
+          content_tag(:span, @counts.not_tracked, id: 'sla-card-not-tracked-value')
+        ]) %>
 </div>

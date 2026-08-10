@@ -24,6 +24,8 @@ class SlaPolicy < ActiveRecord::Base
   has_many :sla_definitions,     dependent: :destroy
   has_many :sla_status_mappings, dependent: :destroy
 
+  serialize :selected_tracker_ids, JSON
+
   validates :project_id, presence: true, uniqueness: true
   validates :coverage_hours, inclusion: { in: COVERAGE_HOURS }
   validates :first_response_rule, inclusion: { in: FIRST_RESPONSE_RULES }
@@ -47,6 +49,17 @@ class SlaPolicy < ActiveRecord::Base
   # Status IDs configured for a milestone role (created / work_started / resolved / pause).
   def status_ids_for(role)
     sla_status_mappings.where(role: role.to_s).pluck(:status_id)
+  end
+
+  # The saved tracker selection as integer ids, or nil when this row has never saved one. Callers
+  # must keep nil and [] apart (see the serialize note above), so this returns nil rather than
+  # flattening the two into an empty array.
+  #
+  # The values are re-cast to Integer on the way out: JSON round-trips whatever was written, and a
+  # caller comparing them against Tracker#id would silently match nothing if a string ever got in.
+  def selected_tracker_ids_or_nil
+    ids = selected_tracker_ids
+    ids.nil? ? nil : Array(ids).map(&:to_i)
   end
 
   # True for a LIGHTWEIGHT row: one that carries only the enabled DECISION for its project and

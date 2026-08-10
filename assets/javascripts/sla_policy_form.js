@@ -60,6 +60,10 @@
   // CSS; see partials/_tom_select.css. Re-measured on every open, since row position and list
   // length both change as the user filters.
   function bindDropUp(instance) {
+    // Suppress the list Redmine's own defaultFocus() would otherwise pop open on load — see
+    // assets/javascripts/sla_tom_select.js. Every instance in this file is built through here.
+    if (window.slaTomSelect) { window.slaTomSelect.guard(instance); }
+
     instance.on('dropdown_open', function (dropdown) {
       var rect = instance.control.getBoundingClientRect();
       var needed = dropdown.offsetHeight;
@@ -160,6 +164,53 @@
     });
   }
 
+  // --- SLA tracking off => the configuration sections are locked ------------------------------
+  // Server-rendered on load (SlaPoliciesHelper#sla_tracking_off?). Mirrored here so flipping the
+  // General switch locks or unlocks SLA Targets, Measurement Rules, Exclusions and Notifications
+  // straight away, instead of the page claiming they are editable until a save lands. Nothing here
+  // decides anything the server doesn't re-decide on save — it only stops the UI from lying between
+  // the flip and the save.
+
+  // What the General section's on/off control currently READS, by whichever of its two forms is on
+  // screen: the tri-state radios for an inheriting project, otherwise the plain switch.
+  function trackingOn() {
+    var picked = document.querySelector('input[name="sla_policy[enablement]"]:checked');
+    if (picked) {
+      if (picked.value !== 'inherit') { return picked.value === 'enabled'; }
+      // "Inherit" resolves against the ancestor's decision, which only the server knows.
+      var form = byId('sla-enablement-form');
+      return !!form && form.getAttribute('data-inherited-on') === 'true';
+    }
+
+    var toggle = document.querySelector('input[type="checkbox"][name="sla_policy[enabled]"]');
+    // No control on the page at all (a notifications-only manager): trust what the server rendered.
+    return toggle ? toggle.checked : !document.querySelector('fieldset[data-sla-lock][disabled]');
+  }
+
+  function syncLocks() {
+    var locked = !trackingOn();
+
+    document.querySelectorAll('fieldset[data-sla-lock]').forEach(function (fieldset) {
+      fieldset.disabled = locked;
+      // A Tom Select control is a div, not the original <select>, so being inside a disabled
+      // fieldset doesn't stop it responding to clicks — its own API has to be told. (Its <select>
+      // is still what posts, so the data is safe either way; this is about not offering a control
+      // that will be ignored.)
+      fieldset.querySelectorAll('select').forEach(function (select) {
+        if (!select.tomselect) { return; }
+        if (locked) { select.tomselect.disable(); } else { select.tomselect.enable(); }
+      });
+    });
+
+    document.querySelectorAll('[data-sla-locked-notice]').forEach(function (notice) {
+      notice.classList.toggle('hidden', !locked);
+    });
+    // The attribute is on every nav row, true or false (see _nav.html.erb) — match on the value.
+    document.querySelectorAll('[data-sla-lockable="true"]').forEach(function (link) {
+      link.classList.toggle('is-locked', locked);
+    });
+  }
+
   function toggleDigestInterval() {
     var field = byId('sla-digest-interval-field');
     if (!field) { return; }
@@ -183,6 +234,17 @@
       event.preventDefault();
       activateSection(this.getAttribute('data-sla-section-link'));
     });
+
+    // The locked banner's "General" link is NOT a nav item, so it gets its own attribute and its
+    // own handler: the sidebar handler marks every [data-sla-section-link] it finds active or
+    // inactive, and this link has no business being in that set.
+    jQuery(document).on('click', '[data-sla-goto-section]', function (event) {
+      event.preventDefault();
+      activateSection(this.getAttribute('data-sla-goto-section'));
+    });
+
+    jQuery(document).on('change',
+      'input[name="sla_policy[enabled]"], input[name="sla_policy[enablement]"]', syncLocks);
 
     jQuery(document).on('change', '[data-sla-reveals]', syncReveals);
     jQuery(document).on('change', '#sla_policy_coverage_hours', toggleCalendarField);
@@ -213,6 +275,8 @@
     initChips();
     initEmailChips();
     initSingleSelects();
+    // After the Tom Select instances exist, so a section rendered locked disables them too.
+    syncLocks();
     syncReveals();
     toggleCalendarField();
     toggleDigestInterval();

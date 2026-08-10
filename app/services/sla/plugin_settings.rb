@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Sla
-  # Reads the plugin's GLOBAL settings (Administration → Plugins → SLA Compliance), which are
+  # Reads the plugin's GLOBAL settings (Administration → SLA Compliance), which are
   # instance-wide rather than per-project — the sweep cadence and the "which priority means
   # unclassified" mapping both fit that shape, unlike everything in Phase 4's per-project policy
   # tab. Backed by Redmine's own plugin-settings mechanism (`Setting.plugin_redmine_sla_compliance`,
@@ -44,60 +44,39 @@ module Sla
         IssuePriority.where('LOWER(name) = ?', 'none').first&.id
       end
 
-      # Step 7.1 — instance-wide Google Chat webhook, used by any project that has not set its own
-      # (the plan's "per-project setting, with a global fallback"). Lives here rather than in a
-      # column because it is a single instance-wide value, exactly like the two settings above.
-      # `SlaNotificationSetting.google_chat_webhook_for` is what applies the fallback; this only
-      # reports the configured default.
-      def default_google_chat_webhook
-        settings['google_chat_webhook'].presence
-      end
+      # NOTE: there was a `default_google_chat_webhook` here — an instance-wide fallback webhook for
+      # projects that had not set their own (Step 7.1). It and its admin field were removed on
+      # request on 2026-08-05; a Google Chat webhook is now a per-project setting only. See
+      # SlaNotificationSetting.google_chat_webhook_for.
 
-      # --- Step 5.1: the user access allow-lists ----------------------------------------------
+      # --- Step 5.1: role-based SLA access ------------------------------------------------------
       #
-      # Redmine permissions attach to roles only, so there is no native way to grant SLA access to
-      # a named person. These two lists fill that gap; Sla::AccessControl turns them into an
-      # answer. Stored as user IDs per Global Rule 2 (references, never labels) inside the same
+      # Which Redmine ROLES carry SLA access. A user who holds one of these roles on a project
+      # they can already open sees that project's SLA dashboard and its SLA Policy settings —
+      # whatever the role's own permission checkboxes say, so the three SLA permissions do not
+      # have to be ticked on every role one by one. Sla::AccessControl turns this list into an
+      # answer.
+      #
+      # Stored as role IDs per Global Rule 2 (references, never labels) inside the same
       # plugin-settings hash as everything above — no table, no migration.
       #
       # Read fresh on every call, like the settings above: `Setting` invalidates its cache when an
-      # admin saves the form, which is what makes a granted (or revoked) user take effect on their
+      # admin saves the form, which is what makes a granted (or revoked) role take effect on the
       # very next request with no restart.
-
-      # Dashboard, read-only.
-      def viewer_user_ids
-        user_ids_setting('sla_viewer_user_ids')
-      end
-
-      # Dashboard plus the SLA Policy tab.
-      def manager_user_ids
-        user_ids_setting('sla_manager_user_ids')
-      end
-
-      def viewer_users
-        users_for(viewer_user_ids)
-      end
-
-      def manager_users
-        users_for(manager_user_ids)
+      #
+      # HISTORY: this replaced two per-USER allow-lists ('sla_viewer_user_ids' /
+      # 'sla_manager_user_ids') on 2026-08-06, along with the viewer/manager split they encoded.
+      # Nothing reads those keys any more, and SlaSettingsController#update drops them from the
+      # stored hash on the next save.
+      def access_role_ids
+        # The settings form posts a blank sentinel entry (so the `[]` param still arrives when
+        # every chip has been removed) and SlaSettingsController#update stores what it is given
+        # verbatim — so the cleanup has to happen on read. Tolerates a nil or non-array value,
+        # which is what a hand-edited or pre-2026-08-06 settings hash looks like.
+        Array(settings['sla_access_role_ids']).reject(&:blank?).map(&:to_i).uniq
       end
 
       private
-
-      # The settings form posts a blank sentinel entry (so the `[]` param still arrives when every
-      # chip has been removed) and Redmine's settings controller stores what it is given verbatim
-      # via `permit!.to_h` — so the cleanup has to happen on read. Tolerates a nil or non-array
-      # value, which is what a hand-edited or pre-5.1 settings hash looks like.
-      def user_ids_setting(key)
-        Array(settings[key]).reject(&:blank?).map(&:to_i).uniq
-      end
-
-      # Ordered for display, and silently skips IDs whose user has since been deleted.
-      def users_for(ids)
-        return User.none if ids.empty?
-
-        User.where(id: ids).sorted
-      end
 
       def settings
         Setting.plugin_redmine_sla_compliance || {}

@@ -84,24 +84,29 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_response :forbidden
   end
 
-  # --- Step 5.1: the user allow-list --------------------------------------------------------
-  # rhill (user 4) holds no role and no membership, so only the allow-list can let them through.
+  # --- Step 5.1: the SLA access roles ----------------------------------------------------------
+  # rhill (user 4) holds no role and no membership, so nothing but the grant below can let them
+  # through. The role itself ticks NO permissions — being named in the plugin settings is the
+  # whole of what makes it work.
 
-  test "a listed manager can save the policy with no role" do
+  test "a member holding an SLA access role can save the policy" do
+    role = Role.create!(name: 'SLA Access Test Role', permissions: [])
+    Member.create!(principal: User.find(4), project: @project, roles: [role])
+    Setting.plugin_redmine_sla_compliance = { 'sla_access_role_ids' => [role.id.to_s] }
     @request.session[:user_id] = 4
-    Setting.plugin_redmine_sla_compliance = { 'sla_manager_user_ids' => ['4'] }
 
     put :update, params: general_params
 
     assert_redirected_to settings_project_path(@project, tab: 'sla_policy', section: 'general')
-    assert policy.present?, 'a listed manager must be able to save the policy'
+    assert policy.present?, 'a granted member must be able to save the policy'
   ensure
     Setting.plugin_redmine_sla_compliance = {}
   end
 
-  test "a listed viewer is dashboard-only and cannot save the policy" do
+  test "holding a role that is not an SLA access role cannot save the policy" do
+    role = Role.create!(name: 'SLA Unlisted Test Role', permissions: [])
+    Member.create!(principal: User.find(4), project: @project, roles: [role])
     @request.session[:user_id] = 4
-    Setting.plugin_redmine_sla_compliance = { 'sla_viewer_user_ids' => ['4'] }
 
     put :update, params: general_params
 
@@ -524,6 +529,62 @@ class SlaPoliciesControllerTest < ActionController::TestCase
                                .response_seconds
   end
 
+  # --- The tracker picker's own selection is saved (migration 009) -----------------------------
+  #
+  # Regression: the displayed set was DERIVED from the definitions, so a tracker added and saved
+  # with every target still on "not tracked" wrote no definition (an all-blank row creates no
+  # record, by design), left no trace anywhere, and had disappeared by the time the redirect
+  # landed — the user's "I add new trackers and save, and they are missing".
+
+  test "a tracker selected with no targets set is still remembered after saving" do
+    empty = @trackers.second
+
+    put :update, params: targets_params(
+      definitions: { tracker_ids: [@trackers.first.id.to_s, empty.id.to_s],
+                     rows: { @trackers.first.id.to_s => { @priorities.first.id.to_s => { response: '3600' } },
+                             empty.id.to_s => { @priorities.first.id.to_s => { response: '' } } } }
+    )
+
+    saved = policy
+    assert_empty saved.sla_definitions.where(tracker_id: empty.id),
+                 'precondition: an all-blank row still creates no definition'
+    assert_includes saved.selected_tracker_ids_or_nil, empty.id,
+                    'the picker itself must be saved, or a targetless tracker vanishes on reload'
+  end
+
+  # The half of the fix that keeps the settings page honest: a tracker with stored targets is being
+  # applied to real tickets, so it must be displayed even when it is missing from the saved
+  # selection — otherwise an SLA stays in force with nothing on screen showing it.
+  test "the displayed trackers are the saved selection plus anything that has targets" do
+    saved_policy = SlaPolicy.create!(project_id: @project.id, enabled: true)
+    with_targets = @trackers.second
+    saved_policy.sla_definitions.create!(tracker_id: with_targets.id,
+                                         priority_id: @priorities.first.id,
+                                         response_seconds: 3600)
+    # A selection that names only the OTHER tracker — as an older save, or a deselect, would leave.
+    saved_policy.update!(selected_tracker_ids: [@trackers.first.id])
+
+    # Called with no request params: a `tracker_id` in the request legitimately overrides the saved
+    # set (that is how the AJAX per-table re-render asks for one tracker), which is a different
+    # branch from the one under test here.
+    displayed = @controller.view_context.send(:sla_selected_trackers, @project, saved_policy)
+
+    assert_includes displayed, with_targets, 'a tracker with stored targets is always displayed'
+    assert_includes displayed, @trackers.first, 'and so is one the saved picker named'
+  end
+
+  test "a policy saved before the column existed still shows its definition-derived trackers" do
+    saved_policy = SlaPolicy.create!(project_id: @project.id, enabled: true)
+    saved_policy.sla_definitions.create!(tracker_id: @trackers.second.id,
+                                         priority_id: @priorities.first.id,
+                                         response_seconds: 3600)
+    assert_nil saved_policy.selected_tracker_ids_or_nil, 'precondition: never saved a selection'
+
+    displayed = @controller.view_context.send(:sla_selected_trackers, @project, saved_policy)
+
+    assert_equal [@trackers.second], displayed
+  end
+
   # The picker chooses which trackers are on screen and therefore editable — not which trackers
   # have an SLA. Hiding one must never be a silent delete; clearing targets is done by setting
   # every one of that tracker's rows to "not tracked".
@@ -708,6 +769,69 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     overridden = saved.sla_definitions.find_by(tracker_id: @trackers.second.id,
                                                priority_id: priority.id)
     assert_equal 3600, overridden.response_seconds, 'posted tracker overrides the copy'
+  end
+
+  # --- clone provenance (migration 009) --------------------------------------------------------
+  #
+  # Regression: nothing recorded WHICH project a policy was cloned from, so the Clone card reopened
+  # on "— Select a project —" and where a whole configuration came from was knowable only to
+  # whoever ran the clone, at the moment they ran it.
+
+  test "saving a clone records the project it was cloned from" do
+    build_clone_source
+
+    put :update, params: targets_params(
+      { clone_source_id: '2',
+        definitions: { tracker_ids: [@trackers.first.id.to_s], rows: { @trackers.first.id.to_s => {} } } }
+    )
+
+    assert_equal 2, policy.cloned_from_project_id
+  end
+
+  test "an ordinary later save keeps the recorded clone source" do
+    build_clone_source
+    put :update, params: targets_params(
+      { clone_source_id: '2',
+        definitions: { tracker_ids: [@trackers.first.id.to_s], rows: { @trackers.first.id.to_s => {} } } }
+    )
+
+    # No clone_source_id this time — the user is just editing. Provenance is history, not a binding:
+    # it stays true until another clone replaces it.
+    put :update, params: targets_params(
+      definitions: { tracker_ids: [@trackers.first.id.to_s], rows: { @trackers.first.id.to_s => {} } }
+    )
+
+    assert_equal 2, policy.cloned_from_project_id
+  end
+
+  test "the clone dropdown reopens preselected on the recorded source" do
+    build_clone_source
+    put :update, params: targets_params(
+      { clone_source_id: '2',
+        definitions: { tracker_ids: [@trackers.first.id.to_s], rows: { @trackers.first.id.to_s => {} } } }
+    )
+
+    sources = @controller.view_context.send(:sla_clone_source_projects, @project)
+
+    assert_equal Project.find(2),
+                 @controller.view_context.send(:sla_cloned_from_project, policy, sources)
+  end
+
+  # It is deliberately a plain id, not a foreign key, so it survives the source changing. A source
+  # the user can no longer pick is not an option on the page, so it must resolve to no selection
+  # rather than to an id with no matching <option>.
+  test "a recorded clone source the user can no longer pick resolves to no selection" do
+    build_clone_source
+    put :update, params: targets_params(
+      { clone_source_id: '2',
+        definitions: { tracker_ids: [@trackers.first.id.to_s], rows: { @trackers.first.id.to_s => {} } } }
+    )
+    SlaPolicy.find_by(project_id: 2).destroy! # source has no policy to clone any more
+
+    sources = @controller.view_context.send(:sla_clone_source_projects, @project)
+
+    assert_equal 2, policy.cloned_from_project_id, 'the record itself survives'
+    assert_nil @controller.view_context.send(:sla_cloned_from_project, policy, sources)
   end
 
   test "cloning skips a source definition saved for the unclassified priority" do

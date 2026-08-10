@@ -1,19 +1,88 @@
-<%= error_messages_for @target_option %>
+<%# Create/edit form for one target option. Locals: f (a plain Rails form builder — deliberately %>
+<%# NOT labelled_form_for, whose builder emits Redmine's own <label> markup and would fight the %>
+<%# module's field layout), cancel_path, submit_label. %>
+<%# %>
+<%# Field names and the params the controller permits are unchanged; this is presentation only. %>
+<%= render 'sla_admin/form_errors', record: @target_option %>
 
-<div class="box tabular">
-  <p><%= f.select :target_type,
-                  SlaTargetOption::TARGET_TYPES.map { |t| [sla_target_type_label(t), t] },
-                  { label: :field_sla_target_type }, required: true %></p>
-  <p><%= f.text_field :code, label: :field_sla_code, required: true, size: 30 %>
-    <em class="info"><%= l(:text_sla_code_hint) %></em></p>
-  <p><%= f.text_field :label, label: :field_sla_option_label, required: true, size: 40 %></p>
-  <p><%= f.select :basis,
-                  SlaTargetOption::BASES.map { |b| [l("label_sla_basis_#{b}"), b] },
-                  { label: :field_sla_basis }, required: true %>
-    <em class="info"><%= l(:text_sla_basis_hint) %></em></p>
-  <p><%= f.check_box :best_effort, label: :field_sla_best_effort %>
-    <em class="info"><%= l(:text_sla_best_effort_hint) %></em></p>
-  <p><%= f.text_field :seconds, label: :field_sla_seconds, size: 12 %>
-    <em class="info"><%= l(:text_sla_seconds_hint) %> <%= l(:text_sla_seconds_best_effort_hint) %></em></p>
-  <p><%= f.text_field :position, label: :field_sla_position, size: 5 %></p>
-</div>
+<%= render layout: 'sla_policies/card',
+           locals: { title: l(:label_sla_target_option_details),
+                     description: l(:text_sla_target_option_details) } do %>
+  <%# Two things the admin decides, side by side — WHICH target this duration is offered for and %>
+  <%# WHAT its time is measured against — then the name they will see it under, spanning both %>
+  <%# columns. Code and Position are no longer asked for: code is derived from the label %>
+  <%# (SlaTargetOption#assign_code) and position keeps whatever the row already has. %>
+  <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-x-5">
+    <%= render layout: 'sla_admin/field',
+               locals: { label: l(:field_sla_target_type), field_id: 'sla_target_option_target_type',
+                         required: true } do %>
+      <%= f.select :target_type,
+                   SlaTargetOption::TARGET_TYPES.map { |t| [sla_target_type_label(t), t] },
+                   {}, class: sla_input_classes, data: { sla_select: true } %>
+    <% end %>
+
+    <%= render layout: 'sla_admin/field',
+               locals: { label: l(:field_sla_basis), field_id: 'sla_target_option_basis',
+                         hint: l(:text_sla_basis_hint), required: true } do %>
+      <%= f.select :basis,
+                   SlaTargetOption::BASES.map { |b| [l("label_sla_basis_#{b}"), b] },
+                   {}, class: sla_input_classes, data: { sla_select: true } %>
+    <% end %>
+
+    <%# Spans both columns: the label is the human-facing name of the option and gets the room. %>
+    <div class="md:tw-col-span-2">
+      <%= render layout: 'sla_admin/field',
+                 locals: { label: l(:field_sla_option_label), field_id: 'sla_target_option_label',
+                           required: true } do %>
+        <%= f.text_field :label, class: sla_input_classes %>
+      <% end %>
+    </div>
+  </div>
+<% end %>
+
+<%= render layout: 'sla_policies/card',
+           locals: { title: l(:field_sla_duration),
+                     description: l(:text_sla_target_option_duration_card) } do %>
+  <%# Best Effort and the numeric duration are mutually exclusive by validation (a Best Effort %>
+  <%# option must have NO seconds), so the switch HIDES the seconds field rather than leaving both %>
+  <%# on screen with a "leave blank when checked" note under one of them. The controller still %>
+  <%# nils seconds server-side — this is an affordance, not the enforcement. %>
+  <div class="tw-flex tw-items-center tw-justify-between tw-gap-4">
+    <div class="tw-min-w-0">
+      <p class="tw-m-0 tw-text-sm tw-font-medium tw-text-gray-900"><%= l(:field_sla_best_effort) %></p>
+      <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500"><%= l(:text_sla_best_effort_hint) %></p>
+    </div>
+    <%# data-sla-reveals is inverted here by the `!` prefix: the block is shown while the switch is %>
+    <%# OFF. sla_admin.js reads that convention; see the file for why it lives in the attribute %>
+    <%# rather than as a second attribute. %>
+    <%= render 'sla_compliance/toggle', name: 'sla_target_option[best_effort]',
+               checked: @target_option.best_effort?, reveals: '!duration' %>
+  </div>
+
+  <%# An amount and its unit, never raw seconds — the model multiplies the two into the stored %>
+  <%# `seconds` (SlaTargetOption#compose_seconds_from_duration_parts) and divides it back out to %>
+  <%# fill these fields when editing, choosing the largest unit that divides exactly so the editor %>
+  <%# opens on the same reading the list column shows ("2d" -> 2 Days). %>
+  <%# %>
+  <%# The units go up to Days deliberately: the lookup holds 24h, 48h and 72h targets, and anything %>
+  <%# capped at hours makes those the longest thing anyone can comfortably enter. %>
+  <div data-sla-reveal="duration" class="tw-mt-5 <%= 'hidden' if @target_option.best_effort? %>">
+    <div class="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 tw-gap-x-5 tw-max-w-md">
+      <%= render layout: 'sla_admin/field',
+                 locals: { label: l(:field_sla_duration),
+                           field_id: 'sla_target_option_duration_amount' } do %>
+        <%= f.number_field :duration_amount, min: 1, step: 1, class: sla_input_classes %>
+      <% end %>
+
+      <%= render layout: 'sla_admin/field',
+                 locals: { label: l(:field_sla_duration_unit),
+                           field_id: 'sla_target_option_duration_unit' } do %>
+        <%= f.select :duration_unit,
+                     SlaTargetOption::DURATION_UNITS.keys.map { |u| [l("label_sla_duration_unit_#{u}"), u] },
+                     {}, class: sla_input_classes, data: { sla_select: true } %>
+      <% end %>
+    </div>
+  </div>
+<% end %>
+
+<%= render 'sla_admin/form_actions', submit_label: submit_label, cancel_path: cancel_path %>

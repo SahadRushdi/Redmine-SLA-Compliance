@@ -3,9 +3,12 @@
 <%# just its rows, is the unit here and carries the id the JS inserts against. Locals: policy, %>
 <%# tracker. %>
 <div id="sla-definitions-table-<%= tracker.id %>" data-sla-definition-table="<%= tracker.id %>">
+  <%# No description: the heading already names the tracker, and one caption per table meant the %>
+  <%# same sentence repeated for every selected tracker down the page. The single line that %>
+  <%# replaces them all lives above the tables in _definitions.html.erb — it has to, since this %>
+  <%# partial is also rendered on its own by edit.js.erb when a tracker is added. %>
   <%= render layout: 'sla_policies/card',
-             locals: { title: l(:label_sla_priority_targets_card, tracker: tracker.name),
-                       description: l(:text_sla_priority_targets_card, tracker: tracker.name) } do %>
+             locals: { title: l(:label_sla_priority_targets_card, tracker: tracker.name) } do %>
     <%# tw-table-fixed: the target cells hold Tom Select controls whose intrinsic width grows the %>
     <%# moment one is focused (its type-ahead input stops being zero-width). Under the default %>
     <%# auto layout that re-flowed every column mid-click; fixed layout makes the columns depend %>

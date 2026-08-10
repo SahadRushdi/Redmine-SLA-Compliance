@@ -1,0 +1,42 @@
+<%# Persistent section sidebar for the admin module. Locals: current (active section key). %>
+<%# %>
+<%# Deliberately the SAME markup and CSS (`.sla-section-nav` / `.sla-section-link`, see %>
+<%# partials/_settings_nav.css) as the project-level SLA Policy tab's sidebar, so the two %>
+<%# configuration surfaces are visually one pattern rather than two lookalikes that can drift. %>
+<%# %>
+<%# Every entry is a real <a href>, so the module navigates with JavaScript unavailable. %>
+<%# %>
+<%# data-sla-admin-section marks a link sla_admin.js may intercept and turn into an in-place panel %>
+<%# swap. It is emitted ONLY on the page that actually renders those panels — which is why it is %>
+<%# gated on `panel_page` below, not just on the section being a panel section. %>
+<%# %>
+<%# That distinction is load-bearing: the attribute used to be emitted on every page, so on the %>
+<%# Target options / Business calendars pages the script still called preventDefault() on the %>
+<%# General and Access control links and then "switched" to a panel that does not exist there. %>
+<%# The click was swallowed, the page never navigated, and the nav ended up showing two active %>
+<%# entries at once. Those two sections are separate CRUD resources at their own URLs; from a %>
+<%# lookup page their links must be ordinary navigations. %>
+<% panel_page = sla_admin_panel_keys.include?(current) %>
+<nav class="tw-w-full lg:tw-w-72 lg:tw-shrink-0" aria-label="<%= l(:label_sla_compliance_settings) %>">
+  <ul class="sla-section-nav tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-shadow-sm tw-overflow-hidden">
+    <% sla_admin_sections.each do |section| %>
+      <% key = section[:key] %>
+      <li>
+        <%= link_to sla_admin_section_path(key),
+              class: "sla-section-link#{' is-active' if key == current}",
+              data: { sla_admin_section: (section[:panel] && panel_page ? key : nil) },
+              'aria-current': (key == current ? 'page' : 'false') do %>
+          <span class="sla-section-link-icon"><%= sla_admin_section_icon(key) %></span>
+          <span class="tw-min-w-0 tw-flex-1">
+            <span class="sla-section-link-title"><%= sla_admin_section_label(key) %></span>
+            <span class="sla-section-link-desc"><%= sla_admin_section_description(key) %></span>
+          </span>
+          <svg class="sla-section-link-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        <% end %>
+      </li>
+    <% end %>
+  </ul>
+</nav>

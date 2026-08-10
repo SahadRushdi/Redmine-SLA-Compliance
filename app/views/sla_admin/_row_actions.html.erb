@@ -1,0 +1,20 @@
+<%# Edit / delete icon buttons for one table row. Locals: edit_path, delete_path, confirm. %>
+<%# %>
+<%# The delete is a `link_to method: :delete`, i.e. rails-ujs builds and submits its own form at %>
+<%# click time and appends it to <body> — so this works unchanged inside the plugin settings %>
+<%# <form> as well as on a standalone page. %>
+<%# %>
+<%# Icon-only, so each carries its action name as the accessible name (title + aria-label) rather %>
+<%# than relying on the glyph. Destructive red is deliberate and is not UI chrome subject to the %>
+<%# blue-only rule — it is the standard danger affordance. %>
+<div class="tw-flex tw-items-center tw-justify-end tw-gap-1">
+  <%= link_to edit_path, class: 'sla-admin-row-action', title: l(:button_edit),
+              'aria-label': l(:button_edit) do %>
+    <%= sla_edit_icon %>
+  <% end %>
+  <%= link_to delete_path, method: :delete, data: { confirm: confirm },
+              class: 'sla-admin-row-action sla-admin-row-action--danger',
+              title: l(:button_delete), 'aria-label': l(:button_delete) do %>
+    <%= sla_delete_icon %>
+  <% end %>
+</div>

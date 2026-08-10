@@ -1,0 +1,49 @@
+<%#
+  Shared summary-card body — ONE definition of the card anatomy, rendered by both the Open Tickets
+  tab's five-card row (_summary_cards.html.erb) and the SLA Trend tab's SLA Met card
+  (_sla_met_card.html.erb), so the two tabs cannot drift into two different card designs.
+
+  Anatomy, top to bottom:
+    row 1 — icon in a tinted rounded tile, then the label.
+    row 2 — the headline number, the largest type on the page after the h1.
+    row 3 — one short muted caption.
+
+  No (i) tooltips. Every card says everything it has to say in the always-visible caption; if a
+  caption needs a paragraph behind an icon to be understood, the caption is wrong.
+
+  Locals:
+    state        palette key (:total, :stale, :breached, :at_risk, :no_sla, :met)
+    label        short title beside the icon
+    value        headline figure. Pass a plain value, or an html_safe fragment when it carries a
+                 secondary part (the Breached card's "(17)").
+    caption      short muted line under the number. Omit for none.
+    value_id     id for the headline element (functional tests assert on these — keep them stable)
+    caption_id   id for the caption element
+    surface      override for the tile background/border classes (the SLA Met card is a white tile
+                 on the Trend tab rather than a tinted one, since it stands alone rather than in a
+                 row of five)
+%>
+<% caption = local_assigns[:caption] %>
+<% surface = local_assigns.fetch(:surface, sla_card_surface_classes(state)) %>
+<%# tw-border-solid, not just tw-border: Tailwind Preflight is disabled in this plugin (CLAUDE.md), %>
+<%# so nothing sets a default border-style and a width-only utility would render no border at all. %>
+<div class="tw-rounded-xl tw-border tw-border-solid tw-p-4 tw-shadow-sm tw-transition-shadow hover:tw-shadow-md <%= surface %>">
+  <div class="tw-flex tw-items-center tw-gap-2.5">
+    <%# Rounded square, not a circle: the icon tile lines up with the card's own rounded-xl corners %>
+    <%# and reads as part of the tile rather than as an avatar. %>
+    <span class="tw-inline-flex tw-items-center tw-justify-center tw-w-9 tw-h-9 tw-rounded-lg tw-flex-shrink-0 <%= sla_card_icon_classes(state) %>"><%= sla_card_icon(state) %></span>
+    <span class="tw-text-sm tw-font-semibold tw-text-gray-700 tw-min-w-0 tw-truncate"><%= label %></span>
+  </div>
+
+  <%# content_tag rather than literal markup only so a nil *_id local drops the attribute entirely %>
+  <%# instead of emitting id="". %>
+  <%= content_tag :p, value, id: local_assigns[:value_id],
+        class: "tw-text-4xl tw-font-bold tw-leading-none tw-mt-3 tw-mb-0 #{sla_card_value_classes(state)}" %>
+
+  <% if caption.present? %>
+    <%# gray-500, not the gray-400 of the reference mock: on a tinted -50 surface gray-400 falls %>
+    <%# under 3:1 contrast, and the caption is the line that explains the number. %>
+    <%= content_tag :p, caption, id: local_assigns[:caption_id],
+          class: 'tw-text-xs tw-text-gray-500 tw-mt-2 tw-mb-0' %>
+  <% end %>
+</div>

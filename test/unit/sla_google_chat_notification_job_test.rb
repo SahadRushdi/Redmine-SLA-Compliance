@@ -12,7 +12,6 @@ class SlaGoogleChatNotificationJobTest < ActiveSupport::TestCase
   OTHER_TRACKER = 2
   PRIORITY      = 6 # High
   WEBHOOK       = 'https://chat.googleapis.com/v1/spaces/AAA/messages?key=k'
-  GLOBAL_WEBHOOK = 'https://chat.googleapis.com/v1/spaces/GLOBAL/messages?key=g'
 
   # Records what would have been posted, in place of Sla::GoogleChatClient. Mirrors the
   # hand-rolled FakeNotifier collaborators in sweep_test.rb rather than pulling in an HTTP stub.
@@ -118,15 +117,9 @@ class SlaGoogleChatNotificationJobTest < ActiveSupport::TestCase
     assert_empty run_job(0, FakeClient.new).calls
   end
 
-  test "falls back to the global webhook when the project has none" do
-    Setting.plugin_redmine_sla_compliance = { 'google_chat_webhook' => GLOBAL_WEBHOOK }
-    issue = make_issue
-
-    assert_equal GLOBAL_WEBHOOK, run_job(issue.id, FakeClient.new).calls.first.first
-  end
-
-  test "the project webhook wins over the global one" do
-    Setting.plugin_redmine_sla_compliance = { 'google_chat_webhook' => GLOBAL_WEBHOOK }
+  test "posts to the project's own webhook" do
+    # There is no instance-wide fallback any more (removed 2026-08-05 with its admin field), so the
+    # project's own value is the only source there is.
     set_webhook(WEBHOOK)
     issue = make_issue
 

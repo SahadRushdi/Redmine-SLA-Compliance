@@ -81,6 +81,111 @@
     });
   }
 
+  // #rgb / #rrggbb -> a text colour that stays legible on it. Needed because the priority chart
+  // draws each segment's value INSIDE the segment: white reads on every hue in the current -600
+  // palette, but this stays derived rather than hard-coded so a lighter palette entry (no_sla was
+  // gray-300 until it moved to violet-600) can't silently render invisible labels again.
+  function readableTextOn(color) {
+    var hex = typeof color === 'string' && color.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (!hex) { return '#ffffff'; }
+
+    var digits = hex[1];
+    if (digits.length === 3) { digits = digits[0] + digits[0] + digits[1] + digits[1] + digits[2] + digits[2]; }
+    var value = parseInt(digits, 16);
+    var r = (value >> 16) & 255, g = (value >> 8) & 255, b = value & 255;
+    // Perceived brightness (ITU-R BT.601), the same weighting Chart.js's own colour helpers use.
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#374151' /* gray-700 */ : '#ffffff';
+  }
+
+  // Rounded bar ends for the priority chart. Chart.js 2.9 has no borderRadius option (that arrived
+  // in v3), so each bar element's own `draw` is shadowed with this one — an instance property, so
+  // Chart.elements.Rectangle.prototype is left alone and no other chart on the page is affected.
+  //
+  // Only the OUTER ends of a stacked row are rounded: the leftmost non-zero segment rounds its left
+  // end and the rightmost rounds its right, so the row reads as one pill rather than as a string of
+  // separate lozenges with notches between them. Which segment is which is worked out per row in
+  // registerPriorityRoundedBars below and left on the element as $slaRound.
+  function drawRoundedBar() {
+    var vm = this._view;
+    var ctx = this._chart.ctx;
+    var left, right, top, bottom, half;
+
+    if (vm.width !== undefined) { // vertical bar
+      half = Math.abs(vm.width) / 2;
+      left = vm.x - half;
+      right = vm.x + half;
+      top = Math.min(vm.y, vm.base);
+      bottom = Math.max(vm.y, vm.base);
+    } else { // horizontalBar: base is the left edge, x the right
+      half = Math.abs(vm.height) / 2;
+      left = Math.min(vm.x, vm.base);
+      right = Math.max(vm.x, vm.base);
+      top = vm.y - half;
+      bottom = vm.y + half;
+    }
+
+    var width = right - left, height = bottom - top;
+    if (width <= 0 || height <= 0) { return; }
+
+    var round = this.$slaRound || {};
+    // Fully rounded ends (radius = half the bar's thickness), clamped so a narrow segment can never
+    // ask for a radius wider than itself — arcTo renders unpredictably when it does.
+    var span = (round.left && round.right) ? width / 2 : width;
+    var radius = Math.min(height / 2, span);
+    var rl = round.left ? radius : 0;
+    var rr = round.right ? radius : 0;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(left + rl, top);
+    ctx.lineTo(right - rr, top);
+    if (rr) { ctx.arcTo(right, top, right, top + rr, rr); } else { ctx.lineTo(right, top); }
+    ctx.lineTo(right, bottom - rr);
+    if (rr) { ctx.arcTo(right, bottom, right - rr, bottom, rr); } else { ctx.lineTo(right, bottom); }
+    ctx.lineTo(left + rl, bottom);
+    if (rl) { ctx.arcTo(left, bottom, left, bottom - rl, rl); } else { ctx.lineTo(left, bottom); }
+    ctx.lineTo(left, top + rl);
+    if (rl) { ctx.arcTo(left, top, left + rl, top, rl); } else { ctx.lineTo(left, top); }
+    ctx.closePath();
+    ctx.fillStyle = vm.backgroundColor;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function registerPriorityRoundedBars() {
+    if (Chart.plugins.getAll().some(function (p) { return p.id === 'slaPriorityRoundedBars'; })) { return; }
+
+    Chart.plugins.register({
+      id: 'slaPriorityRoundedBars',
+      // afterUpdate, not afterInit: Chart.js rebuilds the element list on every update (a legend
+      // highlight, a resize), and a `draw` assigned only once would be dropped with the old elements.
+      afterUpdate: function (chart) {
+        if (chart.canvas.id !== 'sla-priority-chart') { return; }
+
+        var datasets = chart.data.datasets;
+        var rowCount = (datasets[0] && datasets[0].data.length) || 0;
+
+        for (var row = 0; row < rowCount; row++) {
+          var first = -1, last = -1;
+          datasets.forEach(function (dataset, index) {
+            if (chart.getDatasetMeta(index).hidden) { return; }
+            if ((dataset.data[row] || 0) > 0) {
+              if (first < 0) { first = index; }
+              last = index;
+            }
+          });
+
+          datasets.forEach(function (dataset, index) {
+            var element = (chart.getDatasetMeta(index).data || [])[row];
+            if (!element) { return; }
+            element.draw = drawRoundedBar;
+            element.$slaRound = { left: index === first, right: index === last };
+          });
+        }
+      }
+    });
+  }
+
   function registerDonutLegendHighlight() {
     if (Chart.plugins.getAll().some(function (p) { return p.id === 'slaDonutLegendHighlight'; })) { return; }
 
@@ -222,8 +327,9 @@
 
         ctx.save();
 
-        // Pass 1 — per-segment values, white, centered in each segment.
-        ctx.fillStyle = '#ffffff';
+        // Pass 1 — per-segment values, centered in each segment. The colour is derived per segment
+        // (readableTextOn) rather than pinned to white, so a light palette entry can't leave the
+        // label invisible on what is often the biggest segment on the chart.
         ctx.font = 'bold 12px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -241,6 +347,7 @@
             if (!value) { return; }
             var width = bar._model.base - bar._model.x; // horizontalBar: base = left edge, x = right edge
             if (Math.abs(width) < 18) { return; }
+            ctx.fillStyle = readableTextOn(bar._model.backgroundColor);
             ctx.fillText(String(value), bar._model.x + width / 2, bar._model.y);
           });
         });
@@ -263,6 +370,7 @@
     if (!canvas || canvas.slaChartInitialized || !window.Chart) { return; }
     canvas.slaChartInitialized = true;
     registerPriorityValueLabels();
+    registerPriorityRoundedBars();
     registerDatasetLegendHighlight('sla-priority-chart');
 
     var payload = readPayload(canvas);

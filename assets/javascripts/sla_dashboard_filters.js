@@ -38,10 +38,17 @@
 
   // Same pattern as sla_policy_form.js's initChips/initSingleSelects (chip multi-selects vs.
   // single-value dropdowns styled to match the rest of the scoped Flowbite UI).
+  // See assets/javascripts/sla_tom_select.js: Redmine core's defaultFocus() focuses the first
+  // visible text input on the page, which after init IS a Tom Select control, and openOnFocus then
+  // leaves the list hanging open before the user has touched anything.
+  function guard(instance) {
+    return window.slaTomSelect ? window.slaTomSelect.guard(instance) : instance;
+  }
+
   function initChips() {
     document.querySelectorAll('select[data-sla-chips]').forEach(function (el) {
       if (!el.tomselect && window.TomSelect) {
-        new TomSelect(el, { plugins: ['remove_button'] });
+        guard(new TomSelect(el, { plugins: ['remove_button'] }));
       }
     });
   }
@@ -49,7 +56,7 @@
   function initSingleSelects() {
     document.querySelectorAll('select[data-sla-select]').forEach(function (el) {
       if (!el.tomselect && window.TomSelect) {
-        new TomSelect(el, { create: false, allowEmptyOption: true });
+        guard(new TomSelect(el, { create: false, allowEmptyOption: true }));
       }
     });
   }
@@ -99,15 +106,15 @@
     }
   }
 
+  // ONE class, matching what the ERB renders server-side (`.sla-pill.is-active`) — not a hand-kept
+  // copy of the button's Tailwind utilities. Toggling the utilities individually left the inactive
+  // state's `hover:tw-bg-gray-50` behind on the button that had just become active, and a `hover:`
+  // utility outscores a plain one, so the just-clicked pill went white-on-white under the cursor
+  // until the reload landed (permanently for Custom Range, which never reloads). See
+  // assets/stylesheets/partials/_pill_group.css.
   function markActivePresetButton(activeBtn) {
     document.querySelectorAll('[data-sla-preset-btn]').forEach(function (btn) {
-      var active = btn === activeBtn;
-      btn.classList.toggle('tw-bg-primary-600', active);
-      btn.classList.toggle('tw-text-white', active);
-      btn.classList.toggle('tw-border-primary-600', active);
-      btn.classList.toggle('tw-bg-white', !active);
-      btn.classList.toggle('tw-text-gray-700', !active);
-      btn.classList.toggle('tw-border-gray-300', !active);
+      btn.classList.toggle('is-active', btn === activeBtn);
     });
   }
 
@@ -128,15 +135,10 @@
     (form.requestSubmit ? form.requestSubmit() : form.submit());
   }
 
+  // Same single-class contract as the date presets above (`.sla-seg.is-active`).
   function markActiveGranularityButton(activeBtn) {
     document.querySelectorAll('[data-sla-granularity-btn]').forEach(function (btn) {
-      var active = btn === activeBtn;
-      btn.classList.toggle('tw-bg-primary-600', active);
-      btn.classList.toggle('tw-text-white', active);
-      btn.classList.toggle('tw-border-primary-600', active);
-      btn.classList.toggle('tw-bg-white', !active);
-      btn.classList.toggle('tw-text-gray-700', !active);
-      btn.classList.toggle('tw-border-gray-300', !active);
+      btn.classList.toggle('is-active', btn === activeBtn);
     });
   }
 

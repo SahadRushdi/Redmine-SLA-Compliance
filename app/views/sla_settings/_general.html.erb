@@ -1,0 +1,73 @@
+<%# General section of the admin module: the instance-wide settings. Locals: settings. %>
+<%# %>
+<%# Each is a single control, so each is ONE settings row — name and helper line on the left, the %>
+<%# control on the right — using the same sla_policies/_setting_card as the project-level SLA %>
+<%# Policy tab, rather than a titled card whose header would just restate the field label. %>
+<%# %>
+<%# The `settings[...]` input names are what SlaSettingsController#update permits and merges into %>
+<%# Setting.plugin_redmine_sla_compliance — renaming one silently stops it being saved. %>
+<%# --- Step 5.1: who can see SLA -------------------------------------------------------------- %>
+<%# Redmine grants permissions to ROLES. Rather than make an admin tick this plugin's three %>
+<%# permissions on every role's own form and keep them in step by hand, the roles that carry SLA %>
+<%# access are named once here; Sla::AccessControl + UserPatch turn them into permissions. Roles %>
+<%# are held through membership, so a granted user only gains SLA access on projects they are %>
+<%# already a member of. Admins always have access and are not affected by this list. %>
+<%# %>
+<%# This replaced two per-user allow-lists (SLA viewers / SLA managers) and the Access control %>
+<%# section that housed them on 2026-08-06. %>
+<%= render layout: 'sla_policies/setting_card',
+           locals: { title: l(:field_sla_access_roles),
+                     description: l(:text_sla_access_roles_hint) } do %>
+  <div class="tw-w-full md:tw-w-80">
+    <%# Sentinel: guarantees the [] param is still posted once every chip has been removed, so %>
+    <%# clearing the list persists as empty instead of leaving the old roles in place. %>
+    <%= hidden_field_tag 'settings[sla_access_role_ids][]', '', id: nil %>
+    <%# data-sla-chips is the same Tom Select multi-select the policy form's status pickers use %>
+    <%# (sla_admin.js#initChips); without JS this degrades to a native multi-select that still %>
+    <%# posts the current selection back unchanged. %>
+    <%# %>
+    <%# Role.givable, not Role.all: the builtin Non-member and Anonymous roles must never be %>
+    <%# offerable here — granting one would hand SLA access to everyone who can open the project, %>
+    <%# member or not, which is precisely what this list is not for. %>
+    <%= select_tag 'settings[sla_access_role_ids][]',
+          options_from_collection_for_select(Role.givable, :id, :name,
+                                             Sla::PluginSettings.access_role_ids),
+          multiple: true, id: 'settings_sla_access_role_ids', class: sla_input_classes,
+          'aria-label': l(:field_sla_access_roles),
+          data: { sla_chips: true, sla_chip_placeholder: l(:label_sla_access_roles_placeholder) } %>
+  </div>
+<% end %>
+
+<%= render layout: 'sla_policies/setting_card',
+           locals: { title: l(:field_sla_sweep_interval_minutes),
+                     description: l(:text_sla_sweep_interval_hint) } do %>
+  <div class="tw-w-full md:tw-w-40">
+    <%= number_field_tag 'settings[sweep_interval_minutes]',
+          settings['sweep_interval_minutes'].presence || Sla::PluginSettings::DEFAULT_SWEEP_INTERVAL_MINUTES,
+          min: Sla::PluginSettings::MIN_SWEEP_INTERVAL_MINUTES,
+          max: Sla::PluginSettings::MAX_SWEEP_INTERVAL_MINUTES,
+          id: 'settings_sweep_interval_minutes', class: sla_input_classes,
+          'aria-label': l(:field_sla_sweep_interval_minutes) %>
+  </div>
+<% end %>
+
+<%= render layout: 'sla_policies/setting_card',
+           locals: { title: l(:field_sla_unclassified_priority),
+                     description: l(:text_sla_unclassified_priority_hint) } do %>
+  <%# data-sla-select swaps the native <select> for the same Tom Select dropdown used across the %>
+  <%# rest of the plugin — a native popup is OS-rendered and cannot be themed to match. %>
+  <div class="tw-w-full md:tw-w-80">
+    <%= select_tag 'settings[unclassified_priority_id]',
+          options_for_select(
+            [[l(:label_sla_unclassified_priority_auto), '']] +
+              IssuePriority.all.map { |p| [p.name, p.id] },
+            settings['unclassified_priority_id'].presence
+          ),
+          id: 'settings_unclassified_priority_id', class: sla_input_classes,
+          'aria-label': l(:field_sla_unclassified_priority), data: { sla_select: true } %>
+  </div>
+<% end %>
+
+<%# The instance-wide "Default Google Chat webhook" that used to sit here is gone, along with the %>
+<%# fallback it fed (SlaNotificationSetting.google_chat_webhook_for). A webhook is now a per-project %>
+<%# setting only — Project Settings → SLA Policy → Notifications. %>

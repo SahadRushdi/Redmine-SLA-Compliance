@@ -40,16 +40,21 @@ class SlaNotificationSetting < ActiveRecord::Base
   validates :google_chat_webhook, format: { with: %r{\Ahttps://\S+\z} }, allow_blank: true
   validate :recipients_are_valid_emails
 
-  # Step 7.1 — which webhook does +project+ post to? The project's own value, else the
-  # instance-wide default from Administration → Plugins (the plan's "per-project setting, with a
-  # global fallback"). Note this deliberately does NOT walk up the project tree the way SLA
-  # policies do: the form shows a single field with no indication that a value might be inherited
-  # from a parent, so inheriting one silently would post to a space the project's admin never saw.
+  # Step 7.1 — which webhook does +project+ post to? Its own value, or nothing.
+  #
+  # DEVIATION FROM THE IMPLEMENTATION PLAN, recorded deliberately. The plan specifies "per-project
+  # setting, with a global fallback", and an instance-wide default did live in the plugin settings
+  # (Sla::PluginSettings.default_google_chat_webhook). It was removed on request on 2026-08-05 along
+  # with its admin field; a webhook is now per-project only. Raise it if the plan should be amended.
+  #
+  # This also deliberately does NOT walk up the project tree the way SLA policies do: the form shows
+  # a single field with no indication that a value might be inherited from a parent, so inheriting
+  # one silently would post to a space the project's admin never saw. A project with no webhook of
+  # its own now simply sends no Google Chat notification.
   def self.google_chat_webhook_for(project)
     return nil unless project
 
-    own = find_by(project_id: project.id)&.google_chat_webhook
-    own.presence || Sla::PluginSettings.default_google_chat_webhook
+    find_by(project_id: project.id)&.google_chat_webhook.presence
   end
 
   # --- Step 4.7: clone ------------------------------------------------------------------------

@@ -1,16 +1,30 @@
 <%# Compliance-split donut: 3 legend categories (met/breached/no_sla), summing to @counts.total. %>
-<%# At-risk is rendered as a 4th ARC SEGMENT adjacent to "met" (same color family, a thin white %>
-<%# border between them reads as an in-slice boundary marker) but is NOT a 4th legend swatch — %>
-<%# the legend beside the donut (met/breached/no_sla with counts + percentages, plus a visually %>
-<%# distinct "At Risk" subset row) is the one legend for this compliance-state dimension %>
-<%# (Global Rule 9) - the priority chart's own legend below reuses the same colors/labels rather %>
-<%# than a conflicting mapping. Chart.js's own native legend is disabled below. %>
+<%# At-risk is rendered as a 4th ARC SEGMENT (same color family as met, a thin white border between %>
+<%# them reads as an in-slice boundary marker) and as a visually distinct subset legend row, but it %>
+<%# is not a 4th primary state — the legend beside the donut is the one legend for this compliance- %>
+<%# state dimension (Global Rule 9), and the priority chart's own legend below reuses the same %>
+<%# colors/labels rather than a conflicting mapping. Chart.js's own native legend is disabled below. %>
+<%#
+  ORDER: arcs and legend rows are both sorted by count, descending — biggest bucket first — rather
+  than pinned to a fixed met/breached/no_sla/at_risk order. Sorting server-side means the order is
+  recomputed from the same @counts every render, so it can never drift from the data. `each_with_index
+  … sort_by [-value, i]` keeps the sort STABLE: equal counts (very common — several states sit at 0
+  on a healthy board) hold the declaration order below instead of shuffling between requests.
+%>
 <% met_on_track = @counts.met - @counts.at_risk %>
+<% donut_arcs = [
+     { key: :met,      label: l(:label_sla_chart_met_on_track), value: met_on_track },
+     { key: :at_risk,  label: l(:label_sla_chart_met_at_risk),  value: @counts.at_risk },
+     { key: :breached, label: sla_card_label(:breached),        value: @counts.breached },
+     { key: :no_sla,   label: sla_card_label(:no_sla),          value: @counts.no_sla }
+   ].each_with_index.sort_by { |arc, i| [-arc[:value], i] }.map(&:first) %>
+<%# Where each state's arc ended up after the sort — the legend rows below need these indices to %>
+<%# tell the highlight JS which arc(s) they drive, and they are no longer positional constants. %>
+<% arc_index = donut_arcs.each_with_index.to_h { |arc, i| [arc[:key], i] } %>
 <% donut_payload = {
-     labels: [l(:label_sla_chart_met_on_track), l(:label_sla_chart_met_at_risk),
-              l(:label_sla_card_breached), l(:label_sla_card_no_sla)],
-     data: [met_on_track, @counts.at_risk, @counts.breached, @counts.no_sla],
-     colors: [sla_chart_color(:met), sla_chart_color(:at_risk), sla_chart_color(:breached), sla_chart_color(:no_sla)],
+     labels: donut_arcs.map { |arc| arc[:label] },
+     data: donut_arcs.map { |arc| arc[:value] },
+     colors: donut_arcs.map { |arc| sla_chart_color(arc[:key]) },
      total: @counts.total
    } %>
 <div class="tw-flex tw-flex-col tw-h-full">
@@ -22,52 +36,50 @@
   <div class="tw-flex tw-flex-col tw-items-center tw-gap-5 tw-flex-1">
     <div class="tw-relative tw-w-44 tw-h-44 tw-flex-shrink-0">
       <canvas id="sla-donut-chart" data-chart="<%= donut_payload.to_json %>"></canvas>
+      <%# The number only — no caption under it. The card row above already labels this exact figure %>
+      <%# ("Open Tickets") and the section heading already says what the ring splits, so a third %>
+      <%# repetition of the name added no clarity and crowded the 176px hole. %>
       <div class="tw-absolute tw-inset-0 tw-flex tw-flex-col tw-items-center tw-justify-center tw-pointer-events-none">
         <span class="tw-text-2xl tw-font-bold tw-text-gray-900"><%= @counts.total %></span>
-        <span class="tw-text-xs tw-text-gray-500"><%= sla_card_label(:total) %></span>
       </div>
     </div>
 
-    <%# data-sla-legend-indices matches donut_payload's own data array order above (met_on_track, %>
-    <%# at_risk, breached, no_sla) - "met" highlights BOTH the on-track and at-risk arcs together %>
-    <%# (they're one legend row/count here), while the At Risk row below highlights just its own %>
-    <%# arc. Click-to-highlight (dim the other arcs, not hide any of them) is wired in %>
+    <%# Legend rows carry the arc indices they highlight (data-sla-legend-indices), looked up from %>
+    <%# arc_index above rather than hardcoded — "SLA Met" highlights BOTH the on-track and at-risk %>
+    <%# arcs together (they're one legend row/count here), while the At Risk subset row highlights %>
+    <%# only its own arc. Click-to-highlight (dim the other arcs, not hide any of them) is wired in %>
     <%# sla_dashboard_charts.js - same behavior as the priority chart's and trend chart's legends. %>
-    <% donut_legend_indices = { met: '0,1', breached: '2', no_sla: '3' } %>
+    <%#
+      At Risk is a subset of Met (the "(of Met)" hint keeps that clear) but sorts by count among the
+      others and renders as a regular row — same layout/size/weight — so the legend reads as one
+      consistent list ordered biggest-first, exactly like the arcs.
+    %>
+    <% donut_legend_rows = [
+         { state: :met,      value: @counts.met,      indices: [arc_index[:met], arc_index[:at_risk]].sort },
+         { state: :breached, value: @counts.breached, indices: [arc_index[:breached]] },
+         { state: :no_sla,   value: @counts.no_sla,   indices: [arc_index[:no_sla]] },
+         { state: :at_risk,  value: @counts.at_risk,  indices: [arc_index[:at_risk]], subset: true }
+       ].each_with_index.sort_by { |row, i| [-row[:value], i] }.map(&:first) %>
     <div id="sla-chart-legend" class="tw-w-full tw-space-y-2.5">
-      <% %i[met breached no_sla].each do |state| %>
+      <% donut_legend_rows.each do |row| %>
         <%# sla-legend-item carries the click affordance AND the active pill the JS toggles; the %>
         <%# -label/-value/-muted hooks let that pill recolour the count and percentage too, which %>
         <%# carry grey utilities of their own — see partials/_chart_legend.css. %>
         <div class="sla-legend-item tw-flex tw-items-center tw-justify-between tw-gap-3 tw-text-sm"
-             data-sla-legend-target="sla-donut-chart" data-sla-legend-indices="<%= donut_legend_indices[state] %>">
+             data-sla-legend-target="sla-donut-chart" data-sla-legend-indices="<%= row[:indices].join(',') %>">
           <span class="sla-legend-label tw-inline-flex tw-items-center tw-gap-2 tw-text-gray-700">
-            <span class="tw-w-2.5 tw-h-2.5 tw-rounded-full tw-inline-block tw-flex-shrink-0" style="background-color: <%= sla_chart_color(state) %>"></span>
-            <%= sla_card_label(state) %>
+            <span class="tw-w-2.5 tw-h-2.5 tw-rounded-full tw-inline-block tw-flex-shrink-0" style="background-color: <%= sla_chart_color(row[:state]) %>"></span>
+            <%= sla_card_label(row[:state]) %>
+            <% if row[:subset] %>
+              <span class="sla-legend-muted tw-text-gray-400 tw-text-xs">(<%= l(:label_sla_chart_met_at_risk_hint) %>)</span>
+            <% end %>
           </span>
           <span class="tw-whitespace-nowrap">
-            <span class="sla-legend-value tw-font-semibold tw-text-gray-900"><%= @counts.public_send(state) %></span>
-            <span class="sla-legend-muted tw-text-gray-400 tw-text-xs">(<%= sla_percentage(@counts.public_send(state), @counts.total) %>%)</span>
+            <span class="sla-legend-value tw-font-semibold tw-text-gray-900"><%= row[:value] %></span>
+            <span class="sla-legend-muted tw-text-gray-400 tw-text-xs">(<%= sla_percentage(row[:value], @counts.total) %>%)</span>
           </span>
         </div>
       <% end %>
-
-      <%# At-risk is a subset of Met (the "(of Met)" hint keeps that clear), but it's rendered as a %>
-      <%# regular legend row — same layout/size/weight as met/breached/no_sla above — rather than a %>
-      <%# dashed callout, so the legend reads as one consistent list. Highlights only its own arc %>
-      <%# (index 1), not the whole "met" pair the row above does. %>
-      <div class="sla-legend-item tw-flex tw-items-center tw-justify-between tw-gap-3 tw-text-sm"
-           data-sla-legend-target="sla-donut-chart" data-sla-legend-indices="1">
-        <span class="sla-legend-label tw-inline-flex tw-items-center tw-gap-2 tw-text-gray-700">
-          <span class="tw-w-2.5 tw-h-2.5 tw-rounded-full tw-inline-block tw-flex-shrink-0" style="background-color: <%= sla_chart_color(:at_risk) %>"></span>
-          <%= l(:label_sla_card_at_risk) %>
-          <span class="sla-legend-muted tw-text-gray-400 tw-text-xs">(<%= l(:label_sla_chart_met_at_risk_hint) %>)</span>
-        </span>
-        <span class="tw-whitespace-nowrap">
-          <span class="sla-legend-value tw-font-semibold tw-text-gray-900"><%= @counts.at_risk %></span>
-          <span class="sla-legend-muted tw-text-gray-400 tw-text-xs">(<%= sla_percentage(@counts.at_risk, @counts.total) %>%)</span>
-        </span>
-      </div>
     </div>
   </div>
 </div>

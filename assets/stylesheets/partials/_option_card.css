@@ -41,3 +41,17 @@
 .sla-option-card:has(input:focus-visible) {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
 }
+
+/*
+ * Compact variant — the same tile sized to sit inline in a row of several (the Business calendar
+ * form's seven working-day checkboxes) rather than as a full-width stacked option.
+ *
+ * The selectors above are input-type agnostic (`input:checked`), so a checkbox tile picks up the
+ * selected/hover/focus treatment unchanged; only the box metrics differ. _theme_isolation.css has
+ * already reset the native checkbox into a correctly-rendering custom control, exactly as it does
+ * for the radios these tiles were first built for.
+ */
+.sla-option-card--compact {
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+}

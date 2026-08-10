@@ -5,9 +5,10 @@
 <%# per page, with the state pills beside the heading. The card's expand button MOVES this exact %>
 <%# #sla-detail-table node into the modal below (single rendered row set - rows are never %>
 <%# duplicated) and reveals every remaining column plus the search box and per-page control. %>
-<%# State tabs and the main filters still resubmit as plain GET links/forms (they change WHICH %>
-<%# rows are in scope). Free-text search, sorting and pagination are all CLIENT-SIDE %>
-<%# (sla_dashboard_detail_table.js) over the full row set rendered here - no reload for any of them. %>
+<%# The state pills, free-text search, sorting and pagination are ALL client-side %>
+<%# (sla_dashboard_detail_table.js) over the full row set rendered here - no reload for any of %>
+<%# them. Only the main dashboard filters still resubmit as a plain GET form, since they change %>
+<%# which tickets are in scope at all. %>
 <%# Each column carries an `extra` flag: extra columns get the sla-detail-col-extra class and are %>
 <%# hidden until the table is expanded into the modal (see partials/_detail_table.css). %>
 <% detail_columns = [
@@ -30,7 +31,12 @@
     <%# Heading + state pills sit together on one band (pills beside the heading), so the compact %>
     <%# card can filter by state without the search/per-page chrome that only the modal shows. %>
     <div class="tw-flex tw-items-center tw-gap-3 tw-flex-wrap">
-      <h3 class="tw-text-base tw-font-semibold tw-text-gray-900 tw-whitespace-nowrap"><%= l(:label_sla_detail_table) %></h3>
+      <%# tw-m-0 / tw-p-0: Preflight is disabled in this build, so Redmine's own global %>
+      <%# `h1,h2,h3 { padding: 2px 10px 1px 0; margin: 0 0 10px }` still applies. Inside a %>
+      <%# tw-items-center row that 10px bottom margin makes the heading's BOX taller than its %>
+      <%# text, so centring the box left the word "Detail" sitting ~5px above the state pills %>
+      <%# beside it. Same reset the settings-tab cards already carry for the same reason. %>
+      <h3 class="tw-m-0 tw-p-0 tw-text-base tw-font-semibold tw-text-gray-900 tw-whitespace-nowrap"><%= l(:label_sla_detail_table) %></h3>
       <div id="sla-detail-state-tabs" class="tw-flex tw-flex-wrap tw-gap-2">
         <%= render 'sla_dashboard/state_tabs' %>
       </div>
@@ -56,8 +62,13 @@
 
   <%# Home slot the #sla-detail-table node is returned to when the modal closes. %>
   <div id="sla-detail-table-home" class="tw-flex-1">
+    <%# data-l-empty is the message for "this state pill matches none of the rendered rows" — the %>
+    <%# same wording the ERB empty-state row below uses, which only covers the case where the %>
+    <%# server returned nothing at all. Filtering to an empty state is now a client-side outcome, %>
+    <%# so the JS needs the string too. %>
     <div id="sla-detail-table" data-sla-detail-table
-         data-l-no-search-match="<%= l(:text_sla_detail_no_search_matches) %>">
+         data-l-no-search-match="<%= l(:text_sla_detail_no_search_matches) %>"
+         data-l-empty="<%= l(:text_sla_detail_table_empty_state) %>">
       <%# Search + per-page: hidden here (see _detail_table.css) and MOVED onto the modal's state-pill %>
       <%# row when the table is expanded (sla_dashboard_detail_table.js parks this node in %>
       <%# [data-sla-modal-controls-slot]), so the modal spends no band of its own on them. %>
@@ -131,7 +142,15 @@
               <%# reasonably expect to search by, not just subject/id. %>
               <% search_terms = [issue.id, issue.project.name, issue.tracker.name, issue.subject,
                                  issue.status.name, issue.assigned_to&.name, result_label].join(' ') %>
+              <%# The state pills filter these rows client-side, so each row carries its own %>
+              <%# effective state. Two attributes, not one, because at-risk is a BOOLEAN FLAG ON A %>
+              <%# MET ROW, not a fourth state (Global Rule / SLA state model) — and %>
+              <%# `effective_at_risk?` already encodes "at_risk AND effectively met", exactly what %>
+              <%# the server's EFFECTIVE_AT_RISK predicate means, so the two filters agree by %>
+              <%# construction rather than by two implementations happening to match. %>
               <tr data-sla-row data-sla-search="<%= search_terms %>"
+                  data-sla-state="<%= effective_state %>"
+                  data-sla-at-risk="<%= sla_result.effective_at_risk? %>"
                   class="tw-border-b tw-border-gray-100 hover:tw-bg-gray-50" id="sla-detail-row-<%= issue.id %>">
                 <td class="tw-py-2.5 tw-pr-4" data-sla-sort-value="<%= issue.id %>">
                   <%= link_to "##{issue.id}", issue_path(issue), target: '_blank', rel: 'noopener',
@@ -190,14 +209,16 @@
 <%# Expand modal — the #sla-detail-table node is moved into #sla-detail-modal-body on expand and %>
 <%# returned to #sla-detail-table-home on close (sla_dashboard_detail_table.js). Starts hidden. %>
 <%# Near-full-screen modal (max-w-[92vw]/h-[88vh]) so the full-column table has real room, matching %>
-<%# the reference. Its own state pills sit under the title bar (data-sla-modal-tabs): filtering %>
-<%# from inside the modal is the same server scope change the compact card's pills make, and %>
-<%# sla_dashboard_detail_table.js flags the modal to re-open after that reload so it feels seamless. %>
+<%# the reference. Its own state pills sit under the title bar (data-sla-modal-tabs) and filter the %>
+<%# same rows in place as the compact card's copy; sla_dashboard_detail_table.js repaints both %>
+<%# copies on every change, so the modal and the card can never show different active pills. %>
 <div id="sla-detail-modal" class="hidden tw-fixed tw-inset-0 tw-z-50 tw-flex tw-items-center tw-justify-center tw-p-4" role="dialog" aria-modal="true" aria-labelledby="sla-detail-modal-title">
   <div class="tw-absolute tw-inset-0 tw-bg-gray-900/50" data-sla-detail-close></div>
   <div class="tw-relative tw-bg-white tw-rounded-xl tw-shadow-xl tw-w-full tw-max-w-[92vw] tw-h-[88vh] tw-flex tw-flex-col">
     <div class="tw-flex tw-items-center tw-justify-between tw-gap-3 tw-px-5 tw-py-4 tw-border-b tw-border-gray-200">
-      <h3 id="sla-detail-modal-title" class="tw-text-base tw-font-semibold tw-text-gray-900"><%= l(:label_sla_detail_table) %></h3>
+      <%# tw-m-0 / tw-p-0 for the same reason as the card heading above — without it the title sat %>
+      <%# above the centre of the close button it shares this row with. %>
+      <h3 id="sla-detail-modal-title" class="tw-m-0 tw-p-0 tw-text-base tw-font-semibold tw-text-gray-900"><%= l(:label_sla_detail_table) %></h3>
       <%# Clearly-visible close: a solid grey circle button with a bold X, not a faint thin glyph. %>
       <button type="button" data-sla-detail-close aria-label="<%= l(:button_close) %>"
               class="tw-inline-flex tw-items-center tw-justify-center tw-w-9 tw-h-9 tw-bg-gray-100 tw-text-gray-600 tw-border-0 tw-rounded-full tw-shadow-none hover:tw-bg-gray-200 hover:tw-text-gray-900 focus:tw-outline-none focus:tw-ring-4 focus:tw-ring-primary-100">
@@ -208,8 +229,8 @@
     </div>
     <%# One header band: state pills on the left, and the search box + per-page dropdown parked on %>
     <%# the right by sla_dashboard_detail_table.js on expand (they render inside #sla-detail-table %>
-    <%# and are moved here, so there is only ever one of each in the DOM). The pills keep their own %>
-    <%# wrapper so the reopen-flag click binding can target pill links only, never a control. %>
+    <%# and are moved here, so there is only ever one of each in the DOM). The pills sit OUTSIDE %>
+    <%# #sla-detail-modal-body, so they stay put while the table node moves in and out of it. %>
     <div data-sla-modal-tabs class="tw-flex tw-items-center tw-justify-between tw-flex-wrap tw-gap-3 tw-px-5 tw-py-3 tw-border-b tw-border-gray-200">
       <div data-sla-modal-pills class="tw-flex tw-flex-wrap tw-gap-2">
         <%= render 'sla_dashboard/state_tabs' %>

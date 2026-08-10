@@ -1,0 +1,37 @@
+<%#
+  A card that IS one settings row, for the case where a card holds exactly ONE control.
+
+  Left: the setting's name (bold) with a one-line helper caption under it. Right: the control
+  itself, vertically centred on the same row. No tinted header band — sla_policies/_card.html.erb
+  stays the layout for a SECTION of several fields, where a header earns its keep by naming the
+  group. Using it for a single control produced a card title and description immediately above a
+  near-identical field label and hint, i.e. the same idea stated twice before you reached the
+  setting.
+
+  Render it the same way as sla_policies/_card.html.erb — as a LAYOUT partial, with the control
+  supplied as the block. Locals: title; description optional. The block is the control, plus
+  anything that belongs directly under it (e.g. a dependent field the control reveals).
+
+  NOTE FOR FUTURE EDITS OF THIS COMMENT: never write a percent-greater-than sequence in here. ERB
+  ends a comment at the FIRST one it meets, so an illustrative snippet containing a closing tag
+  terminates the comment early and dumps the rest of it onto the page as visible text. That is
+  exactly what happened to the first version of this file.
+%>
+<%# tw-border-solid, not just tw-border: Preflight is disabled in this plugin (CLAUDE.md), so %>
+<%# nothing sets a default border-style and a width-only utility would draw no border at all. %>
+<div class="tw-bg-white tw-border tw-border-solid tw-border-gray-200 tw-rounded-lg tw-shadow-sm tw-mb-5">
+  <%# tw-items-center is the whole point of the row: the control sits on the label's optical %>
+  <%# centre, not at the top of a two-line block. It wraps to stacked at narrow widths, where %>
+  <%# label-beside-control has no room to be a row at all. %>
+  <div class="tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-gap-x-6 tw-gap-y-3 tw-px-5 tw-py-4">
+    <div class="tw-min-w-0 tw-flex-1">
+      <%# tw-m-0 / tw-mb-0: Preflight is disabled, so Purplemine2's own p margins are still in %>
+      <%# force and would otherwise space this row out of proportion. %>
+      <p class="tw-m-0 tw-text-base tw-font-semibold tw-text-gray-900"><%= title %></p>
+      <% if local_assigns[:description].present? %>
+        <p class="tw-mt-1 tw-mb-0 tw-text-sm tw-text-gray-500"><%= description %></p>
+      <% end %>
+    </div>
+    <div class="tw-flex-shrink-0"><%= yield %></div>
+  </div>
+</div>

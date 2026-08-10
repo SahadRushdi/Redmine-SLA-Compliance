@@ -1,0 +1,13 @@
+<%# Closing action bar for a create/edit form: primary submit on the right, Cancel beside it. %>
+<%# Locals: submit_label, cancel_path. %>
+<%# %>
+<%# Cancel is a real link back to the section list, not history.back() — the module's whole point %>
+<%# is that every page states where it belongs and can get back there without the browser's Back %>
+<%# button. %>
+<div class="tw-flex tw-flex-wrap tw-items-center tw-justify-end tw-gap-3 tw-mt-6">
+  <%= link_to l(:button_cancel), cancel_path,
+              class: "#{sla_secondary_button_classes} tw-no-underline" %>
+  <button type="submit" class="<%= sla_primary_button_classes %>">
+    <%= sla_save_icon %><span><%= submit_label %></span>
+  </button>
+</div>

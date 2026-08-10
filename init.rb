@@ -11,9 +11,17 @@ Redmine::Plugin.register :redmine_sla_compliance do
 
   requires_redmine version_or_higher: '5.1.0'
 
-  # Global plugin settings (expanded in Phase 5). Declared now so the admin-menu stub renders
-  # a real settings page instead of erroring.
-  settings default: {}, partial: 'sla_compliance/settings'
+  # Global plugin settings, stored as one serialized hash under
+  # `Setting.plugin_redmine_sla_compliance` and read through Sla::PluginSettings.
+  #
+  # DELIBERATELY NO `:partial`. Redmine::Plugin#configurable? is `settings[:partial].present?`, and
+  # it is what puts the "Configure" link on the Plugins list and lets SettingsController#plugin
+  # render. This plugin's settings have their own page (SlaSettingsController, reached from the
+  # "SLA Compliance" entry in the Administration sidebar), so a second way in would be a duplicate
+  # that could never highlight the right sidebar entry — see that controller for the full reason.
+  # Setting.define_plugin_setting only requires `settings` to be present, so the stored hash and
+  # this default are unaffected by the omission.
+  settings default: {}
 
   # --- Step 0.2: project module + named permissions ---------------------------------------
   # Permission names are STABLE — later steps reference them verbatim. Do not rename.
@@ -62,9 +70,11 @@ Redmine::Plugin.register :redmine_sla_compliance do
        caption: :label_sla_dashboard_all,
        if: Proc.new { |_project| User.current.logged? && SlaPolicy.enabled_projects_for(User.current).any? }
 
-  # Global plugin settings screen stub (fleshed out in Phase 5 — access control / lookups).
+  # The admin module's entry point. The item NAME is what SlaSettingsController,
+  # SlaTargetOptionsController and SlaBusinessCalendarsController each declare as their
+  # `menu_item`, which is how this entry stays selected across every page of the module.
   menu :admin_menu, :sla_compliance_settings,
-       { controller: 'settings', action: 'plugin', id: 'redmine_sla_compliance' },
+       { controller: 'sla_settings', action: 'show' },
        caption: :label_sla_compliance_settings,
        html: { class: 'icon', style: 'background-image: url(/images/time.png)' }
 end
@@ -106,11 +116,6 @@ Rails.application.config.after_initialize do
   # plugin helpers by default — make the form helpers available there.
   ProjectsController.helper(:sla_policies)
   ProjectsController.helper(:sla_compliance)
-
-  # Step 5.1 — the access-control pickers render inside Redmine's own SettingsController#plugin
-  # view, which likewise doesn't include plugin helpers by default (sla_label_classes et al).
-  SettingsController.helper(:sla_policies)
-  SettingsController.helper(:sla_compliance)
 
   # Step 3.3 — start the recurring at-risk/stale sweep (no-op under rake / when disabled).
   RedmineSlaCompliance::SweepScheduler.start

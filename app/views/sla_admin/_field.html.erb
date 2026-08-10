@@ -1,0 +1,16 @@
+<%# One labelled form field: label (with an optional required marker), the control, and its hint. %>
+<%# LAYOUT partial — the control is the block, so any input type can use it and every field in the %>
+<%# module gets identical label/hint typography and spacing without re-typing the classes. %>
+<%# %>
+<%# Locals: label, field_id (the control's id, for the label's `for`); hint and required optional. %>
+<div class="tw-mb-5 last:tw-mb-0">
+  <label for="<%= field_id %>" class="<%= sla_label_classes %>">
+    <%= label %><%# Red asterisk is the module-wide required marker; not UI chrome. %>
+    <% if local_assigns[:required] %><span class="tw-text-red-600" aria-hidden="true"> *</span><% end %>
+  </label>
+  <%= yield %>
+  <% if local_assigns[:hint].present? %>
+    <%# tw-mb-0: Preflight is off, so the theme's own p margin would otherwise double the gap. %>
+    <p class="tw-mt-1.5 tw-mb-0 tw-text-xs tw-text-gray-500"><%= hint %></p>
+  <% end %>
+</div>

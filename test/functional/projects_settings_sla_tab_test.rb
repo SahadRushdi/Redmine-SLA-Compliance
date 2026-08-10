@@ -24,6 +24,47 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     Setting.plugin_redmine_sla_compliance = {}
   end
 
+  # Regression: an ERB comment in _setting_card.html.erb illustrated the partial's usage with a
+  # snippet, and the snippet's own closing tag ended the comment early — so the remainder of the
+  # doc comment rendered as visible text above the SLA Tracking and Coverage Hours cards. Nothing
+  # else caught it: the page still returned 200 and every field assertion still passed. Scans the
+  # whole rendered tab rather than that one partial, since the trap applies to any of them.
+  test "no ERB source leaks into the rendered SLA Policy tab" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+
+    assert_response :success
+    tab = css_select('#tab-content-sla_policy').first
+    assert tab.present?, 'SLA Policy tab did not render'
+    text = tab.text
+    %w[<% %> <%= <%#].each do |marker|
+      assert_not_includes text, marker,
+                          "ERB source #{marker} leaked into the page — an ERB comment probably " \
+                          'contains a closing tag and was terminated early'
+    end
+  end
+
+  # The sibling failure mode, which the ERB-marker scan above does NOT catch: a tag closed early,
+  # so its remaining ATTRIBUTES render as visible text. It bit `tag.attributes(...)`, the obvious
+  # way to emit an attribute conditionally — it does not exist in Rails 6.1 (added in 7.0), and
+  # TagBuilder#method_missing silently builds an `<attributes …>` ELEMENT from it instead, which
+  # lands inside the opening tag and terminates it at its own `>`. The page still returned 200 and
+  # every assert_select in this file still passed; only the rendered text showed it.
+  test "no HTML attributes leak as text into the rendered SLA Policy tab" do
+    SlaPolicy.create!(project_id: @project.id, enabled: false) # renders the lock's markup too
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+
+    assert_response :success
+    text = css_select('#tab-content-sla_policy').first.text
+    %w[aria-current= data-sla- class=" href=" <attributes].each do |marker|
+      assert_not_includes text, marker,
+                          "#{marker} rendered as visible text — an opening tag was closed early, " \
+                          'most likely by markup emitted into the middle of it'
+    end
+  end
+
   test "settings page renders both tab sections with saved values" do
     saved = SlaPolicy.create!(project_id: @project.id, enabled: true, at_risk_threshold: 85)
     status_id = @project.rolled_up_statuses.first.id
@@ -113,6 +154,120 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select "[data-sla-panel='notifications']:not(.hidden)"
   end
 
+  # --- Locking the configuration sections while SLA tracking is off ----------------------------
+  # SLA Targets, Measurement Rules, Exclusions and Notifications describe how an ACTIVE policy
+  # behaves, so they go read-only while tracking is off — otherwise someone can spend an afternoon
+  # configuring a policy that is never evaluated. The lock is one <fieldset disabled> per section,
+  # which matters beyond appearance: a control inside a disabled fieldset is not submitted, so a
+  # locked section cannot be posted even by hand.
+
+  # Every section EXCEPT General, which owns the switch that would unlock the others — locking it
+  # would be a one-way door.
+  LOCKED_PANELS = %w[targets measurement exclusions notifications].freeze
+
+  test "the four configuration sections are locked while SLA tracking is off" do
+    SlaPolicy.create!(project_id: @project.id, enabled: false)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    LOCKED_PANELS.each do |key|
+      assert_select "[data-sla-panel='#{key}'] fieldset[data-sla-lock][disabled]", 1,
+                    "the #{key} section must be disabled while tracking is off"
+      assert_select "[data-sla-panel='#{key}'] [data-sla-locked-notice]:not(.hidden)", 1,
+                    "the #{key} section must say why its controls are inert"
+      assert_select "a[data-sla-section-link='#{key}'].is-locked", 1
+    end
+  end
+
+  test "General stays editable and unlocked while SLA tracking is off" do
+    SlaPolicy.create!(project_id: @project.id, enabled: false)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select "[data-sla-panel='general'] fieldset[data-sla-lock]", 0,
+                  'General is where tracking is switched back on — locking it strands the project'
+    assert_select "a[data-sla-section-link='general'].is-locked", 0
+    assert_select "input[type=checkbox][name='sla_policy[enabled]']:not([disabled])", 1
+  end
+
+  test "nothing is locked while SLA tracking is on" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select 'fieldset[data-sla-lock][disabled]', 0
+    assert_select 'a[data-sla-section-link].is-locked', 0
+    # The banner is rendered either way so the JS can reveal it the moment the switch flips; while
+    # tracking is on it must be hidden, not merely absent from view by accident.
+    assert_select '[data-sla-locked-notice]', LOCKED_PANELS.size
+    assert_select '[data-sla-locked-notice]:not(.hidden)', 0
+  end
+
+  # The locked banner sends the user to the one section that can undo the lock.
+  test "the locked banner links back to the General section" do
+    SlaPolicy.create!(project_id: @project.id, enabled: false)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select "[data-sla-locked-notice] a[data-sla-goto-section='general']" \
+                  "[href*='section=general']", LOCKED_PANELS.size
+  end
+
+  # A notifications-only manager cannot reach General, so pointing them at it would be a dead end —
+  # the banner still explains the lock, just without a link.
+  test "the locked banner is unlinked when General is not on offer" do
+    @role.remove_permission!(:edit_sla_policy)
+    SlaPolicy.create!(project_id: @project.id, enabled: false)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select '[data-sla-locked-notice]:not(.hidden)', 1
+    assert_select '[data-sla-locked-notice] a', 0
+  end
+
+  # An inheriting project's on/off decision lives in the TRI-STATE control, not the plain switch,
+  # so the lock has to resolve that instead — including :inherit, which means asking the ancestor.
+
+  test "an inheriting project locks on its own Disabled decision" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    SlaPolicy.create!(project_id: child.id, enabled: false, inherits_config: true)
+
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select 'fieldset[data-sla-lock][disabled]', LOCKED_PANELS.size
+  end
+
+  test "an inheriting project follows its ancestor while set to Inherit" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select "input[name='sla_policy[enablement]'][value='inherit'][checked]"
+    assert_select 'fieldset[data-sla-lock][disabled]', 0, 'the ancestor has tracking on'
+  end
+
+  test "an inheriting project locks when the ancestor it inherits from is off" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: @project.id, enabled: false)
+
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select 'fieldset[data-sla-lock][disabled]', LOCKED_PANELS.size
+  end
+
   # --- Section bodies ---------------------------------------------------------------------------
 
   # The unclassified priority can never hold a target (enforced in
@@ -190,14 +345,59 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
                   I18n.t(:label_sla_stale_threshold_placeholder_inherited, days: 4)
   end
 
-  # A project's OWN value must not be described as something it inherits — the line answers
-  # "what applies if this box is empty", which is the parent's answer, never its own.
-  test "a project's own value is not reported as inherited from itself" do
+  # There is ONE status line under the field now, so it has to report the state the project is
+  # ACTUALLY in. It used to always answer "what would apply if this box were empty" — the parent's
+  # answer — which put "Not set — never flagged stale" directly beneath a field showing a number.
+  test "a project with its own value says so, not that nothing is set" do
     SlaPolicy.create!(project_id: @project.id, enabled: true, stale_threshold_days: 9)
 
     get_measurement_section
 
-    assert_select '#sla-stale-threshold-source', text: I18n.t(:text_sla_stale_threshold_unset_anywhere)
+    assert_select '#sla-stale-threshold-source', text: I18n.t(:text_sla_stale_threshold_own)
+  end
+
+  # The consolidation: one line, never a second static paragraph restating how empty behaves.
+  test "the stale card carries exactly one line under its field" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true, stale_threshold_days: 9)
+
+    get_measurement_section
+
+    assert_select '#sla-stale-threshold-source', 1
+    assert_select "[data-sla-panel='measurement'] p", text: /Leave empty to inherit/, count: 0
+  end
+
+  # The render half of the "I add a tracker, save, and it is gone" bug (the save half is covered in
+  # SlaPoliciesControllerTest). A tracker the picker saved with NO targets set has no definitions to
+  # be derived from, so before migration 009 nothing on this page knew it had ever been chosen.
+  test "a saved tracker with no targets still renders its Priority Targets table" do
+    policy = SlaPolicy.create!(project_id: @project.id, enabled: true)
+    targetless = @project.trackers.sorted.second
+    policy.update!(selected_tracker_ids: [targetless.id])
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select "#sla-definitions-table-#{targetless.id}", 1
+    assert_select "select[name='definitions[tracker_ids][]'] option[selected][value='#{targetless.id}']", 1
+  end
+
+  # The Clone card reopens saying where the configuration came from, instead of on a blank picker
+  # that leaves the provenance of a whole policy knowable only to whoever ran the clone.
+  test "the clone picker preselects the project the policy was cloned from" do
+    source_project = Project.find(2)
+    source_project.enable_module!(:sla_compliance)
+    member = Member.find_or_initialize_by(user_id: 2, project_id: source_project.id)
+    member.role_ids = (member.role_ids + [@role.id]).uniq
+    member.save!
+    SlaPolicy.create!(project_id: source_project.id, enabled: true)
+    SlaPolicy.create!(project_id: @project.id, enabled: true,
+                      cloned_from_project_id: source_project.id)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select "#sla-clone-source option[selected][value='#{source_project.id}']", 1
+    assert_select '.sla-plugin', text: /#{Regexp.escape(source_project.name)}/
   end
 
   test "every configured target type gets its own column, header and dropdown per priority" do
@@ -386,58 +586,71 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select revert_delete_form_selector(child), 0
   end
 
-  # --- Step 5.1: the user allow-list ------------------------------------------------------------
+  # --- Step 5.1: the SLA access roles -----------------------------------------------------------
   #
   # "A non-permitted role sees neither the tab nor the dashboard; an admin can grant access to a
-  # chosen role and it takes effect." These cover the TAB half for users granted individually
-  # rather than through a role — the case Redmine's role-only permission model cannot express.
+  # chosen role and it takes effect." These cover the TAB half of that, for a role that ticks NO
+  # SLA permission of its own and is granted purely by being named in the plugin settings.
   #
-  # All of them log in as rhill (user 4): active, but a member of no project and holding no role.
-  # Anything they can see here was granted by the allow-list and by nothing else.
+  # All of them log in as rhill (user 4): active, and a member of no project until a test makes
+  # them one. Anything they can see here was granted by that membership plus the role list.
 
-  def list!(list, *user_ids)
-    Setting.plugin_redmine_sla_compliance = {
-      "sla_#{list}_user_ids" => user_ids.map(&:to_s)
-    }
+  def sla_role!
+    @sla_role ||= Role.create!(name: 'SLA Access Test Role', permissions: [])
   end
 
-  test "a listed manager gets the tab and both sections with no role at all" do
+  def member!(project = @project)
+    Member.create!(principal: User.find(4), project: project, roles: [sla_role!])
+  end
+
+  def configure_sla_role!
+    Setting.plugin_redmine_sla_compliance = { 'sla_access_role_ids' => [sla_role!.id.to_s] }
+  end
+
+  def grant!(project = @project)
+    member!(project)
+    configure_sla_role!
+  end
+
+  test "a member holding an SLA access role gets the tab and both sections" do
     @request.session[:user_id] = 4
-    list!(:manager, 4)
+    grant!
 
     get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
 
-    assert_response :success, 'a listed manager must be able to open the Settings page itself'
+    assert_response :success, 'a granted member must be able to open the Settings page itself'
     assert_select '#tab-content-sla_policy .sla-plugin' do
       assert_select '#sla-policy-form'
       assert_select '#sla-notification-form'
     end
   end
 
-  test "a listed viewer is dashboard-only and never sees the tab" do
+  test "holding a role that is not an SLA access role never sees the tab" do
     @request.session[:user_id] = 4
-    list!(:viewer, 4)
+    member! # the membership without naming the role in the settings
 
     get :settings, params: { id: @project.identifier }
 
-    # The viewer list grants the dashboard only, so the page hosting the tab stays closed to them.
+    # The role ticks no permission of its own, so until it is named in the settings it opens
+    # nothing — not the tab, and not the page that hosts it.
     assert_response :forbidden
   end
 
-  test "an unlisted user with no role sees neither the tab nor the Settings page" do
+  test "a user with no role at all sees neither the tab nor the Settings page" do
     @request.session[:user_id] = 4
 
     get :settings, params: { id: @project.identifier }
     assert_response :forbidden
   end
 
-  test "granting a manager takes effect immediately, with no restart" do
+  test "granting a role takes effect immediately, with no restart" do
     @request.session[:user_id] = 4
+    member!
 
     get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
-    assert_response :forbidden, 'precondition: not listed yet'
+    assert_response :forbidden, 'precondition: the role is not named in the settings yet'
 
-    list!(:manager, 4)
+    configure_sla_role!
     get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
     assert_response :success
     assert_select '#sla-policy-form'
@@ -447,11 +660,11 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_response :forbidden, 'revoking must apply just as immediately'
   end
 
-  test "a listed manager sees only the SLA tab, not the rest of Project Settings" do
+  test "a granted member sees only the SLA tab, not the rest of Project Settings" do
     # Claiming projects/settings for :edit_sla_policy opens the page, but every other tab is
-    # still filtered by its own permission — a listed manager must not gain project admin.
+    # still filtered by its own permission — a granted member must not gain project admin.
     @request.session[:user_id] = 4
-    list!(:manager, 4)
+    grant!
 
     get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
 

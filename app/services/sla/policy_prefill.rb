@@ -38,7 +38,12 @@ module Sla
         first_response_rule: @source.first_response_rule,
         at_risk_threshold: @source.at_risk_threshold,
         stale_threshold_days: @source.stale_threshold_days,
-        pause_enabled: @source.pause_enabled
+        pause_enabled: @source.pause_enabled,
+        # Restricted to trackers THIS project has, like the definitions below: a selection naming a
+        # tracker the project cannot use would ask the form for a table it can never render. nil
+        # (source never saved a selection) is passed through as nil, so the form falls back to
+        # deriving its tables from the definitions rather than showing an empty picker.
+        selected_tracker_ids: selected_tracker_ids
       )
       build_status_mappings(policy)
       build_definitions(policy)
@@ -46,6 +51,15 @@ module Sla
     end
 
     private
+
+    # Deliberately does NOT carry @source.cloned_from_project_id: that records where the SOURCE got
+    # its configuration, and reporting it here would tell the user this policy came from a project
+    # it has no relationship with. The real provenance is written on save, from the clone the user
+    # actually performed (SlaPoliciesController#update).
+    def selected_tracker_ids
+      ids = @source.selected_tracker_ids_or_nil
+      ids && (ids & @project.trackers.ids)
+    end
 
     def build_status_mappings(policy)
       status_ids = @project.rolled_up_statuses.map(&:id)

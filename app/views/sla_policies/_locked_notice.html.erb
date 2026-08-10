@@ -1,0 +1,22 @@
+<%# Why this section's controls are inert. Locals: project, locked. %>
+<%# %>
+<%# The link uses data-sla-goto-section rather than data-sla-section-link (which the sidebar uses): %>
+<%# sla_policy_form.js marks every data-sla-section-link element active/inactive as the user %>
+<%# navigates, and this link is not a nav item. Without JS it is still a real href to the same %>
+<%# ?section=general URL the sidebar links to. %>
+<%# %>
+<%# Unlinked when General isn't on offer — a user with only :manage_sla_notifications sees the %>
+<%# Notifications section alone, and pointing them at a section they'd be redirected away from is %>
+<%# worse than plain text. Same pattern as the admin-only link in _definitions.html.erb. %>
+<% general = l(:label_sla_section_general) %>
+<% if sla_general_section_visible?(project) %>
+  <% general = link_to(general, settings_project_path(project, tab: 'sla_policy', section: 'general'),
+                       class: 'tw-font-medium tw-underline',
+                       data: { sla_goto_section: 'general' }) %>
+<% end %>
+<div data-sla-locked-notice
+     class="tw-flex tw-items-start tw-gap-3 tw-mb-5 tw-p-3 tw-rounded-lg tw-border tw-border-solid
+            tw-border-amber-200 tw-bg-amber-50 tw-text-sm tw-text-amber-800<%= ' hidden' unless locked %>">
+  <span class="tw-mt-0.5 tw-text-amber-500"><%= sla_lock_icon %></span>
+  <p class="tw-m-0"><%= l(:text_sla_section_locked, link: general).html_safe %></p>
+</div>

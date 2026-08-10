@@ -81,12 +81,16 @@ class SlaNotificationSettingsControllerTest < ActionController::TestCase
     assert_response :forbidden
   end
 
-  # --- Step 5.1: the user allow-list ------------------------------------------------------------
-  # rhill (user 4) holds no role and no membership, so only the allow-list can let them through.
+  # --- Step 5.1: the SLA access roles -----------------------------------------------------------
+  # rhill (user 4) holds no role and no membership, so nothing but the grant below can let them
+  # through. The role itself ticks NO permissions — being named in the plugin settings is the
+  # whole of what makes it work.
 
-  test "a listed manager can save notification settings with no role" do
+  test "a member holding an SLA access role can save notification settings" do
+    role = Role.create!(name: 'SLA Access Test Role', permissions: [])
+    Member.create!(principal: User.find(4), project: @project, roles: [role])
+    Setting.plugin_redmine_sla_compliance = { 'sla_access_role_ids' => [role.id.to_s] }
     @request.session[:user_id] = 4
-    Setting.plugin_redmine_sla_compliance = { 'sla_manager_user_ids' => ['4'] }
 
     put :update, params: { project_id: @project.id,
                            sla_notification_setting: { stale_email_frequency: 'daily' } }
@@ -97,9 +101,10 @@ class SlaNotificationSettingsControllerTest < ActionController::TestCase
     Setting.plugin_redmine_sla_compliance = {}
   end
 
-  test "a listed viewer is dashboard-only and cannot save notification settings" do
+  test "holding a role that is not an SLA access role cannot save notification settings" do
+    role = Role.create!(name: 'SLA Unlisted Test Role', permissions: [])
+    Member.create!(principal: User.find(4), project: @project, roles: [role])
     @request.session[:user_id] = 4
-    Setting.plugin_redmine_sla_compliance = { 'sla_viewer_user_ids' => ['4'] }
 
     put :update, params: { project_id: @project.id,
                            sla_notification_setting: { stale_email_frequency: 'daily' } }

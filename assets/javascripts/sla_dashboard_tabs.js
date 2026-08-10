@@ -1,5 +1,5 @@
 /* SLA dashboard tab switcher (Open Tickets / SLA Trend). Both panels are rendered server-side and
- * present in the DOM; this only toggles the LITERAL `hidden` class and the active-tab underline, so
+ * present in the DOM; this only toggles the LITERAL `hidden` class and the active-tab pill, so
  * switching never reloads. The active tab is remembered in sessionStorage so a date-range change
  * (which submits #sla-filter-form and reloads the page from the SLA Trend tab) returns on the same
  * tab. Same IIFE / idempotent-init / DOMContentLoaded convention as the other dashboard scripts;
@@ -12,8 +12,9 @@
 
   var STORAGE_KEY = 'slaActiveTab';
 
-  var ACTIVE_CLASSES = ['tw-text-primary-600', 'tw-border-primary-600'];
-  var INACTIVE_CLASSES = ['tw-text-gray-500', 'tw-border-transparent'];
+  var ACTIVE_CLASSES = ['tw-bg-white', 'tw-text-gray-900', 'tw-shadow-sm'];
+  var INACTIVE_CLASSES = ['tw-bg-transparent', 'hover:tw-bg-transparent', 'tw-text-gray-500',
+                          'hover:tw-text-gray-700', 'tw-shadow-none'];
 
   function panels() {
     return Array.prototype.slice.call(document.querySelectorAll('[data-sla-tab-panel]'));

@@ -12,8 +12,10 @@
  *     No separate flowbite-datepicker package/stylesheet is used anymore — this file supplies
  *     both structure (grid layout, cell sizing, popup positioning) and color, self-contained.
  *   - _tom_select.css — the Tom Select chip multi-select skin (Step 4.4/6.1).
- *   - _settings_nav.css — the SLA Policy settings sidebar's section links (active/inactive state
- *     as one toggled class, so the JS carries no Tailwind class strings).
+ *   - _settings_nav.css — the SLA Policy settings sidebar's section links (active/inactive/locked
+ *     state as one toggled class each, so the JS carries no Tailwind class strings).
+ *   - _locked_section.css — the <fieldset disabled> wrapper that makes a configuration section
+ *     read-only while SLA tracking is off, plus the fieldset resets Preflight isn't there to do.
  *   - _option_card.css — radio buttons presented as selectable tiles. Also CSS rather than
  *     utilities, but for a different reason: the :checked state has to reach an ANCESTOR, which
  *     Tailwind's sibling-based `peer-checked:` variant cannot express.
@@ -22,6 +24,15 @@
  *   - _detail_table.css — the ticket-level detail table's compact (in-card) vs expanded (modal)
  *     column/control visibility, toggled by a single `.sla-detail-expanded` class on the one
  *     table node that gets moved into the modal on expand.
+ *   - _admin_settings.css — the Administration → SLA Compliance module's shared chrome (data-table
+ *     rows/row actions, breadcrumb links, working-day chips) plus the one rule that has to reach
+ *     OUTSIDE the plugin wrapper, to neutralise the `box tabular settings` container Redmine wraps
+ *     around every plugin settings partial.
+ *   - _pill_group.css — the dashboard's segmented "pick one of these" button groups (date-range
+ *     presets, trend granularity). Active/inactive is ONE class (`is-active`) that
+ *     sla_dashboard_filters.js toggles, for the same reason _settings_nav.css and
+ *     _chart_legend.css do it that way: no Tailwind class strings in the JS, so the server-rendered
+ *     state and the click-rendered state cannot drift apart.
  * postcss-import inlines these before Tailwind/scoping run, so they get the exact same
  * `.sla-plugin` treatment as everything else in this file.
  */
@@ -42,6 +53,7 @@
 .sla-plugin input[type='text']:focus,
 .sla-plugin input[type='number']:focus,
 .sla-plugin input[type='url']:focus,
+.sla-plugin input[type='time']:focus,
 .sla-plugin select:focus,
 .sla-plugin textarea:focus {
   border-color: #2563eb; /* primary-600 — the only intentional blue in UI chrome */
@@ -127,13 +139,28 @@
  * (an *element* selector, so it wins wherever nothing here overrides it) combined with this
  * plugin's own `tw-p-2.5` (10px) padding utility squeezed the visible text area of every
  * select/url/number input down to a few pixels — the "clipped to dots" look in screenshots.
+ *
+ * `time` is in that theme rule's selector list too (it names every text-like type: datetime, date,
+ * month, time, week, number, url, tel, color, search, email, text, password), so the business
+ * calendar's work start / end pickers need the same unclamping or they arrive squashed — and a
+ * squashed time input hides its own clock affordance, which is the whole point of using one.
  */
 .sla-plugin select,
 .sla-plugin input[type='text'],
 .sla-plugin input[type='url'],
-.sla-plugin input[type='number'] {
+.sla-plugin input[type='number'],
+.sla-plugin input[type='time'] {
   height: auto;
   min-height: 2.625rem; /* 42px: matches tw-p-2.5 (10px) + tw-text-sm line-height once unclamped */
+}
+/* The browser's own clock/stepper affordance. It is the control's only visible cue that this is a
+   picker rather than a text box, so make it read as clickable; `color-scheme: light` pins it to the
+   light rendering the rest of this plugin's chrome assumes, regardless of the OS theme. */
+.sla-plugin input[type='time'] {
+  color-scheme: light;
+}
+.sla-plugin input[type='time']::-webkit-calendar-picker-indicator {
+  cursor: pointer;
 }
 .sla-plugin input[type='radio'] {
   -webkit-appearance: none;
@@ -641,6 +668,75 @@
 .sla-plugin .sla-section-link.is-active .sla-section-link-chevron {
   opacity: 1;
 }
+/* --- Locked section ------------------------------------------------------------------------- */
+/* SLA Targets, Measurement Rules, Exclusions and Notifications while SLA tracking is off. Rendered
+ * with the class by the server and toggled by sla_policy_form.js when the General switch flips —
+ * same one-class contract as .is-active above, so the JS carries no Tailwind class strings.
+ *
+ * These rules come AFTER the active block deliberately: at equal specificity the later rule wins,
+ * and the `:not(.is-active)` guard is what keeps the OPEN section blue even while it is locked, so
+ * the user never loses track of where they are. */
+/* Always in the markup for a lockable entry, so the JS has nothing to build; only its display
+ * changes. It replaces the chevron rather than sitting beside it — the row would otherwise gain a
+ * column's width on lock and shift the labels. */
+.sla-plugin .sla-section-link-lock {
+  display: none;
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  color: #9ca3af; /* gray-400 */
+}
+.sla-plugin .sla-section-link-lock svg {
+  width: 100%;
+  height: 100%;
+}
+.sla-plugin .sla-section-link.is-locked .sla-section-link-lock {
+  display: block;
+}
+.sla-plugin .sla-section-link.is-locked .sla-section-link-chevron {
+  display: none;
+}
+.sla-plugin .sla-section-link.is-locked:not(.is-active) .sla-section-link-icon,
+.sla-plugin .sla-section-link.is-locked:not(.is-active) .sla-section-link-title,
+.sla-plugin .sla-section-link.is-locked:not(.is-active) .sla-section-link-desc {
+  color: #9ca3af; /* gray-400 */
+}
+/*
+ * SLA Policy settings — a configuration section locked because SLA tracking is off.
+ *
+ * The lock is a <fieldset disabled> around the section's controls (sla_policies/_lock.html.erb):
+ * one wrapper disables every descendant control, including ones added later, and a control inside
+ * a disabled fieldset is not submitted, so a locked section cannot be posted at all. This file is
+ * only what that wrapper has to look like.
+ *
+ * postcss-prefix-selector scopes every rule below to `.sla-plugin ...` at build time.
+ */
+/* Preflight is disabled in this build, so a bare <fieldset> still carries the browser's default
+ * border, margin and padding — reset them or wrapping a section in one visibly boxes it in.
+ * min-width: 0 undoes the fieldset's built-in min-content sizing, which otherwise stops the grids
+ * and tables inside from shrinking below their content width (the classic fieldset flex bug). */
+.sla-plugin .sla-lock-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+/* Muted, NOT hidden: the values have to stay readable while tracking is off, because seeing what a
+ * project would measure is how someone decides whether to turn tracking back on. 0.65 keeps body
+ * text above the contrast floor against white; anything lower reads as "this content is gone". */
+.sla-plugin .sla-lock-fieldset[disabled] {
+  opacity: 0.65;
+}
+/* Browsers give no cursor feedback for a control disabled via an ancestor fieldset, so say it
+ * explicitly — including on the Tom Select controls, which are divs and never inherit :disabled. */
+.sla-plugin .sla-lock-fieldset[disabled] input,
+.sla-plugin .sla-lock-fieldset[disabled] select,
+.sla-plugin .sla-lock-fieldset[disabled] textarea,
+.sla-plugin .sla-lock-fieldset[disabled] button,
+.sla-plugin .sla-lock-fieldset[disabled] label,
+.sla-plugin .sla-lock-fieldset[disabled] .ts-wrapper {
+  cursor: not-allowed;
+}
 /*
  * Selectable option card — a radio button presented as a full-width tile (SLA Policy → Measurement
  * Rules → First Response Rule).
@@ -679,6 +775,19 @@
 }
 .sla-plugin .sla-option-card:has(input:focus-visible) {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+/*
+ * Compact variant — the same tile sized to sit inline in a row of several (the Business calendar
+ * form's seven working-day checkboxes) rather than as a full-width stacked option.
+ *
+ * The selectors above are input-type agnostic (`input:checked`), so a checkbox tile picks up the
+ * selected/hover/focus treatment unchanged; only the box metrics differ. _theme_isolation.css has
+ * already reset the native checkbox into a correctly-rendering custom control, exactly as it does
+ * for the radios these tiles were first built for.
+ */
+.sla-plugin .sla-option-card--compact {
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
 }
 /*
  * Dashboard chart legends — clickable rows that highlight one series and dim the rest.
@@ -751,11 +860,284 @@
 .sla-plugin [data-sla-detail-controls] { display: none; }
 .sla-plugin .sla-detail-expanded .sla-detail-col-extra { display: table-cell; }
 .sla-plugin [data-sla-modal-controls-slot] [data-sla-detail-controls] { display: flex; }
-/* Only the expanded (modal) table may scroll sideways; the compact in-card table must not. */
-.sla-plugin .sla-detail-expanded [data-sla-detail-tablewrap] { overflow-x: auto; }
 /* Title truncates tightly in the narrow in-card table, wider once expanded into the roomy modal. */
 .sla-plugin .sla-detail-title { max-width: 11rem; }
 .sla-plugin .sla-detail-expanded .sla-detail-title { max-width: 28rem; }
+/* --- Expanded (modal): sticky column headers -------------------------------------------------
+ *
+ * `position: sticky` pins an element against its nearest SCROLLING ancestor, so the whole point of
+ * the rules below is to make the element that scrolls be the one the header should stick to.
+ *
+ * The modal body used to own the vertical scroll (`tw-overflow-y-auto`) while the table wrapper
+ * inside it owned only the horizontal one. A sticky `th` therefore had nothing to stick against:
+ * its scrollport was the wrapper, whose height is its content's, so it never scrolls vertically and
+ * the header just travelled up out of sight with the rows. Moving BOTH axes onto the wrapper fixes
+ * that and is better regardless — the modal's title bar, state pills, search box and the pager all
+ * stay put, and only the rows move.
+ *
+ * The chain is a flex column all the way down (`min-height: 0` at each level, or a flex item
+ * refuses to shrink below its content and the scroll never appears). None of it applies to the
+ * compact in-card table, which has no scroll container at all: `.sla-detail-expanded` is added only
+ * while the table node lives in the modal.
+ */
+.sla-plugin #sla-detail-modal-body {
+  display: flex;
+  flex-direction: column;
+  /* Beats the element's own tw-overflow-y-auto on specificity (id + class vs two classes). */
+  overflow: hidden;
+  min-height: 0;
+}
+.sla-plugin .sla-detail-expanded {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.sla-plugin .sla-detail-expanded [data-sla-detail-tablewrap] {
+  /* Both axes now, not overflow-x alone. The compact in-card table still never scrolls sideways
+   * (CLAUDE.md) — it simply hides the extra columns instead. */
+  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.sla-plugin .sla-detail-expanded thead th {
+  position: sticky;
+  top: 0;
+  /* Above the rows that scroll beneath it; the modal itself is z-50, so this stays local. */
+  z-index: 2;
+  /* Opaque, or the rows would show through — the table and its cells are otherwise transparent
+   * over the card's white background. */
+  background-color: #ffffff;
+  /* An inset shadow rather than a border-bottom. Purplemine2 sets `table { border-collapse:
+   * collapse }` globally, and under the collapsed model a border belongs to the TABLE GRID rather
+   * than to the cell — so the header's own rule stays put while the sticky cell moves, leaving a
+   * stray line drifting down through the rows. The shadow is painted by the cell and travels with
+   * it. The row's own utility border is dropped here for the same reason: it is that line. */
+  box-shadow: inset 0 -1px 0 #e5e7eb; /* gray-200 */
+}
+.sla-plugin .sla-detail-expanded thead tr {
+  border-bottom-width: 0;
+}
+/*
+ * Dashboard "pick one of these" button groups — the SLA Trend tab's date-range presets
+ * (`.sla-pill`) and the trend chart's Daily/Weekly/Monthly granularity (`.sla-seg`).
+ *
+ * WHY THIS IS CSS AND NOT TAILWIND UTILITIES ON THE BUTTON
+ *
+ * sla_dashboard_filters.js repaints the clicked pill optimistically (the form then submits and the
+ * page reloads, and without this the pill would sit un-updated for the whole round trip). It used
+ * to do that by toggling the individual utilities — `tw-bg-primary-600`, `tw-text-white`,
+ * `tw-bg-white`, … — which produced two real bugs:
+ *
+ *   1. The inactive state's `hover:tw-bg-gray-50` was never removed when a pill became active.
+ *      A `hover:` utility compiles to `.sla-plugin .hover\:tw-bg-gray-50:hover` (0,2,1), which
+ *      OUTSCORES the plain `.sla-plugin .tw-bg-primary-600` (0,2,0) the JS had just added — so the
+ *      pill you had just clicked went white-background/white-text (invisible) for as long as the
+ *      cursor stayed on it. On Custom Range, which reveals the date inputs instead of reloading,
+ *      "for as long as the cursor stayed on it" meant permanently.
+ *   2. The JS's class list and the ERB's class list were two copies of the same design that had
+ *      already drifted (the JS still applied the pre-redesign `tw-border-gray-300`).
+ *
+ * Both go away by expressing the whole thing as ONE class the JS toggles — the convention
+ * _settings_nav.css and _chart_legend.css already follow in this plugin — with every state
+ * (rest / hover / active) declared here, in one place, for both branches.
+ *
+ * FOCUS: deliberately not handled here. _theme_isolation.css already owns the single focus
+ * treatment for every button in the plugin (`button:focus { outline: none }` +
+ * `button:focus-visible { outline: 2px solid #2563eb }`), so these pills carry no ring utilities of
+ * their own. They used to carry `focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-primary-300`,
+ * which at (0,2,1) beat that shared rule and inverted it: a blue ring painted on every MOUSE click
+ * (a focus ring nobody asked for) while keyboard users lost the outline entirely.
+ *
+ * postcss-prefix-selector scopes every rule below to `.sla-plugin ...` at build time.
+ */
+.sla-plugin .sla-pill,
+.sla-plugin .sla-seg {
+  cursor: pointer;
+  font-weight: 600;
+  transition: background-color 0.12s ease-in-out, color 0.12s ease-in-out,
+    border-color 0.12s ease-in-out;
+}
+/* --- Date-range presets: separately rounded, bordered buttons ------------------------------- */
+.sla-plugin .sla-pill {
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem; /* text-sm */
+  line-height: 1.25rem;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb; /* gray-200 */
+  background-color: #fff;
+  color: #374151; /* gray-700 */
+  box-shadow: none;
+}
+.sla-plugin .sla-pill:hover {
+  background-color: #f9fafb; /* gray-50 */
+  color: #111827; /* gray-900 */
+  border-color: #e5e7eb;
+}
+.sla-plugin .sla-pill.is-active,
+.sla-plugin .sla-pill.is-active:hover {
+  background-color: #2563eb; /* primary-600 */
+  border-color: #2563eb;
+  color: #fff;
+}
+.sla-plugin .sla-pill.is-active:hover {
+  background-color: #1d4ed8; /* primary-700 — a darker fill, never a lighter one */
+  border-color: #1d4ed8;
+}
+/* --- Granularity: pills inside a single gray track ------------------------------------------ */
+.sla-plugin .sla-seg {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem; /* text-xs */
+  line-height: 1rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background-color: transparent;
+  color: #4b5563; /* gray-600 */
+  box-shadow: none;
+}
+.sla-plugin .sla-seg:hover {
+  background-color: transparent;
+  color: #111827; /* gray-900 */
+}
+.sla-plugin .sla-seg.is-active,
+.sla-plugin .sla-seg.is-active:hover {
+  background-color: #2563eb; /* primary-600 */
+  color: #fff;
+}
+.sla-plugin .sla-seg.is-active:hover {
+  background-color: #1d4ed8; /* primary-700 */
+}
+/*
+ * SLA Compliance ADMIN MODULE — chrome shared by the plugin settings page and the two lookup CRUD
+ * screens (Administration → SLA Compliance).
+ *
+ * Everything here is either (a) a fix for Redmine/Purplemine2 markup this module has to live
+ * inside, or (b) a class that BOTH the ERB and a JS re-render name — the codebase's standing rule
+ * (see _settings_nav.css, _chart_legend.css, _pill_group.css) is that anything the JS re-renders is
+ * styled by one class here rather than by Tailwind class strings duplicated into the script.
+ *
+ * postcss-prefix-selector scopes every rule below to `.sla-plugin ...` at build time, EXCEPT those
+ * written pre-scoped (i.e. with `.sla-plugin` spelled out); those it leaves exactly as written.
+ * The first block below depends on that, because it has to reach an ANCESTOR of the wrapper.
+ */
+/* --- Redmine's plugin-settings container ------------------------------------------------------
+ *
+ * app/views/settings/plugin.html.erb wraps every plugin settings partial in
+ * `<div class="box tabular settings">`, and `.box` carries a background, a border, padding and a
+ * bottom margin. Around a module that draws its own cards on a page canvas, that reads as one
+ * stray outer card containing the real ones.
+ *
+ * The rule has to target that div, which is the wrapper's PARENT — so it cannot be written as a
+ * plain selector and left to the prefixer, which would nest it under `.sla-plugin` and never
+ * match. Writing `.sla-plugin` explicitly (here, as part of the `:has()` argument) is what makes
+ * postcss-prefix-selector return it untouched; `:has()` is already used the same way in
+ * _option_card.css. Scoped by OUR class, so no other plugin's settings box is affected.
+ *
+ * `.tabular.settings`'s own label/p rules are separately neutralised in _theme_isolation.css.
+ */
+.box.tabular.settings:has(.sla-plugin.sla-admin-module) {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin-bottom: 0;
+}
+/* --- Breadcrumb ------------------------------------------------------------------------------ */
+/* Purplemine2 styles `a` globally (colour + underline on hover); state this link's treatment
+ * outright rather than inheriting from whichever stylesheet wins — CLAUDE.md rule 4. */
+.sla-plugin .sla-admin-crumb {
+  color: #6b7280; /* gray-500 */
+  text-decoration: none;
+}
+.sla-plugin .sla-admin-crumb:hover {
+  color: #2563eb; /* primary-600 — the one blue permitted in UI chrome */
+  text-decoration: none;
+}
+/* --- Data tables ------------------------------------------------------------------------------
+ *
+ * Cell padding and row separators for the two lookup tables (target options, business calendars),
+ * stated once here rather than as utilities on every cell so the two cannot drift apart.
+ */
+.sla-plugin .sla-admin-rows tr + tr {
+  border-top: 1px solid #f3f4f6; /* gray-100 */
+}
+.sla-plugin .sla-admin-rows tr:hover {
+  background-color: #f9fafb; /* gray-50 */
+}
+.sla-plugin .sla-admin-rows td {
+  padding: 0.75rem 1rem;
+  vertical-align: middle;
+}
+/* The trailing column is always the row's actions. */
+.sla-plugin .sla-admin-rows td:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+/* The lookup tables' sortable headers need no class of their own: they mirror the dashboard's
+ * ticket detail table, which carries `tw-cursor-pointer tw-select-none` as utilities and lets
+ * sla_table_sort.js paint the icon. */
+/* (`.sla-admin-code` lived here for the target options' Code column. That column is gone — the
+ * code is derived from the label now and never shown — and nothing else in the module renders a
+ * machine identifier in a cell.) */
+/* --- Row actions ------------------------------------------------------------------------------
+ *
+ * Icon-only edit/delete buttons, shared by both lookup tables' rows.
+ */
+.sla-plugin .sla-admin-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+.sla-plugin .sla-admin-row-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.375rem;
+  color: #6b7280; /* gray-500 */
+  text-decoration: none;
+  transition: background-color 0.12s ease-in-out, color 0.12s ease-in-out;
+}
+.sla-plugin .sla-admin-row-action:hover {
+  background-color: #f3f4f6; /* gray-100 */
+  color: #111827; /* gray-900 */
+  text-decoration: none;
+}
+/* Destructive red. Not subject to the blue-only rule (Global Rule 7), which governs UI chrome —
+ * this is the standard danger affordance and must not read as neutral. */
+.sla-plugin .sla-admin-row-action--danger:hover {
+  background-color: #fef2f2; /* red-50 */
+  color: #dc2626; /* red-600 */
+}
+.sla-plugin .sla-admin-row-action:focus-visible {
+  outline: 2px solid #2563eb; /* primary-600 */
+  outline-offset: 1px;
+}
+/* --- Working-days summary (Business calendars list) -------------------------------------------
+ *
+ * All seven days are always rendered, with the non-working ones muted, so a calendar's shape is
+ * readable at a glance rather than having to be inferred from which names are absent.
+ */
+.sla-plugin .sla-admin-day-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  padding: 0.125rem 0.375rem;
+  border: 1px solid #e5e7eb; /* gray-200 */
+  border-radius: 0.25rem;
+  background-color: #ffffff;
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  color: #d1d5db; /* gray-300 — an off day, deliberately low contrast */
+}
+.sla-plugin .sla-admin-day-chip.is-on {
+  border-color: #bfdbfe; /* primary-200 */
+  background-color: #eff6ff; /* primary-50 */
+  color: #2563eb; /* primary-600 */
+  font-weight: 500;
+}
 .sla-plugin *, .sla-plugin ::before, .sla-plugin ::after {
   --tw-border-spacing-x: 0;
   --tw-border-spacing-y: 0;
@@ -1337,11 +1719,9 @@
   margin-left: 0.25rem;
   margin-right: 0.25rem;
 }
-.sla-plugin .-tw-mb-px {
-  margin-bottom: -1px;
-}
-.sla-plugin .-tw-ml-px {
-  margin-left: -1px;
+.sla-plugin .tw-mx-auto {
+  margin-left: auto;
+  margin-right: auto;
 }
 .sla-plugin .tw-mb-0 {
   margin-bottom: 0px;
@@ -1361,8 +1741,8 @@
 .sla-plugin .tw-mb-6 {
   margin-bottom: 1.5rem;
 }
-.sla-plugin .tw-mb-8 {
-  margin-bottom: 2rem;
+.sla-plugin .tw-ml-1 {
+  margin-left: 0.25rem;
 }
 .sla-plugin .tw-ms-3 {
   margin-inline-start: 0.75rem;
@@ -1376,6 +1756,9 @@
 .sla-plugin .tw-mt-1 {
   margin-top: 0.25rem;
 }
+.sla-plugin .tw-mt-1\.5 {
+  margin-top: 0.375rem;
+}
 .sla-plugin .tw-mt-2 {
   margin-top: 0.5rem;
 }
@@ -1387,6 +1770,9 @@
 }
 .sla-plugin .tw-mt-5 {
   margin-top: 1.25rem;
+}
+.sla-plugin .tw-mt-6 {
+  margin-top: 1.5rem;
 }
 .sla-plugin .tw-block {
   display: block;
@@ -1411,6 +1797,9 @@
 }
 .sla-plugin .tw-h-10 {
   height: 2.5rem;
+}
+.sla-plugin .tw-h-12 {
+  height: 3rem;
 }
 .sla-plugin .tw-h-2\.5 {
   height: 0.625rem;
@@ -1447,6 +1836,9 @@
 }
 .sla-plugin .tw-w-11 {
   width: 2.75rem;
+}
+.sla-plugin .tw-w-12 {
+  width: 3rem;
 }
 .sla-plugin .tw-w-2\.5 {
   width: 0.625rem;
@@ -1502,8 +1894,11 @@
 .sla-plugin .tw-max-w-full {
   max-width: 100%;
 }
-.sla-plugin .tw-max-w-xl {
-  max-width: 36rem;
+.sla-plugin .tw-max-w-lg {
+  max-width: 32rem;
+}
+.sla-plugin .tw-max-w-md {
+  max-width: 28rem;
 }
 .sla-plugin .tw-flex-1 {
   flex: 1 1 0%;
@@ -1516,6 +1911,9 @@
 }
 .sla-plugin .tw-table-fixed {
   table-layout: fixed;
+}
+.sla-plugin .tw-border-collapse {
+  border-collapse: collapse;
 }
 .sla-plugin .-tw-translate-y-1\/2 {
   --tw-translate-y: -50%;
@@ -1531,6 +1929,9 @@
   -webkit-user-select: none;
      -moz-user-select: none;
           user-select: none;
+}
+.sla-plugin .tw-list-disc {
+  list-style-type: disc;
 }
 .sla-plugin .tw-list-none {
   list-style-type: none;
@@ -1571,6 +1972,9 @@
 .sla-plugin .tw-gap-2 {
   gap: 0.5rem;
 }
+.sla-plugin .tw-gap-2\.5 {
+  gap: 0.625rem;
+}
 .sla-plugin .tw-gap-3 {
   gap: 0.75rem;
 }
@@ -1583,12 +1987,30 @@
 .sla-plugin .tw-gap-6 {
   gap: 1.5rem;
 }
+.sla-plugin .tw-gap-x-3 {
+  -moz-column-gap: 0.75rem;
+       column-gap: 0.75rem;
+}
 .sla-plugin .tw-gap-x-4 {
   -moz-column-gap: 1rem;
        column-gap: 1rem;
 }
+.sla-plugin .tw-gap-x-5 {
+  -moz-column-gap: 1.25rem;
+       column-gap: 1.25rem;
+}
+.sla-plugin .tw-gap-x-6 {
+  -moz-column-gap: 1.5rem;
+       column-gap: 1.5rem;
+}
 .sla-plugin .tw-gap-y-1 {
   row-gap: 0.25rem;
+}
+.sla-plugin .tw-gap-y-2 {
+  row-gap: 0.5rem;
+}
+.sla-plugin .tw-gap-y-3 {
+  row-gap: 0.75rem;
 }
 .sla-plugin .tw-space-y-2\.5 > :not([hidden]) ~ :not([hidden]) {
   --tw-space-y-reverse: 0;
@@ -1619,6 +2041,9 @@
 .sla-plugin .tw-overflow-hidden {
   overflow: hidden;
 }
+.sla-plugin .tw-overflow-x-auto {
+  overflow-x: auto;
+}
 .sla-plugin .tw-overflow-y-auto {
   overflow-y: auto;
 }
@@ -1639,16 +2064,11 @@
 .sla-plugin .tw-rounded-lg {
   border-radius: 0.5rem;
 }
+.sla-plugin .tw-rounded-md {
+  border-radius: 0.375rem;
+}
 .sla-plugin .tw-rounded-xl {
   border-radius: 0.75rem;
-}
-.sla-plugin .tw-rounded-l-lg {
-  border-top-left-radius: 0.5rem;
-  border-bottom-left-radius: 0.5rem;
-}
-.sla-plugin .tw-rounded-r-lg {
-  border-top-right-radius: 0.5rem;
-  border-bottom-right-radius: 0.5rem;
 }
 .sla-plugin .tw-rounded-t-lg {
   border-top-left-radius: 0.5rem;
@@ -1662,9 +2082,6 @@
 }
 .sla-plugin .tw-border-b {
   border-bottom-width: 1px;
-}
-.sla-plugin .tw-border-b-2 {
-  border-bottom-width: 2px;
 }
 .sla-plugin .tw-border-t {
   border-top-width: 1px;
@@ -1696,13 +2113,17 @@
   --tw-border-opacity: 1;
   border-color: rgb(209 213 219 / var(--tw-border-opacity, 1));
 }
+.sla-plugin .tw-border-green-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(187 247 208 / var(--tw-border-opacity, 1));
+}
 .sla-plugin .tw-border-green-300 {
   --tw-border-opacity: 1;
   border-color: rgb(134 239 172 / var(--tw-border-opacity, 1));
 }
-.sla-plugin .tw-border-orange-300 {
+.sla-plugin .tw-border-primary-200 {
   --tw-border-opacity: 1;
-  border-color: rgb(253 186 116 / var(--tw-border-opacity, 1));
+  border-color: rgb(191 219 254 / var(--tw-border-opacity, 1));
 }
 .sla-plugin .tw-border-primary-300 {
   --tw-border-opacity: 1;
@@ -1712,12 +2133,29 @@
   --tw-border-opacity: 1;
   border-color: rgb(37 99 235 / var(--tw-border-opacity, 1));
 }
+.sla-plugin .tw-border-red-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(254 202 202 / var(--tw-border-opacity, 1));
+}
 .sla-plugin .tw-border-red-300 {
   --tw-border-opacity: 1;
   border-color: rgb(252 165 165 / var(--tw-border-opacity, 1));
 }
-.sla-plugin .tw-border-transparent {
-  border-color: transparent;
+.sla-plugin .tw-border-teal-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(153 246 228 / var(--tw-border-opacity, 1));
+}
+.sla-plugin .tw-border-teal-300 {
+  --tw-border-opacity: 1;
+  border-color: rgb(94 234 212 / var(--tw-border-opacity, 1));
+}
+.sla-plugin .tw-border-violet-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(221 214 254 / var(--tw-border-opacity, 1));
+}
+.sla-plugin .tw-border-violet-300 {
+  --tw-border-opacity: 1;
+  border-color: rgb(196 181 253 / var(--tw-border-opacity, 1));
 }
 .sla-plugin .tw-bg-amber-100 {
   --tw-bg-opacity: 1;
@@ -1754,14 +2192,6 @@
   --tw-bg-opacity: 1;
   background-color: rgb(240 253 244 / var(--tw-bg-opacity, 1));
 }
-.sla-plugin .tw-bg-orange-100 {
-  --tw-bg-opacity: 1;
-  background-color: rgb(255 237 213 / var(--tw-bg-opacity, 1));
-}
-.sla-plugin .tw-bg-orange-50 {
-  --tw-bg-opacity: 1;
-  background-color: rgb(255 247 237 / var(--tw-bg-opacity, 1));
-}
 .sla-plugin .tw-bg-primary-100 {
   --tw-bg-opacity: 1;
   background-color: rgb(219 234 254 / var(--tw-bg-opacity, 1));
@@ -1782,15 +2212,34 @@
   --tw-bg-opacity: 1;
   background-color: rgb(254 242 242 / var(--tw-bg-opacity, 1));
 }
+.sla-plugin .tw-bg-teal-100 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(204 251 241 / var(--tw-bg-opacity, 1));
+}
+.sla-plugin .tw-bg-teal-50 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(240 253 250 / var(--tw-bg-opacity, 1));
+}
 .sla-plugin .tw-bg-transparent {
   background-color: transparent;
+}
+.sla-plugin .tw-bg-violet-100 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(237 233 254 / var(--tw-bg-opacity, 1));
+}
+.sla-plugin .tw-bg-violet-50 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(245 243 255 / var(--tw-bg-opacity, 1));
 }
 .sla-plugin .tw-bg-white {
   --tw-bg-opacity: 1;
   background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1));
 }
-.sla-plugin .tw-p-1\.5 {
-  padding: 0.375rem;
+.sla-plugin .tw-p-0 {
+  padding: 0px;
+}
+.sla-plugin .tw-p-1 {
+  padding: 0.25rem;
 }
 .sla-plugin .tw-p-2\.5 {
   padding: 0.625rem;
@@ -1806,10 +2255,6 @@
 }
 .sla-plugin .tw-p-6 {
   padding: 1.5rem;
-}
-.sla-plugin .tw-px-1\.5 {
-  padding-left: 0.375rem;
-  padding-right: 0.375rem;
 }
 .sla-plugin .tw-px-2 {
   padding-left: 0.5rem;
@@ -1827,6 +2272,10 @@
   padding-left: 1.25rem;
   padding-right: 1.25rem;
 }
+.sla-plugin .tw-px-6 {
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
 .sla-plugin .tw-py-0\.5 {
   padding-top: 0.125rem;
   padding-bottom: 0.125rem;
@@ -1838,6 +2287,10 @@
 .sla-plugin .tw-py-1\.5 {
   padding-top: 0.375rem;
   padding-bottom: 0.375rem;
+}
+.sla-plugin .tw-py-12 {
+  padding-top: 3rem;
+  padding-bottom: 3rem;
 }
 .sla-plugin .tw-py-2 {
   padding-top: 0.5rem;
@@ -1862,9 +2315,6 @@
 .sla-plugin .tw-pb-2 {
   padding-bottom: 0.5rem;
 }
-.sla-plugin .tw-pb-3 {
-  padding-bottom: 0.75rem;
-}
 .sla-plugin .tw-pl-0 {
   padding-left: 0px;
 }
@@ -1883,14 +2333,14 @@
 .sla-plugin .tw-pr-4 {
   padding-right: 1rem;
 }
+.sla-plugin .tw-ps-5 {
+  padding-inline-start: 1.25rem;
+}
 .sla-plugin .tw-pt-1 {
   padding-top: 0.25rem;
 }
 .sla-plugin .tw-pt-3 {
   padding-top: 0.75rem;
-}
-.sla-plugin .tw-pt-5 {
-  padding-top: 1.25rem;
 }
 .sla-plugin .tw-text-left {
   text-align: left;
@@ -1898,27 +2348,21 @@
 .sla-plugin .tw-text-center {
   text-align: center;
 }
-.sla-plugin .tw-text-right {
-  text-align: right;
-}
 .sla-plugin .tw-text-2xl {
   font-size: 1.5rem;
   line-height: 2rem;
-}
-.sla-plugin .tw-text-3xl {
-  font-size: 1.875rem;
-  line-height: 2.25rem;
 }
 .sla-plugin .tw-text-4xl {
   font-size: 2.25rem;
   line-height: 2.5rem;
 }
-.sla-plugin .tw-text-\[10px\] {
-  font-size: 10px;
-}
 .sla-plugin .tw-text-base {
   font-size: 1rem;
   line-height: 1.5rem;
+}
+.sla-plugin .tw-text-lg {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
 }
 .sla-plugin .tw-text-sm {
   font-size: 0.875rem;
@@ -1938,14 +2382,8 @@
 .sla-plugin .tw-font-medium {
   font-weight: 500;
 }
-.sla-plugin .tw-font-normal {
-  font-weight: 400;
-}
 .sla-plugin .tw-font-semibold {
   font-weight: 600;
-}
-.sla-plugin .tw-uppercase {
-  text-transform: uppercase;
 }
 .sla-plugin .tw-ordinal {
   --tw-ordinal: ordinal;
@@ -1955,12 +2393,16 @@
   --tw-slashed-zero: slashed-zero;
   font-variant-numeric: var(--tw-ordinal) var(--tw-slashed-zero) var(--tw-numeric-figure) var(--tw-numeric-spacing) var(--tw-numeric-fraction);
 }
-.sla-plugin .tw-tracking-wide {
-  letter-spacing: 0.025em;
+.sla-plugin .tw-leading-none {
+  line-height: 1;
 }
 .sla-plugin .tw-text-amber-500 {
   --tw-text-opacity: 1;
   color: rgb(245 158 11 / var(--tw-text-opacity, 1));
+}
+.sla-plugin .tw-text-amber-600 {
+  --tw-text-opacity: 1;
+  color: rgb(217 119 6 / var(--tw-text-opacity, 1));
 }
 .sla-plugin .tw-text-amber-700 {
   --tw-text-opacity: 1;
@@ -2010,10 +2452,6 @@
   --tw-text-opacity: 1;
   color: rgb(21 128 61 / var(--tw-text-opacity, 1));
 }
-.sla-plugin .tw-text-orange-700 {
-  --tw-text-opacity: 1;
-  color: rgb(194 65 12 / var(--tw-text-opacity, 1));
-}
 .sla-plugin .tw-text-primary-600 {
   --tw-text-opacity: 1;
   color: rgb(37 99 235 / var(--tw-text-opacity, 1));
@@ -2030,6 +2468,26 @@
   --tw-text-opacity: 1;
   color: rgb(185 28 28 / var(--tw-text-opacity, 1));
 }
+.sla-plugin .tw-text-red-800 {
+  --tw-text-opacity: 1;
+  color: rgb(153 27 27 / var(--tw-text-opacity, 1));
+}
+.sla-plugin .tw-text-teal-600 {
+  --tw-text-opacity: 1;
+  color: rgb(13 148 136 / var(--tw-text-opacity, 1));
+}
+.sla-plugin .tw-text-teal-700 {
+  --tw-text-opacity: 1;
+  color: rgb(15 118 110 / var(--tw-text-opacity, 1));
+}
+.sla-plugin .tw-text-violet-600 {
+  --tw-text-opacity: 1;
+  color: rgb(124 58 237 / var(--tw-text-opacity, 1));
+}
+.sla-plugin .tw-text-violet-700 {
+  --tw-text-opacity: 1;
+  color: rgb(109 40 217 / var(--tw-text-opacity, 1));
+}
 .sla-plugin .tw-text-white {
   --tw-text-opacity: 1;
   color: rgb(255 255 255 / var(--tw-text-opacity, 1));
@@ -2037,8 +2495,11 @@
 .sla-plugin .tw-underline {
   text-decoration-line: underline;
 }
-.sla-plugin .tw-opacity-70 {
-  opacity: 0.7;
+.sla-plugin .tw-no-underline {
+  text-decoration-line: none;
+}
+.sla-plugin .tw-opacity-80 {
+  opacity: 0.8;
 }
 .sla-plugin .tw-shadow-lg {
   --tw-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
@@ -2155,8 +2616,8 @@
   --tw-content: '';
   content: var(--tw-content);
 }
-.sla-plugin .last\:tw-border-0:last-child {
-  border-width: 0px;
+.sla-plugin .last\:tw-mb-0:last-child {
+  margin-bottom: 0px;
 }
 .sla-plugin .hover\:tw-bg-gray-100:hover {
   --tw-bg-opacity: 1;
@@ -2211,9 +2672,6 @@
   --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(4px + var(--tw-ring-offset-width)) var(--tw-ring-color);
   box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
 }
-.sla-plugin .focus\:tw-ring-inset:focus {
-  --tw-ring-inset: inset;
-}
 .sla-plugin .focus\:tw-ring-primary-100:focus {
   --tw-ring-opacity: 1;
   --tw-ring-color: rgb(219 234 254 / var(--tw-ring-opacity, 1));
@@ -2254,8 +2712,17 @@
   }
 }
 @media (min-width: 768px) {
+  .sla-plugin .md\:tw-col-span-2 {
+    grid-column: span 2 / span 2;
+  }
+  .sla-plugin .md\:tw-w-40 {
+    width: 10rem;
+  }
   .sla-plugin .md\:tw-w-56 {
     width: 14rem;
+  }
+  .sla-plugin .md\:tw-w-80 {
+    width: 20rem;
   }
   .sla-plugin .md\:tw-w-96 {
     width: 24rem;
@@ -2310,7 +2777,7 @@
   .sla-plugin .lg\:tw-flex-row {
     flex-direction: row;
   }
-  .sla-plugin .lg\:tw-items-stretch {
-    align-items: stretch;
+  .sla-plugin .lg\:tw-items-start {
+    align-items: flex-start;
   }
 }

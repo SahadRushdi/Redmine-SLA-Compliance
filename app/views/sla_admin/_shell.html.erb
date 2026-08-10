@@ -1,0 +1,28 @@
+<%# The admin module's page shell: header, persistent section sidebar, content column. %>
+<%# %>
+<%# LAYOUT partial — render it with `render layout: 'sla_admin/shell', locals: { current: ... }` %>
+<%# and a block holding the section's content. Every page of the module (the plugin settings form %>
+<%# and the two lookup CRUD screens) goes through here, which is what makes the sidebar persistent: %>
+<%# there is no page in this module that can render without it. %>
+<%# %>
+<%# Locals: current (section key, drives which sidebar entry is active). %>
+<%= render 'sla_compliance/assets' %>
+<% content_for :header_tags do %>
+  <%= javascript_include_tag 'sla_admin.js', plugin: 'redmine_sla_compliance' %>
+<% end %>
+
+<%# sla-admin-module is what neutralises Redmine's own `.box tabular settings` chrome when this %>
+<%# shell renders inside the plugin settings form — see partials/_admin_settings.css. It is on the %>
+<%# wrapper (not only the settings page) so the two lookup pages get identical page padding. %>
+<div class="sla-plugin sla-admin-module">
+  <div class="tw-mb-6">
+    <%# tw-m-0 / tw-mb-0: Preflight is disabled, so Purplemine2's own h2/p margins still apply. %>
+    <h2 class="tw-m-0 tw-text-xl tw-font-semibold tw-text-gray-900"><%= l(:label_sla_compliance_settings) %></h2>
+    <p class="tw-mt-1 tw-mb-0 tw-text-sm tw-text-gray-500"><%= l(:text_sla_admin_intro) %></p>
+  </div>
+
+  <div class="tw-flex tw-flex-col lg:tw-flex-row tw-gap-6 tw-items-start">
+    <%= render 'sla_admin/nav', current: current %>
+    <div class="tw-flex-1 tw-min-w-0 tw-w-full"><%= yield %></div>
+  </div>
+</div>

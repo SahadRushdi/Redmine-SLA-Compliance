@@ -20,6 +20,9 @@
 <% current = sla_current_section(sections) %>
 
 <div class="sla-plugin">
+  <%# The header sits ABOVE the sidebar, so it is on screen for all five sections at once — its %>
+  <%# description is one short line rather than a sentence listing what those sections contain, %>
+  <%# which only repeated the sidebar's own labels and sub-labels back at the reader on every tab. %>
   <div class="tw-mb-6">
     <h2 class="tw-m-0 tw-text-xl tw-font-semibold tw-text-gray-900"><%= l(:label_sla_policy_settings) %></h2>
     <p class="tw-mt-1 tw-mb-0 tw-text-sm tw-text-gray-500"><%= l(:text_sla_policy_settings_intro) %></p>
@@ -28,6 +31,12 @@
   <div id="sla-policy-settings" class="tw-flex tw-flex-col lg:tw-flex-row tw-gap-6 tw-items-start">
     <%= render 'sla_policies/nav_slot', project: @project, sections: sections, current: current %>
 
+    <%# Deliberately NOT given the reference design's gray-50 page canvas. It would read well behind %>
+    <%# the General section's new headerless white cards, but sla_policies/_card.html.erb — used by %>
+    <%# every section this change was told to leave alone — separates its header from its body with %>
+    <%# a gray-50 tint, and on a gray-50 canvas that header stops looking like part of the card at %>
+    <%# all. Matching the reference here means whitening those headers too, which is a change to %>
+    <%# sections that were explicitly out of scope. %>
     <div class="tw-flex-1 tw-min-w-0 tw-w-full">
       <div id="sla-policy-tab-body">
         <%= render 'sla_policies/policy_body',
