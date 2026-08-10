@@ -1,5 +1,4 @@
-<%# General section — SLA on/off and coverage hours (business calendar shown only for Business %>
-<%# Hours coverage). Its own <form>: each section saves independently, and the hidden `section` %>
+<%# General section — SLA on/off. Its own <form>: each section saves independently, and the hidden `section` %>
 <%# field tells SlaPoliciesController#update which slice of the policy this submit may touch, so %>
 <%# saving here can never clear another section's status mappings or targets. Locals: project, %>
 <%# policy, current (active section key), inherited_source. %>
@@ -20,7 +19,7 @@
     <%= hidden_field_tag 'tab', 'sla_policy' %>
     <%= hidden_field_tag 'section', 'general' %>
 
-    <%# Both settings on this section are a single control apiece, so each is ONE row — name and
+    <%# The setting is one row — name and
         helper line on the left, control on the right — rather than a titled card wrapping a
         field that restates the title. See sla_policies/_setting_card.html.erb. %>
     <% if inherited_source.blank? %>
@@ -29,36 +28,6 @@
                            description: l(:text_sla_tracking_hint) } do %>
         <%= render 'sla_compliance/toggle', name: 'sla_policy[enabled]', checked: policy.enabled? %>
       <% end %>
-    <% end %>
-
-    <%= render layout: 'sla_policies/setting_card',
-               locals: { title: l(:label_sla_coverage_card),
-                         description: l(:text_sla_coverage_schedule_hint) } do %>
-      <%# The row's own title is the label now, so the select carries its field name as an %>
-      <%# aria-label instead of a visible <label> that would repeat it. %>
-      <div class="tw-w-full md:tw-w-80">
-        <%= select_tag 'sla_policy[coverage_hours]',
-              options_for_select(SlaPolicy::COVERAGE_HOURS.map { |c| [l("label_coverage_#{c}"), c] },
-                                 policy.coverage_hours),
-              id: 'sla_policy_coverage_hours', class: sla_input_classes,
-              'aria-label': l(:field_sla_coverage_schedule), data: { sla_select: true } %>
-
-        <%# Dependent field: revealed by sla_policy_form.js only while Business Hours is selected, %>
-        <%# so it stacks under the control it depends on rather than sitting in a card of its own. %>
-        <div id="sla-calendar-field" class="tw-mt-3 <%= 'hidden' unless policy.business_hours? %>">
-          <label for="sla_policy_business_calendar_id" class="<%= sla_label_classes %>"><%= l(:field_business_calendar) %></label>
-          <% calendars = SlaBusinessCalendar.order(:name).to_a %>
-          <% if calendars.any? %>
-            <%= select_tag 'sla_policy[business_calendar_id]',
-                  options_for_select([['', '']] + calendars.map { |c| [c.name, c.id] },
-                                     policy.business_calendar_id),
-                  id: 'sla_policy_business_calendar_id', class: sla_input_classes,
-                  data: { sla_select: true } %>
-          <% else %>
-            <p class="tw-text-sm tw-text-gray-500"><%= l(:text_sla_no_business_calendars) %></p>
-          <% end %>
-        </div>
-      </div>
     <% end %>
 
     <%= render 'sla_policies/save_bar', label: l(:button_sla_save_general) %>

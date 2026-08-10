@@ -28,7 +28,7 @@
         </tr>
       </thead>
       <tbody id="sla-definitions-rows-<%= tracker.id %>">
-        <%= render 'sla_policies/definition_rows', policy: policy, tracker: tracker %>
+        <%= render 'sla_policies/definition_rows', policy: policy, tracker: tracker, project: @project %>
       </tbody>
     </table>
   <% end %>

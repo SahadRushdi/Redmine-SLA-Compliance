@@ -28,14 +28,17 @@ class Sla::AtRiskEvaluatorTest < ActiveSupport::TestCase
 
   test "calendar: on-track ticket is not at risk and projects a future breach" do
     now = UTC.local(2026, 6, 1, 9, 0)
-    at_risk, breach_at = calendar_eval(now: now).evaluate([{ target: 3600, elapsed: 1800 }])
+    at_risk, breach_at, _kind, at_risk_at = calendar_eval(now: now).evaluate([{ target: 3600, elapsed: 1800 }])
     refute at_risk
     assert_equal now + 1800, breach_at # remaining 1800s
+    assert_equal now + 1080, at_risk_at # another 30% until the 80% threshold
   end
 
   test "calendar: exactly at the threshold flags at risk" do
-    at_risk, = calendar_eval.evaluate([{ target: 3600, elapsed: 2880 }]) # 80%
+    now = UTC.local(2026, 6, 1, 9, 0)
+    at_risk, _breach_at, _kind, at_risk_at = calendar_eval(now: now).evaluate([{ target: 3600, elapsed: 2880 }]) # 80%
     assert at_risk
+    assert_equal now, at_risk_at
   end
 
   test "calendar: between threshold and target is at risk" do

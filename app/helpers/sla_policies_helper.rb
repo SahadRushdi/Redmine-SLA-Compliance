@@ -296,32 +296,18 @@ module SlaPoliciesHelper
   end
   private :sla_requested_tracker_ids
 
-  # <option> list for one target dropdown: a leading "not tracked" blank, then the admin lookup
-  # (numeric durations by seconds, Best Effort rows by the 'best_effort' sentinel — a Best Effort
-  # option has no seconds value to use as the option value). If the saved numeric value no longer
-  # matches any option (the admin edited the lookup), inject it so it isn't silently dropped on
-  # the next save.
   SLA_BEST_EFFORT_VALUE = 'best_effort'
 
-  def sla_target_select_options(target_type, current_seconds, current_best_effort = false)
-    rows = sla_target_options_by_type.fetch(target_type.to_s, [])
-    options = rows.reject(&:best_effort?).map { |o| [o.label, o.seconds.to_s] }
-    options += rows.select(&:best_effort?).map { |o| [o.label, SLA_BEST_EFFORT_VALUE] }
+  def sla_direct_duration_parts(seconds, unit = nil)
+    return ['', 'hours'] unless seconds.present?
+    return Sla::DirectDuration.parts(seconds) unless Sla::DirectDuration::UNITS.key?(unit.to_s)
 
-    if !current_best_effort && current_seconds.present? &&
-       options.none? { |_, value| value == current_seconds.to_s }
-      options.unshift([l(:label_sla_target_current_value,
-                         value: format_sla_duration(current_seconds)), current_seconds.to_s])
-    end
-    options.unshift([l(:label_sla_target_skipped), ''])
-
-    selected = current_best_effort ? SLA_BEST_EFFORT_VALUE : (current_seconds || '').to_s
-    options_for_select(options, selected)
+    amount = BigDecimal(seconds.to_s) / Sla::DirectDuration::UNITS.fetch(unit.to_s)
+    [amount.to_s('F').sub(/\.0+\z/, ''), unit.to_s]
   end
 
-  def sla_target_options_by_type
-    @sla_target_options_by_type ||=
-      SlaTargetOption.order(:position, :seconds).group_by(&:target_type)
+  def sla_direct_duration_label(seconds, best_effort, unit = nil)
+    Sla::DirectDuration.label(seconds: seconds, best_effort: best_effort, unit: unit)
   end
 
   # Source candidates for "Clone from another project": projects the user could edit the

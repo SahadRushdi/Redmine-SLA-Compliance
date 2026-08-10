@@ -38,19 +38,6 @@
   </div>
 <% end %>
 
-<%= render layout: 'sla_policies/setting_card',
-           locals: { title: l(:field_sla_sweep_interval_minutes),
-                     description: l(:text_sla_sweep_interval_hint) } do %>
-  <div class="tw-w-full md:tw-w-40">
-    <%= number_field_tag 'settings[sweep_interval_minutes]',
-          settings['sweep_interval_minutes'].presence || Sla::PluginSettings::DEFAULT_SWEEP_INTERVAL_MINUTES,
-          min: Sla::PluginSettings::MIN_SWEEP_INTERVAL_MINUTES,
-          max: Sla::PluginSettings::MAX_SWEEP_INTERVAL_MINUTES,
-          id: 'settings_sweep_interval_minutes', class: sla_input_classes,
-          'aria-label': l(:field_sla_sweep_interval_minutes) %>
-  </div>
-<% end %>
-
 <%# The instance-wide "Default Google Chat webhook" that used to sit here is gone, along with the %>
 <%# fallback it fed (SlaNotificationSetting.google_chat_webhook_for). A webhook is now a per-project %>
 <%# setting only — Project Settings → SLA Policy → Notifications. %>

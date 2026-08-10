@@ -28,10 +28,6 @@
     </div>
   <% end %>
 
-  <% if sla_target_options_by_type.empty? %>
-    <p class="tw-mt-0 tw-mb-4 tw-text-sm tw-text-amber-700"><%= l(:text_sla_no_target_options) %></p>
-  <% end %>
-
   <div id="sla-definitions-tables">
     <% selected.each do |tracker| %>
       <%= render 'sla_policies/definition_table', policy: policy, tracker: tracker %>

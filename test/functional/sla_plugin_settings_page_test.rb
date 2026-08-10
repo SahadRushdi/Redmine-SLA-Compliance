@@ -150,8 +150,7 @@ class SlaPluginSettingsPageTest < ActionController::TestCase
     stored = Setting.plugin_redmine_sla_compliance
     assert_not stored.key?('sla_viewer_user_ids')
     assert_not stored.key?('sla_manager_user_ids')
-    assert_equal '20', stored['sweep_interval_minutes'],
-                 'a setting this form does not render must still survive the save'
+    assert_not stored.key?('sweep_interval_minutes')
   end
 
   # --- the whole point: saving here grants access there ----------------------------------------

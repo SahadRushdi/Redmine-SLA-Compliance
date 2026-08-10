@@ -22,15 +22,11 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert @status_ids.size >= 2, 'fixtures must provide at least two project statuses'
     assert @trackers.size >= 2, 'fixtures must provide at least two project trackers'
 
-    # Admin lookup the target dropdowns post from.
-    @opt_1h = SlaTargetOption.create!(target_type: 'response', code: '1h', label: '1 hour',
-                                      seconds: 3600)
-    @opt_4h = SlaTargetOption.create!(target_type: 'response', code: '4h', label: '4 hours',
-                                      seconds: 14_400)
-    @opt_2h = SlaTargetOption.create!(target_type: 'workaround', code: '2h', label: '2 hours',
-                                      seconds: 7200)
-    @opt_1d = SlaTargetOption.create!(target_type: 'resolution', code: '1d', label: '1 day',
-                                      seconds: 86_400)
+    duration = Struct.new(:seconds)
+    @opt_1h = duration.new(3600)
+    @opt_4h = duration.new(14_400)
+    @opt_2h = duration.new(7200)
+    @opt_1d = duration.new(86_400)
   end
 
   # The tab saves one section at a time (SlaPoliciesHelper::SECTIONS): each section's form posts
@@ -39,8 +35,7 @@ class SlaPoliciesControllerTest < ActionController::TestCase
   # scenario spanning two sections posts twice, exactly as the UI does.
   def general_params(overrides = {})
     { project_id: @project.id, tab: 'sla_policy', section: 'general',
-      sla_policy: { enabled: '1', coverage_hours: '24x7',
-                    business_calendar_id: '' } }.deep_merge(overrides)
+      sla_policy: { enabled: '1', coverage_hours: '24x7' } }.deep_merge(overrides)
   end
 
   def measurement_params(overrides = {})

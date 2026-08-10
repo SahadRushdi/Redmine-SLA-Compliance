@@ -26,7 +26,8 @@ module Sla
       target_projects.each do |proj|
         context = PolicyContext.for_project(proj)
         issues_for(proj).find_each do |issue|
-          ResultStore.recalculate(issue, context: context, now: @now)
+          outcome = ResultStore.recalculate(issue, context: context, now: @now)
+          LiveTransitionScheduler.call(issue, outcome, now: @now)
           count += 1
         end
       end

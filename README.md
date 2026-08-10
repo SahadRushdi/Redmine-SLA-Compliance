@@ -2,11 +2,13 @@
 
 Per-project SLA policies and automatic SLA-compliance measurement for incident tickets in
 Redmine, presented as a filterable dashboard, with Google Chat + email notifications and a
-time-driven at-risk/stale sweep.
+live, time-aware dashboard state.
 
-The plugin is **event-driven** (recomputes when a ticket changes) **and time-driven** (a
-recurring sweep re-evaluates open tickets so at-risk/stale states stay current). SLA timelines
-are reconstructed from Redmine's journal history, never from the issue's current state.
+The plugin recomputes cached SLA projections whenever a ticket changes. While a dashboard is open,
+it refreshes every 15 seconds and evaluates indexed `at_risk_at` / `breach_at` projections against
+the current time. This keeps the visible dashboard current without a recurring server scheduler or
+reconstructing ticket journals on dashboard reads. SLA timelines are reconstructed from Redmine's
+journal history, never from the issue's current state.
 
 See `SLA_Compliance_Plugin_Implementation_Plan.md` for the full spec and phased plan.
 
@@ -19,13 +21,13 @@ See `SLA_Compliance_Plugin_Implementation_Plan.md` for the full spec and phased 
 | Rails | 6.1.x |
 
 - **Background jobs:** ActiveJob using Redmine's configured adapter (default `:async`).
-- **Recurring scheduler:** `rufus-scheduler` (in-process), for the at-risk/stale sweep (Phase 3.3).
+- **Live dashboard:** event-driven cache writes plus indexed, read-time state projections.
 
 ## Install
 
 ```bash
 # 1. Place this plugin under redmine/plugins/redmine_sla_compliance
-# 2. Install gems (rufus-scheduler / sucker_punch are already vendored on this instance)
+# 2. Install gems
 cd redmine && bundle install
 
 # 3. Build the scoped Tailwind + Flowbite stylesheet (see below)

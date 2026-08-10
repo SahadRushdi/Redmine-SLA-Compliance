@@ -8,8 +8,8 @@ require_relative '../../test_helper'
 class Sla::EffectiveStateTest < ActiveSupport::TestCase
   NOW = Time.zone.local(2026, 7, 15, 12, 0, 0)
 
-  def result(primary_state:, breach_at: nil, at_risk: false, no_sla_reason: nil)
-    SlaResult.new(primary_state: primary_state, breach_at: breach_at, at_risk: at_risk,
+  def result(primary_state:, breach_at: nil, at_risk_at: nil, at_risk: false, no_sla_reason: nil)
+    SlaResult.new(primary_state: primary_state, breach_at: breach_at, at_risk_at: at_risk_at, at_risk: at_risk,
                   no_sla_reason: no_sla_reason)
   end
 
@@ -45,6 +45,18 @@ class Sla::EffectiveStateTest < ActiveSupport::TestCase
 
   test "effective_at_risk? is false when at_risk is not set" do
     r = result(primary_state: 'met', breach_at: NOW + 1.hour, at_risk: false)
+    refute r.effective_at_risk?(NOW)
+  end
+
+  test "effective_at_risk? becomes true live when at_risk_at is reached" do
+    r = result(primary_state: 'met', breach_at: NOW + 1.hour,
+               at_risk_at: NOW - 1.second, at_risk: false)
+    assert r.effective_at_risk?(NOW)
+  end
+
+  test "effective_at_risk? remains false before at_risk_at" do
+    r = result(primary_state: 'met', breach_at: NOW + 1.hour,
+               at_risk_at: NOW + 1.second, at_risk: false)
     refute r.effective_at_risk?(NOW)
   end
 

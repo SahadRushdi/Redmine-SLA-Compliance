@@ -4,8 +4,7 @@ Redmine::Plugin.register :redmine_sla_compliance do
   name 'Redmine SLA Compliance Plugin'
   author 'Sahad Rushdi'
   description 'Per-project SLA policies and automatic SLA-compliance measurement for incident ' \
-              'tickets, with a filterable dashboard, Google Chat + email notifications, and a ' \
-              'time-driven at-risk/stale sweep.'
+              'tickets, with a live filterable dashboard and Google Chat + email notifications.'
   version '0.1.0'
   url 'https://github.com/SahadRushdi/redmine-plugins'
 
@@ -38,7 +37,7 @@ Redmine::Plugin.register :redmine_sla_compliance do
     # menu link and 403 on the URL — the tab could never be opened. This mirrors how core's own
     # :manage_members / :manage_versions / :manage_categories each claim projects/settings.
     # Holding it grants nothing else: every other tab stays filtered by its own permission.
-    permission :edit_sla_policy, { sla_policies: [:edit, :update, :destroy],
+    permission :edit_sla_policy, { sla_policies: [:edit, :update, :update_target, :destroy],
                                    projects: [:settings] }
 
     # Manage per-project notification settings (Google Chat webhook, at-risk/stale email).
@@ -70,23 +69,20 @@ Redmine::Plugin.register :redmine_sla_compliance do
        caption: :label_sla_dashboard_all,
        if: Proc.new { |_project| User.current.logged? && SlaPolicy.enabled_projects_for(User.current).any? }
 
-  # The admin module's entry point. The item NAME is what SlaSettingsController,
-  # SlaTargetOptionsController and SlaBusinessCalendarsController each declare as their
-  # `menu_item`, which is how this entry stays selected across every page of the module.
+  # The admin module's single General entry point.
   menu :admin_menu, :sla_compliance_settings,
        { controller: 'sla_settings', action: 'show' },
        caption: :label_sla_compliance_settings,
        html: { class: 'icon', style: 'background-image: url(/images/time.png)' }
 end
 
-# --- Event-driven recompute + time-driven sweep -----------------------------------
+# --- Event-driven recompute --------------------------------------------------------
 # Wired after full app initialization so Issue and the plugin's autoloaded services are available.
 Rails.application.config.after_initialize do
   require_dependency File.expand_path('lib/redmine_sla_compliance/patches/issue_patch', __dir__)
   require_dependency File.expand_path('lib/redmine_sla_compliance/patches/projects_helper_patch', __dir__)
   require_dependency File.expand_path('lib/redmine_sla_compliance/patches/projects_controller_patch', __dir__)
   require_dependency File.expand_path('lib/redmine_sla_compliance/patches/user_patch', __dir__)
-  require File.expand_path('lib/redmine_sla_compliance/sweep_scheduler', __dir__)
 
   # Step 3.1 — recompute an issue's cached SLA result on every change (idempotent include guard).
   unless Issue.included_modules.include?(RedmineSlaCompliance::Patches::IssuePatch)
@@ -117,6 +113,4 @@ Rails.application.config.after_initialize do
   ProjectsController.helper(:sla_policies)
   ProjectsController.helper(:sla_compliance)
 
-  # Step 3.3 — start the recurring at-risk/stale sweep (no-op under rake / when disabled).
-  RedmineSlaCompliance::SweepScheduler.start
 end

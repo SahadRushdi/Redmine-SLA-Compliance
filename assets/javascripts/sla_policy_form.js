@@ -98,14 +98,12 @@
     });
   }
 
-  // Single-value dropdowns (Coverage hours, Business calendar, Tracker, target durations,
-  // stale-digest frequency). Native <select> popups are OS/browser-chrome-rendered and can't be
+  // Single-value dropdowns (Tracker and stale-digest frequency). Native <select> popups are
   // themed to match the rest of the scoped Flowbite UI — Tom Select replaces them with the same
   // styled, HTML-rendered dropdown already used for the chip multi-selects (see .ts-dropdown in
   // tailwind.input.css), which also sidesteps the native-select text-clipping some browsers
   // exhibit under Purplemine2's fixed input height. Tom Select keeps the original <select>'s
-  // `.value` in sync and re-dispatches `change` on it, so existing handlers (toggleCalendarField,
-  // snapshotDefs, the tracker-switch confirm) keep working unmodified.
+  // `.value` in sync and re-dispatches `change` on it.
   function initSingleSelects() {
     document.querySelectorAll('select[data-sla-select]').forEach(function (el) {
       if (!el.tomselect && window.TomSelect) {
@@ -142,14 +140,60 @@
     });
   }
 
-  function toggleCalendarField() {
-    var coverage = byId('sla_policy_coverage_hours');
-    var field = byId('sla-calendar-field');
-    if (!coverage || !field) { return; }
-    var businessHours = coverage.value === 'business_hours';
-    field.classList.toggle('hidden', !businessHours);
-    var calendarSelect = byId('sla_policy_business_calendar_id');
-    if (calendarSelect) { calendarSelect.required = businessHours; }
+  function targetParts(cell) {
+    return {
+      editor: cell.querySelector('[data-sla-target-editor]'),
+      display: cell.querySelector('[data-sla-target-display]'),
+      value: cell.querySelector('[data-sla-target-value]'),
+      unit: cell.querySelector('[data-sla-target-unit]'),
+      bestEffort: cell.querySelector('[data-sla-target-best-effort]'),
+      status: cell.querySelector('[data-sla-target-status]')
+    };
+  }
+
+  function syncTargetInputs(cell) {
+    var parts = targetParts(cell);
+    var disabled = parts.bestEffort.checked;
+    parts.value.disabled = disabled;
+    parts.unit.disabled = disabled;
+    if (parts.unit.tomselect) {
+      if (disabled) { parts.unit.tomselect.disable(); } else { parts.unit.tomselect.enable(); }
+    }
+  }
+
+  function saveTargetCell(cell) {
+    var parts = targetParts(cell);
+    var mode = parts.bestEffort.checked ? 'best_effort' :
+      (parts.value.value.trim() ? 'duration' : 'unset');
+    var token = document.querySelector('meta[name="csrf-token"]');
+    var recalculate = document.querySelector('input[name="recalculate"]');
+    parts.status.textContent = '';
+
+    jQuery.ajax({
+      url: cell.getAttribute('data-endpoint'),
+      method: 'PATCH',
+      dataType: 'json',
+      headers: token ? { 'X-CSRF-Token': token.content } : {},
+      data: {
+        tracker_id: cell.getAttribute('data-tracker-id'),
+        priority_id: cell.getAttribute('data-priority-id'),
+        target_type: cell.getAttribute('data-target-type'),
+        mode: mode,
+        value: parts.value.value,
+        unit: parts.unit.value,
+        recalculate: recalculate && recalculate.checked ? '1' : '0'
+      }
+    }).done(function (response) {
+      cell.setAttribute('data-seconds', response.seconds || '');
+      cell.setAttribute('data-best-effort', response.best_effort ? 'true' : 'false');
+      parts.display.textContent = response.display;
+      parts.status.textContent = response.message;
+      parts.status.className = 'tw-mt-1 tw-block tw-text-xs tw-text-green-600';
+    }).fail(function (xhr) {
+      var response = xhr.responseJSON || {};
+      parts.status.textContent = response.error || 'Unable to save';
+      parts.status.className = 'tw-mt-1 tw-block tw-text-xs tw-text-red-600';
+    });
   }
 
   // A switch marked data-sla-reveals="<key>" owns the [data-sla-reveal="<key>"] block of detail
@@ -247,12 +291,35 @@
       'input[name="sla_policy[enabled]"], input[name="sla_policy[enablement]"]', syncLocks);
 
     jQuery(document).on('change', '[data-sla-reveals]', syncReveals);
-    jQuery(document).on('change', '#sla_policy_coverage_hours', toggleCalendarField);
     jQuery(document).on('change',
       'input[name="sla_notification_setting[at_risk_email_frequency]"]', toggleDigestInterval);
 
     jQuery(document).on('change', '#sla-definitions-trackers', function () {
       syncDefinitionTables(this);
+    });
+
+    jQuery(document).on('click', '[data-sla-target-display]', function () {
+      var cell = this.closest('[data-sla-target-cell]');
+      targetParts(cell).editor.classList.remove('hidden');
+      syncTargetInputs(cell);
+      if (!targetParts(cell).bestEffort.checked) { targetParts(cell).value.focus(); }
+    });
+    jQuery(document).on('change', '[data-sla-target-best-effort]', function () {
+      syncTargetInputs(this.closest('[data-sla-target-cell]'));
+    });
+    jQuery(document).on('focusout', '[data-sla-target-editor]', function () {
+      var editor = this;
+      window.setTimeout(function () {
+        if (editor.contains(document.activeElement)) { return; }
+        editor.classList.add('hidden');
+        saveTargetCell(editor.closest('[data-sla-target-cell]'));
+      }, 0);
+    });
+    jQuery(document).on('keydown', '[data-sla-target-editor]', function (event) {
+      if (event.key !== 'Enter') { return; }
+      event.preventDefault();
+      this.classList.add('hidden');
+      saveTargetCell(this.closest('[data-sla-target-cell]'));
     });
 
     jQuery(document).on('click', '#sla-clone-load', function () {
@@ -278,7 +345,6 @@
     // After the Tom Select instances exist, so a section rendered locked disables them too.
     syncLocks();
     syncReveals();
-    toggleCalendarField();
     toggleDigestInterval();
     bindOnce();
   }

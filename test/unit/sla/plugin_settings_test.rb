@@ -15,29 +15,6 @@ class Sla::PluginSettingsTest < ActiveSupport::TestCase
     Setting.plugin_redmine_sla_compliance = {}
   end
 
-  # --- sweep_interval_minutes -----------------------------------------------------------------
-
-  test "sweep_interval_minutes defaults to 15 when unset" do
-    assert_equal 15, Sla::PluginSettings.sweep_interval_minutes
-  end
-
-  test "sweep_interval_minutes reads a configured positive value" do
-    Setting.plugin_redmine_sla_compliance = { 'sweep_interval_minutes' => '5' }
-    assert_equal 5, Sla::PluginSettings.sweep_interval_minutes
-  end
-
-  test "sweep_interval_minutes falls back to the default for a blank/zero/negative value" do
-    ['', '0', '-5', nil].each do |bad|
-      Setting.plugin_redmine_sla_compliance = { 'sweep_interval_minutes' => bad }
-      assert_equal 15, Sla::PluginSettings.sweep_interval_minutes, "for #{bad.inspect}"
-    end
-  end
-
-  test "sweep_interval_minutes clamps an absurdly large value to the max" do
-    Setting.plugin_redmine_sla_compliance = { 'sweep_interval_minutes' => '999999' }
-    assert_equal 1440, Sla::PluginSettings.sweep_interval_minutes
-  end
-
   # --- the Step 5.1 SLA access roles -----------------------------------------------------------
   #
   # The settings form posts strings and a blank sentinel entry, and #update stores what it is

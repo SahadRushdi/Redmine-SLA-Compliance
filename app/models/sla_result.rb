@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Precomputed SLA result cache, one row per issue. Written by the event-driven recompute and the
-# time-driven sweep (Phase 3); the dashboard reads only from here, never computing on page load.
+# one-off live transition jobs; the dashboard reads only from here, never rebuilding timelines.
 class SlaResult < ActiveRecord::Base
   self.table_name = 'sla_results'
 

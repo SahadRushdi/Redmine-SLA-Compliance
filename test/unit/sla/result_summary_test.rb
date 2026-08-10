@@ -12,10 +12,11 @@ class Sla::ResultSummaryTest < ActiveSupport::TestCase
 
   NOW = Time.zone.local(2026, 7, 15, 12, 0, 0)
 
-  def make_result(issue_id:, project_id: 1, primary_state: 'met', at_risk: false, breach_at: nil,
+  def make_result(issue_id:, project_id: 1, primary_state: 'met', at_risk: false, at_risk_at: nil, breach_at: nil,
                    no_sla_reason: nil)
     SlaResult.create!(issue_id: issue_id, project_id: project_id, primary_state: primary_state,
-                      at_risk: at_risk, breach_at: breach_at, no_sla_reason: no_sla_reason)
+                      at_risk: at_risk, at_risk_at: at_risk_at, breach_at: breach_at,
+                      no_sla_reason: no_sla_reason)
   end
 
   test 'reconciles total = met + breached + no_sla for a mixed set' do
@@ -145,6 +146,16 @@ class Sla::ResultSummaryTest < ActiveSupport::TestCase
 
     assert_equal 1, counts.met
     assert_equal 0, counts.at_risk
+  end
+
+  test 'a projected at-risk timestamp is counted live without a persisted flag' do
+    make_result(issue_id: 1, primary_state: 'met', at_risk: false,
+                at_risk_at: NOW - 1.second, breach_at: NOW + 1.hour)
+
+    counts = Sla::ResultSummary.call(scope: SlaResult.where(issue_id: 1), now: NOW)
+
+    assert_equal 1, counts.met
+    assert_equal 1, counts.at_risk
   end
 
   test 'a narrowed scope only counts rows for the given project' do

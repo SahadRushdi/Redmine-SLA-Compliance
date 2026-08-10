@@ -11,7 +11,7 @@ class SlaPolicy < ActiveRecord::Base
   self.table_name = 'sla_policies'
 
   # Plugin-internal enums (modes/rules) — NOT Redmine domain data.
-  COVERAGE_HOURS      = %w[24x7 business_hours].freeze
+  COVERAGE_HOURS      = %w[24x7].freeze
   FIRST_RESPONSE_RULES = %w[first_comment first_status_change either].freeze
   # Accepted range for the Stale card's inactivity threshold. One definition, shared by the
   # validation below and the number input's min/max in the Measurement Rules form — a form that
@@ -19,8 +19,6 @@ class SlaPolicy < ActiveRecord::Base
   STALE_THRESHOLD_DAYS = (1..365).freeze
 
   belongs_to :project
-  belongs_to :business_calendar, class_name: 'SlaBusinessCalendar', optional: true
-
   has_many :sla_definitions,     dependent: :destroy
   has_many :sla_status_mappings, dependent: :destroy
 
@@ -37,14 +35,8 @@ class SlaPolicy < ActiveRecord::Base
                             greater_than_or_equal_to: STALE_THRESHOLD_DAYS.min,
                             less_than_or_equal_to: STALE_THRESHOLD_DAYS.max },
             allow_nil: true
-  # Business Hours coverage requires a calendar to compute against.
-  validates :business_calendar_id, presence: true, if: :business_hours?
 
   scope :enabled, -> { where(enabled: true) }
-
-  def business_hours?
-    coverage_hours == 'business_hours'
-  end
 
   # Status IDs configured for a milestone role (created / work_started / resolved / pause).
   def status_ids_for(role)

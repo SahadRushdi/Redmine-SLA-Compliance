@@ -2,8 +2,8 @@
 
 module Sla
   # Live-accurate met/breached/at_risk/no_sla counts over the `sla_results` cache — the read half
-  # that lets a dashboard show real-time compliance counts without shortening the sweep interval or
-  # computing SLA state on page load (Global Rule 4).
+  # that lets a dashboard show real-time compliance counts without a recurring full-ticket scan or
+  # rebuilding SLA timelines on page load (Global Rule 4).
   #
   # The trick: `breach_at` (see ResultClassifier#risk) is only ever non-nil while a ticket is still
   # open and currently classified `met`, and it's already a precomputed wall-clock instant (the
@@ -11,9 +11,8 @@ module Sla
   # right now, actually breached — the sweep just hasn't caught up yet. Reclassifying that at read
   # time is one indexed comparison, not an engine re-run, and never touches the persisted cache.
   #
-  # At-risk is NOT given the same live treatment: there is no precomputed instant to compare
-  # against (only a boolean, refreshed solely by the full engine pass), so at-risk counts still
-  # reflect the last sweep/event, same as today.
+  # `at_risk_at` provides the equivalent projection for the warning window, so at-risk and breach
+  # transitions are both evaluated live with indexed timestamp comparisons.
   #
   # `not_configured`/`not_tracked` split `no_sla` by `sla_results.no_sla_reason` (Step 6.2's card
   # breakdown). `no_sla_reason` is nullable at the DB level even though ResultClassifier always

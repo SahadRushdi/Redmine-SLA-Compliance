@@ -24,6 +24,7 @@ class Sla::ProjectRecalculatorTest < ActiveSupport::TestCase
     SlaStatusMapping.create!(sla_policy: @policy, role: 'created', status_id: 1)
     SlaDefinition.create!(sla_policy: @policy, tracker_id: TRACKER, priority_id: PRIORITY,
                           response_seconds: 3600)
+    Sla::LiveTransitionScheduler.stubs(:call)
   end
 
   def make_issue(project)

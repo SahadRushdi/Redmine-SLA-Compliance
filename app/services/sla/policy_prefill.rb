@@ -34,7 +34,6 @@ module Sla
         project_id: @project.id,
         enabled: @enabled.nil? ? @source.enabled : @enabled,
         coverage_hours: @source.coverage_hours,
-        business_calendar_id: @source.business_calendar_id,
         first_response_rule: @source.first_response_rule,
         at_risk_threshold: @source.at_risk_threshold,
         stale_threshold_days: @source.stale_threshold_days,

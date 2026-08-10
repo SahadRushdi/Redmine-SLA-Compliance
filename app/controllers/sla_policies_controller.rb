@@ -28,7 +28,7 @@ class SlaPoliciesController < ApplicationController
   # Every policy scalar the sectioned form manages, in one place: it is both the strong-params
   # allow-list and the set copied when a section other than General creates the row
   # (see #seed_scalars_from!). The two must not drift apart.
-  POLICY_ATTRIBUTES = %i[enabled coverage_hours business_calendar_id first_response_rule
+  POLICY_ATTRIBUTES = %i[enabled coverage_hours first_response_rule
                          at_risk_threshold stale_threshold_days pause_enabled].freeze
 
   # Milestone roles owned by each section; roles NOT listed for the posted section are left
@@ -120,6 +120,42 @@ class SlaPoliciesController < ApplicationController
       flash[:notice] = "#{flash[:notice]} #{l(:notice_sla_recalculation_queued)}"
     end
     redirect_to settings_project_path(@project, tab: 'sla_policy', section: section)
+  end
+
+  # PATCH /projects/:project_id/sla_policy/target
+  # Saves one tracker/priority/target cell. Target edits are intentionally independent from the
+  # section form so a deadline is durable as soon as the user leaves the inline editor.
+  def update_target
+    @sla_policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
+    tracker_id = params[:tracker_id].to_i
+    priority_id = params[:priority_id].to_i
+    target_type = params[:target_type].to_s
+    return render json: { error: l(:error_sla_target_invalid) }, status: :unprocessable_entity unless
+      @project.trackers.exists?(tracker_id) && IssuePriority.active.exists?(priority_id) &&
+      SlaDefinition::TARGET_TYPES.include?(target_type)
+
+    target = Sla::DirectDuration.parse(mode: params[:mode], value: params[:value], unit: params[:unit])
+    ActiveRecord::Base.transaction do
+      source = forking_from_inherited? ? inherited_seed_source : nil
+      seed_scalars_from!(source) if source
+      @sla_policy.coverage_hours = '24x7'
+      @sla_policy.inherits_config = false
+      @sla_policy.save!
+      copy_configuration_from!(source) if source
+
+      definition = @sla_policy.sla_definitions.find_or_initialize_by(
+        tracker_id: tracker_id, priority_id: priority_id
+      )
+      definition.public_send("#{target_type}_seconds=", target[:seconds])
+      definition.public_send("#{target_type}_best_effort=", target[:best_effort])
+      definition.public_send("#{target_type}_unit=", target[:unit])
+      definition_has_target?(definition) ? definition.save! : definition.destroy!
+    end
+    SlaPolicyRecalculationJob.perform_later(@project.id) if params[:recalculate].to_s == '1'
+    render json: target.merge(display: Sla::DirectDuration.label(target), message: l(:text_sla_target_saved))
+  rescue Sla::DirectDuration::InvalidDuration, ActiveRecord::RecordInvalid => e
+    render json: { error: e.message.presence || l(:error_sla_target_invalid) },
+           status: :unprocessable_entity
   end
 
   # B3 — "Revert to inherited policy": deletes THIS project's own policy row (cascading to its
@@ -407,7 +443,7 @@ class SlaPoliciesController < ApplicationController
     # the time the redirect landed. Written even when the list is empty — [] is a real answer here,
     # distinct from the nil that means "this row predates the column" (see migration 009).
     @sla_policy.update!(selected_tracker_ids: tracker_ids)
-    return if tracker_ids.empty?
+    return if tracker_ids.empty? || params.dig(:definitions, :rows).blank?
 
     previous = @sla_policy.sla_definitions.where(tracker_id: tracker_ids).group_by(&:tracker_id)
     @sla_policy.sla_definitions.where(tracker_id: tracker_ids).delete_all
@@ -441,31 +477,30 @@ class SlaPoliciesController < ApplicationController
     end
   end
 
-  def definition_targets(targets, previous_definition)
-    SlaTargetOption::TARGET_TYPES.each_with_object({}) do |target_type, attributes|
+  def definition_targets(targets, _previous_definition)
+    SlaDefinition::TARGET_TYPES.each_with_object({}) do |target_type, attributes|
       raw = targets[target_type].presence
       next unless raw
 
       if raw == SlaPoliciesHelper::SLA_BEST_EFFORT_VALUE
-        next unless SlaTargetOption.exists?(target_type: target_type, best_effort: true)
-
         attributes["#{target_type}_seconds"] = nil
         attributes["#{target_type}_best_effort"] = true
+        attributes["#{target_type}_unit"] = nil
       else
         seconds = raw.to_i
-        previously_saved = previous_definition&.public_send("#{target_type}_seconds")
-        if allowed_seconds_for(target_type).include?(seconds) || seconds == previously_saved
+        if seconds.positive? && seconds <= Sla::DirectDuration::MAX_SECONDS
           attributes["#{target_type}_seconds"] = seconds
           attributes["#{target_type}_best_effort"] = false
+          attributes["#{target_type}_unit"] = 'hours'
         end
       end
     end
   end
 
-  def allowed_seconds_for(target_type)
-    @allowed_seconds ||= SlaTargetOption.where(best_effort: false).group_by(&:target_type)
-                                        .transform_values { |options| options.map(&:seconds) }
-    @allowed_seconds.fetch(target_type.to_s, [])
+  def definition_has_target?(definition)
+    SlaDefinition::TARGET_TYPES.any? do |type|
+      definition.public_send("#{type}_seconds").present? || definition.best_effort?(type)
+    end
   end
 
   # A source project is a valid prefill source (for both Step 4.7 "Clone from another project"

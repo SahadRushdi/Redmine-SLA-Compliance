@@ -24,23 +24,31 @@ module Sla
     # @param milestones [Array<Hash>] each {target:, elapsed:, kind:} — the pending, not-yet-achieved
     #   milestones (with elapsed measured to `now` in the coverage mode). `kind` is optional and only
     #   used to report which target drove the flag.
-    # @return [Array(Boolean, Time|nil, Symbol|nil)] [at_risk, breach_at, at_risk_kind]
+    # @return [Array(Boolean, Time|nil, Symbol|nil, Time|nil)]
+    #   [at_risk, breach_at, at_risk_kind, at_risk_at]
     #   `at_risk_kind` is the flagged milestone closest to breaching — the same one `breach_at`
     #   projects — so a caller can say WHICH target is at risk (Step 8.2 notifies per ticket+target).
-    #   Deliberately a third array element rather than a new return type: existing two-value
-    #   destructuring keeps working untouched.
+    #   Extra array elements preserve existing two-value destructuring while exposing the target
+    #   and projected warning time to callers that need them.
     def evaluate(milestones)
       candidates = milestones.reject { |m| m[:elapsed] > m[:target] } # exclude already-breached
       flagged    = candidates.select { |m| m[:elapsed] >= m[:target] * @fraction }
       urgent     = flagged.min_by { |m| m[:target] - m[:elapsed] }
 
-      [flagged.any?, earliest_breach_at(candidates), urgent && urgent[:kind]]
+      [flagged.any?, earliest_breach_at(candidates), urgent && urgent[:kind], earliest_at_risk_at(candidates)]
     end
 
     private
 
     def earliest_breach_at(milestones)
       milestones.filter_map { |m| project(m) }.min
+    end
+
+    def earliest_at_risk_at(milestones)
+      milestones.filter_map do |milestone|
+        remaining = (milestone[:target] * @fraction) - milestone[:elapsed]
+        remaining <= 0 ? @now : @calculator.add(@now, remaining)
+      end.min
     end
 
     def project(milestone)

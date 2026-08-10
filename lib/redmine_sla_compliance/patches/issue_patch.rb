@@ -29,7 +29,8 @@ module RedmineSlaCompliance
       def sla_recalculate_result
         return unless project&.module_enabled?(:sla_compliance)
 
-        Sla::ResultStore.recalculate(self)
+        outcome = Sla::ResultStore.recalculate(self)
+        Sla::LiveTransitionScheduler.call(self, outcome)
       rescue StandardError => e
         Rails.logger.error("[SLA] result recompute failed for issue ##{id}: #{e.message}")
       end

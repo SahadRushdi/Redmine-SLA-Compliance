@@ -10,12 +10,6 @@
 <%# swap. It is emitted ONLY on the page that actually renders those panels — which is why it is %>
 <%# gated on `panel_page` below, not just on the section being a panel section. %>
 <%# %>
-<%# That distinction is load-bearing: the attribute used to be emitted on every page, so on the %>
-<%# Target options / Business calendars pages the script still called preventDefault() on the %>
-<%# General and Access control links and then "switched" to a panel that does not exist there. %>
-<%# The click was swallowed, the page never navigated, and the nav ended up showing two active %>
-<%# entries at once. Those two sections are separate CRUD resources at their own URLs; from a %>
-<%# lookup page their links must be ordinary navigations. %>
 <% panel_page = sla_admin_panel_keys.include?(current) %>
 <nav class="tw-w-full lg:tw-w-72 lg:tw-shrink-0" aria-label="<%= l(:label_sla_compliance_settings) %>">
   <ul class="sla-section-nav tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-shadow-sm tw-overflow-hidden">

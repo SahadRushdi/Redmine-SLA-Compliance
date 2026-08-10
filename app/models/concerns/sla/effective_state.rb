@@ -18,7 +18,8 @@ module Sla
                     'AND sla_results.breach_at < :now)'
     EFFECTIVE_BREACHED = "(sla_results.primary_state = 'breached' OR #{LIVE_BREACHED})"
     EFFECTIVE_MET      = "(sla_results.primary_state = 'met' AND NOT #{LIVE_BREACHED})"
-    EFFECTIVE_AT_RISK  = "(sla_results.at_risk = :at_risk_true AND #{EFFECTIVE_MET})"
+    LIVE_AT_RISK = "(sla_results.at_risk_at IS NOT NULL AND sla_results.at_risk_at <= :now)"
+    EFFECTIVE_AT_RISK  = "((sla_results.at_risk = :at_risk_true OR #{LIVE_AT_RISK}) AND #{EFFECTIVE_MET})"
     EFFECTIVE_NO_SLA   = "(sla_results.primary_state = 'no_sla')"
 
     # ORDER BY rank for a detail-table "Result" column sort: breached first, then met, then no_sla
@@ -37,7 +38,7 @@ module Sla
     # at_risk is only ever meaningful as a subset of an effectively-met row — a row whose breach_at
     # has since passed is live-reclassified to breached and can no longer be "at risk" of it.
     def effective_at_risk?(now = Time.current)
-      at_risk? && effective_primary_state(now) == 'met'
+      (at_risk? || (at_risk_at.present? && at_risk_at <= now)) && effective_primary_state(now) == 'met'
     end
 
     private

@@ -16,7 +16,6 @@ class SlaAdminCopyTest < ActiveSupport::TestCase
   # brief's budget is "under ~8 words"; 10 is the hard ceiling asserted here so a caption that
   # genuinely needs a couple of extra words is not a test failure, but a sentence is.
   CAPTION_KEYS = %i[
-    text_sla_sweep_interval_hint
     text_sla_access_roles_hint
     text_sla_target_options_hint
     text_sla_target_option_details

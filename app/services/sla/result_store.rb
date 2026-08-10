@@ -37,6 +37,7 @@ module Sla
         primary_state:      result.primary_state,
         no_sla_reason:      result.no_sla_reason,
         at_risk:            result.at_risk || false,
+        at_risk_at:         result.at_risk_at,
         breach_at:          result.breach_at,
         response_seconds:   result.response_seconds,
         workaround_seconds: result.workaround_seconds,

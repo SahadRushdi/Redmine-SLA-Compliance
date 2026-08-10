@@ -21,6 +21,7 @@ class IssuePatchTest < ActiveSupport::TestCase
     # unstubbed enqueue would run the notification job for real on every `make_issue` below. The
     # enqueue tests re-stub with an expectation; the rest just need it inert.
     SlaGoogleChatNotificationJob.stubs(:perform_later)
+    Sla::LiveTransitionScheduler.stubs(:call)
   end
 
   def configure_sla(project)

@@ -76,6 +76,7 @@ class Sla::ResultStoreTest < ActiveSupport::TestCase
     refute row.at_risk
     assert_equal 1800, row.response_seconds
     assert_equal now + 1800, row.breach_at   # earliest pending breach = response
+    assert_equal now + 1080, row.at_risk_at
     assert_nil row.deviation_seconds
     assert_nil row.resolved_at
     assert_equal now.to_i, row.calculated_at.to_i
@@ -128,6 +129,7 @@ class Sla::ResultStoreTest < ActiveSupport::TestCase
     assert_equal 'met', row.primary_state
     assert row.at_risk
     assert_equal now + 600, row.breach_at
+    assert_equal now.to_i, row.at_risk_at.to_i
   end
 
   # --- resolved within target -----------------------------------------------------------

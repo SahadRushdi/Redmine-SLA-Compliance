@@ -15,8 +15,6 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     @role = Role.find(1) # Manager — user 2 (jsmith)
     @role.add_permission!(:edit_sla_policy, :manage_sla_notifications)
     @request.session[:user_id] = 2
-    SlaTargetOption.create!(target_type: 'response', code: '4h', label: '4 hours',
-                            seconds: 14_400)
     Setting.plugin_redmine_sla_compliance = {}
   end
 
@@ -84,7 +82,7 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
       assert_select 'input#sla_policy_at_risk_threshold[value="85"]'
       assert_select "select[name='status_mappings[created][]'] option[selected][value='#{status_id}']"
       assert_select "#sla-definitions-rows-#{@project.trackers.first.id} " \
-                    'option[selected][value="14400"]'
+                    '[data-sla-target-cell][data-seconds="14400"]'
       assert_select "option[selected][value='ops@example.com']"
     end
   end
@@ -281,9 +279,11 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     tracker_id = @project.trackers.sorted.first.id
     assert_select '[data-sla-panel="targets"]' do
       IssuePriority.active.each do |priority|
-        assert_select "select[name='definitions[rows][#{tracker_id}][#{priority.id}][response]']", 1
+        assert_select "[data-sla-target-cell][data-tracker-id='#{tracker_id}']" \
+                      "[data-priority-id='#{priority.id}'][data-target-type='response']", 1
       end
-      assert_select '.tw-bg-amber-50', 0, 'the removed unclassified-priority notice must not render'
+      assert_select 'span', { text: 'Unclassified', count: 0 },
+                    'the removed unclassified-priority label must not render'
     end
   ensure
     Setting.plugin_redmine_sla_compliance = {}
@@ -388,15 +388,20 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select '.sla-plugin', text: /#{Regexp.escape(source_project.name)}/
   end
 
-  test "every configured target type gets its own column, header and dropdown per priority" do
+  test "every configured target type gets its own column, header and inline editor per priority" do
     get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
     assert_response :success
 
     tracker_id = @project.trackers.sorted.first.id
     priority   = IssuePriority.active.first
     SlaDefinition::TARGET_TYPES.each do |target_type|
-      assert_select "select[name='definitions[rows][#{tracker_id}][#{priority.id}][#{target_type}]']", 1,
-                    "#{target_type} must have a dropdown on every priority row"
+      assert_select "[data-sla-target-cell][data-tracker-id='#{tracker_id}']" \
+                    "[data-priority-id='#{priority.id}'][data-target-type='#{target_type}']", 1,
+                    "#{target_type} must have an inline editor on every priority row"
+      assert_select "[data-sla-target-cell][data-priority-id='#{priority.id}']" \
+                    "[data-target-type='#{target_type}'] " \
+                    'select[data-sla-target-unit][data-sla-select]', 1,
+                    "#{target_type} must use the styled single-select component"
       # Title case from the i18n value, never an uppercase CSS transform (CLAUDE.md).
       assert_select "#sla-definitions-table-#{tracker_id} thead th",
                     text: I18n.t("label_sla_target_#{target_type}"), count: 1
@@ -476,7 +481,7 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select 'input#sla_policy_at_risk_threshold[value="85"]'
     assert_select "select[name='status_mappings[created][]'] option[selected][value='#{status_id}']"
     assert_select "#sla-definitions-rows-#{child.trackers.first.id} " \
-                  'option[selected][value="14400"]'
+                  '[data-sla-target-cell][data-seconds="14400"]'
     assert_select 'button#sla-override-load', 0, 'the form itself is the override now'
   end
 

@@ -41,13 +41,13 @@ module Sla
     # and suppress every later one for the life of the cycle. `at_risk_since` is the clock start for
     # the three one-shot targets (identical to the old key) and the current gap's start for
     # Update Frequency. Both nil when the ticket is not at risk.
-    Result = Struct.new(:primary_state, :no_sla_reason, :at_risk, :breach_at,
+    Result = Struct.new(:primary_state, :no_sla_reason, :at_risk, :at_risk_at, :breach_at,
                         :at_risk_target, :at_risk_since,
                         :response_seconds, :workaround_seconds, :resolution_seconds,
                         :update_frequency_seconds, :deviation_seconds, :cycle_started_at,
                         :resolved_at, keyword_init: true)
 
-    # @param policy [#business_hours?, #business_calendar, #first_response_rule,
+    # @param policy [#first_response_rule,
     #   #at_risk_threshold, #pause_enabled, nil] the effective SlaPolicy (nil ⇒ not configured).
     # @param definition [#response_seconds, #workaround_seconds, #resolution_seconds,
     #   #any_target?, nil] the SlaDefinition for this tracker×priority (nil ⇒ not tracked).
@@ -79,12 +79,13 @@ module Sla
       milestones = evaluated_milestones
       breached   = milestones.any? { |m| m[:breached] }
       primary    = breached ? 'breached' : 'met'
-      at_risk, breach_at, at_risk_kind = risk(primary, milestones)
+      at_risk, breach_at, at_risk_kind, at_risk_at = risk(primary, milestones)
 
       Result.new(
         primary_state:      primary,
         no_sla_reason:      nil,
         at_risk:            at_risk,
+        at_risk_at:         at_risk_at,
         breach_at:          breach_at,
         at_risk_target:     at_risk_kind&.to_s,
         at_risk_since:      at_risk_kind && risk_since(milestones, at_risk_kind),
@@ -178,10 +179,10 @@ module Sla
     end
 
     def risk(primary, milestones)
-      return [false, nil, nil] unless primary == 'met' && open?
+      return [false, nil, nil, nil] unless primary == 'met' && open?
 
       pending = milestones.select { |m| m[:pending] && !m[:best_effort] }
-      return [false, nil, nil] if pending.empty?
+      return [false, nil, nil, nil] if pending.empty?
 
       AtRiskEvaluator.new(threshold_percent: @policy.at_risk_threshold,
                           calculator: calculator, now: @now).evaluate(pending.map { |m| risk_input(m) })
@@ -324,12 +325,7 @@ module Sla
     end
 
     def calculator
-      @calculator ||=
-        if @policy.business_hours?
-          BusinessHoursCalculator.new(@policy.business_calendar, zone: Time.zone)
-        else
-          CalendarTimeCalculator.new
-        end
+      @calculator ||= CalendarTimeCalculator.new
     end
 
     def role(name)

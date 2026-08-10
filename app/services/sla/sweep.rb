@@ -6,8 +6,8 @@ module Sla
   # even when no ticket event fires, then queues a one-time notification for each ticket that has
   # just crossed its at-risk threshold — and separately drives each project's stale-ticket digest
   # schedule (Step 2.8's excluded-ticket detector, wired in here). Runs off the request path
-  # (scheduler thread / rake task); the dashboard only ever reads the `sla_results` rows this
-  # refreshes.
+  # This remains available through the manual maintenance rake task; normal live transitions use
+  # targeted ActiveJob executions and dashboard timestamp projections instead of this full scan.
   #
   # Idempotency (the hard requirement): the sweep runs repeatedly, and may run concurrently in
   # more than one app-server process, and must NEVER double-send. Both notification paths rely on
@@ -116,7 +116,7 @@ module Sla
     # updated) until the project's configured frequency interval has actually elapsed, at which
     # point the schedule gate on `sla_notification_settings.last_stale_digest_at` advances. This
     # runs even with an empty candidate list so a project with zero stale tickets this period
-    # still doesn't get re-checked every 15 minutes.
+    # still does not get re-checked repeatedly inside one manual run.
     def queue_stale_digest(project, stale_candidates)
       setting = SlaNotificationSetting.claim_stale_digest_window!(project.id, now: @now)
       return 0 unless setting
