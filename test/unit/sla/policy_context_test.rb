@@ -38,6 +38,17 @@ class Sla::PolicyContextTest < ActiveSupport::TestCase
     assert_equal definition, context.definition_for(TRACKER, PRIORITY)
   end
 
+  test "a removed tracker is inactive while its definitions remain available for restoration" do
+    definition = SlaDefinition.create!(sla_policy: @policy, tracker_id: TRACKER,
+                                       priority_id: PRIORITY, response_seconds: 3600)
+    @policy.update!(selected_tracker_ids: [])
+    context = Sla::PolicyContext.new(@policy)
+
+    refute context.tracker_configured?(TRACKER)
+    assert_nil context.definition_for(definition.tracker_id, definition.priority_id)
+    assert definition.persisted?, 'removing a tracker keeps its target values for later restoration'
+  end
+
   test "definition_for treats a priority named None like every other configured priority" do
     none = IssuePriority.create!(name: 'None', type: 'IssuePriority', position: 99)
     definition = SlaDefinition.create!(sla_policy: @policy, tracker_id: TRACKER, priority_id: none.id,

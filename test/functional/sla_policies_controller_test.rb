@@ -547,25 +547,30 @@ class SlaPoliciesControllerTest < ActionController::TestCase
                     'the picker itself must be saved, or a targetless tracker vanishes on reload'
   end
 
-  # The half of the fix that keeps the settings page honest: a tracker with stored targets is being
-  # applied to real tickets, so it must be displayed even when it is missing from the saved
-  # selection — otherwise an SLA stays in force with nothing on screen showing it.
-  test "the displayed trackers are the saved selection plus anything that has targets" do
+  test "the saved tracker selection remains authoritative when removed trackers have targets" do
     saved_policy = SlaPolicy.create!(project_id: @project.id, enabled: true)
     with_targets = @trackers.second
     saved_policy.sla_definitions.create!(tracker_id: with_targets.id,
                                          priority_id: @priorities.first.id,
                                          response_seconds: 3600)
-    # A selection that names only the OTHER tracker — as an older save, or a deselect, would leave.
-    saved_policy.update!(selected_tracker_ids: [@trackers.first.id])
+    saved_policy.update!(selected_tracker_ids: @trackers.map(&:id))
+
+    # Submit exactly what the browser posts after removing the second tracker and pressing Save.
+    put :update, params: targets_params(
+      definitions: { tracker_ids: [@trackers.first.id.to_s] }
+    )
+    assert_redirected_to settings_project_path(@project, tab: 'sla_policy', section: 'targets')
+    saved_policy.reload
+    assert_equal [@trackers.first.id], saved_policy.selected_tracker_ids_or_nil
 
     # Called with no request params: a `tracker_id` in the request legitimately overrides the saved
     # set (that is how the AJAX per-table re-render asks for one tracker), which is a different
     # branch from the one under test here.
     displayed = @controller.view_context.send(:sla_selected_trackers, @project, saved_policy)
 
-    assert_includes displayed, with_targets, 'a tracker with stored targets is always displayed'
-    assert_includes displayed, @trackers.first, 'and so is one the saved picker named'
+    assert_equal [@trackers.first], displayed
+    assert saved_policy.sla_definitions.where(tracker_id: with_targets.id).exists?,
+           'the hidden target values remain available if the tracker is re-added'
   end
 
   test "a policy saved before the column existed still shows its definition-derived trackers" do

@@ -184,6 +184,7 @@ en:
   label_sla_priority_targets_card: "Priority Targets — %{tracker}"
   text_sla_priority_targets_intro: "A priority with every target unset is also excluded."
   field_sla_trackers: "Trackers"
+  label_sla_tracker_placeholder: "Add a tracker"
   text_sla_tracker_selection_hint: "Removing a tracker hides its table; its saved targets are kept."
   label_sla_priority: "Priority"
   label_sla_target_response: "Response"

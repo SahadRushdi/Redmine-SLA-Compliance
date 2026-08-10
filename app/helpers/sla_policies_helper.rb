@@ -258,34 +258,17 @@ module SlaPoliciesHelper
   def sla_selected_trackers(project, policy)
     trackers = project.trackers.sorted.to_a
     requested = sla_requested_tracker_ids
-    selected =
-      if requested.any?
-        trackers.select { |tracker| requested.include?(tracker.id) }
-      else
-        ids = sla_saved_tracker_ids(policy)
-        trackers.select { |tracker| ids.include?(tracker.id) }
-      end
+    return trackers.select { |tracker| requested.include?(tracker.id) } if requested.any?
 
-    selected.presence || Array(trackers.first)
-  end
+    saved_ids = policy.selected_tracker_ids_or_nil
+    # Once the picker has been saved it is authoritative, including an intentionally empty list.
+    # Definitions for removed trackers stay stored so re-adding a tracker restores its targets,
+    # but they must neither reappear on reload nor remain active in PolicyContext.
+    return trackers.select { |tracker| saved_ids.include?(tracker.id) } unless saved_ids.nil?
 
-  # What was SAVED, as a union of two sources — which is the whole fix for "I added a tracker, saved,
-  # and it was gone":
-  #
-  #   * the picker's own saved selection (migration 009). Before it existed the displayed set was
-  #     derived purely from the definitions below, so a tracker added and saved with every target
-  #     still on "not tracked" wrote no definition, left no trace, and disappeared on the redirect.
-  #   * every tracker that HAS definitions. This half is not redundant and must never be dropped: a
-  #     tracker with stored targets is being applied to real tickets, so hiding it — because it
-  #     happens to be missing from a selection saved before it, or one saved by an older version —
-  #     would leave an SLA in force that the settings page does not show anywhere.
-  #
-  # nil (never saved) therefore behaves exactly as this method did before the column existed.
-  def sla_saved_tracker_ids(policy)
-    from_definitions = policy.sla_definitions.map(&:tracker_id)
-    (policy.selected_tracker_ids_or_nil.to_a | from_definitions).uniq
+    derived = trackers.select { |tracker| policy.sla_definitions.map(&:tracker_id).include?(tracker.id) }
+    derived.presence || Array(trackers.first)
   end
-  private :sla_saved_tracker_ids
 
   # Tracker ids named by THIS request: the picker's own array, or the single `tracker_id` the AJAX
   # per-table re-render sends. `definitions[tracker_ids][]` is the picker's real parameter name —

@@ -12,10 +12,8 @@
   <% selected = sla_selected_trackers(project, policy) %>
 
   <%= render layout: 'sla_policies/card',
-             locals: { title: l(:label_sla_tracker_card),
-                       description: l(:text_sla_tracker_card) } do %>
-    <div class="md:tw-w-96">
-      <label for="sla-definitions-trackers" class="<%= sla_label_classes %>"><%= l(:field_sla_trackers) %></label>
+             locals: { title: l(:field_sla_trackers) } do %>
+    <div class="tw-w-full">
       <%# data-sla-chips (not data-sla-select): the same Tom Select multi-select already used for %>
       <%# the milestone status pickers, so adding several trackers is one interaction and needs no %>
       <%# new component (CLAUDE.md — reuse what's already solved). Each selection adds that %>
@@ -23,8 +21,8 @@
       <%= select_tag 'definitions[tracker_ids][]',
             options_from_collection_for_select(trackers, :id, :name, selected.map(&:id)),
             id: 'sla-definitions-trackers', multiple: true, class: sla_input_classes,
+            placeholder: l(:label_sla_tracker_placeholder),
             data: { sla_chips: true, table_url: edit_project_sla_policy_path(project) } %>
-      <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500"><%= l(:text_sla_tracker_selection_hint) %></p>
     </div>
   <% end %>
 

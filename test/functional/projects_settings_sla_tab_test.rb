@@ -408,6 +408,16 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     end
   end
 
+  test "tracker selection uses the simple full-width chip picker" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select '[data-sla-panel="targets"] h3', text: I18n.t(:field_sla_trackers), count: 1
+    assert_select '#sla-definitions-trackers[data-sla-chips][multiple]' \
+                  "[placeholder='#{I18n.t(:label_sla_tracker_placeholder)}']", 1
+    assert_select '[data-sla-panel="targets"]', text: I18n.t(:text_sla_tracker_selection_hint), count: 0
+  end
+
   # A disabled alert card collapses to just its switch, but its fields stay in the DOM and keep
   # posting — otherwise turning an alert off and on again would silently drop the recipients the
   # project had already saved.

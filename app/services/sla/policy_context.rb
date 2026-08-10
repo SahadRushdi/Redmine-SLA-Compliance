@@ -28,6 +28,8 @@ module Sla
       @policy = policy
       if policy
         definitions        = policy.sla_definitions.to_a
+        selected_ids       = policy.selected_tracker_ids_or_nil
+        definitions.select! { |definition| selected_ids.include?(definition.tracker_id) } if selected_ids
         @definition_by_key = definitions.index_by { |d| [d.tracker_id, d.priority_id] }
         @configured_tracker_ids = definitions.map(&:tracker_id).to_set
         @status_roles      = build_status_roles(policy)

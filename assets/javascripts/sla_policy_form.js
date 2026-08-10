@@ -80,7 +80,18 @@
   function initChips() {
     document.querySelectorAll('select[data-sla-chips]').forEach(function (el) {
       if (!el.tomselect && window.TomSelect) {
-        bindDropUp(new TomSelect(el, { plugins: ['remove_button'] }));
+        var instance = bindDropUp(new TomSelect(el, {
+          plugins: { remove_button: { title: '' } },
+          placeholder: el.getAttribute('placeholder') || ''
+        }));
+        var removeNativeTooltips = function () {
+          instance.control.querySelectorAll('.remove').forEach(function (button) {
+            button.removeAttribute('title');
+            button.setAttribute('aria-label', 'Remove');
+          });
+        };
+        removeNativeTooltips();
+        instance.on('item_add', removeNativeTooltips);
       }
     });
   }
