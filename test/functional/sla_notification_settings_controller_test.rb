@@ -114,4 +114,34 @@ class SlaNotificationSettingsControllerTest < ActionController::TestCase
   ensure
     Setting.plugin_redmine_sla_compliance = {}
   end
+
+  test "an administrator can save the instance-wide notification fallback" do
+    @request.session[:user_id] = 1
+
+    patch :update_global, params: {
+      sla_notification_setting: {
+        google_chat_webhook: 'https://chat.googleapis.com/v1/spaces/global/messages?key=test',
+        at_risk_email_enabled: '1', at_risk_email_recipients: ['', 'ops@example.com'],
+        at_risk_email_frequency: 'digest', at_risk_digest_interval_minutes: '90',
+        stale_email_enabled: '1', stale_email_recipients: ['', 'desk@example.com'],
+        stale_email_frequency: 'daily', stale_threshold_days: '4'
+      }
+    }
+
+    assert_redirected_to sla_settings_path(section: 'notifications')
+    global = SlaNotificationSetting.global
+    assert global.at_risk_email_enabled?
+    assert_equal ['ops@example.com'], global.at_risk_email_recipients
+    assert global.stale_email_enabled?
+    assert_equal ['desk@example.com'], global.stale_email_recipients
+  end
+
+  test "a non-administrator cannot save the instance-wide notification fallback" do
+    patch :update_global, params: {
+      sla_notification_setting: { at_risk_email_enabled: '1' }
+    }
+
+    assert_response :forbidden
+    assert_nil SlaNotificationSetting.global
+  end
 end

@@ -11,11 +11,6 @@ module Sla
   # per the CLAUDE.md "reuse code, don't duplicate" convention.
   class PluginSettings
     class << self
-      # NOTE: there was a `default_google_chat_webhook` here — an instance-wide fallback webhook for
-      # projects that had not set their own (Step 7.1). It and its admin field were removed on
-      # request on 2026-08-05; a Google Chat webhook is now a per-project setting only. See
-      # SlaNotificationSetting.google_chat_webhook_for.
-
       # --- Step 5.1: role-based SLA access ------------------------------------------------------
       #
       # Which Redmine ROLES carry SLA access. A user who holds one of these roles on a project

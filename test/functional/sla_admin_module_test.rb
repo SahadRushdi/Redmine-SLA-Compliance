@@ -6,12 +6,20 @@ class SlaAdminModuleTest < ActionController::TestCase
 
   setup { @request.session[:user_id] = 1 }
 
-  test 'admin module contains General as its only section' do
+  test 'admin module contains General and Notifications sections' do
     get :show
 
     assert_response :success
-    assert_select '[data-sla-admin-section]', 1
+    assert_select '[data-sla-admin-section]', 2
     assert_select '[data-sla-admin-section="general"]', 1
+    assert_select '[data-sla-admin-section="notifications"]', 1
+    assert_select '.sla-section-link-desc', 0
+    assert_select '#sla-global-notification-form', 1
+    assert_select '#sla-global-notification-form', 1 do
+      assert_select 'h3', text: 'Google Chat Integration'
+      assert_select 'h3', text: 'At-Risk Email Alerts'
+      assert_select 'h3', text: 'Stale-Ticket Email Digest'
+    end
     assert_select 'a', text: /Target options/i, count: 0
     assert_select 'a', text: /Business calendars/i, count: 0
   end

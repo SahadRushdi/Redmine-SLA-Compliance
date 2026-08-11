@@ -461,6 +461,28 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select 'input[data-sla-reveals="at-risk-email"][type=checkbox]'
   end
 
+  test "each inactive project channel identifies its effective fallback source" do
+    global = SlaNotificationSetting.global_for_form
+    global.google_chat_webhook = 'https://chat.example.test/global'
+    global.stale_email_enabled = true
+    global.save!
+    parent = Project.find(3).parent
+    SlaPolicy.create!(project_id: parent.id, enabled: true)
+    SlaNotificationSetting.create!(project_id: parent.id, at_risk_email_enabled: true)
+    @project = Project.find(3)
+    @project.enable_module!(:sla_compliance)
+    grant_child_access(@project)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'notifications' }
+
+    assert_response :success
+    assert_select '[data-sla-notification-fallback="admin"]', 2
+    assert_select '[data-sla-notification-fallback="parent"]',
+                  { count: 1, text: /#{Regexp.escape(parent.name)}/ }
+    assert_select '[data-sla-notification-fallback="admin"] a', 0,
+                  'non-admin project managers must not receive an admin settings link'
+  end
+
   test "the tab is absent without either permission" do
     @role.remove_permission!(:edit_sla_policy, :manage_sla_notifications)
 

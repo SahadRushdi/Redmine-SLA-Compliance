@@ -69,8 +69,4 @@ class Sla::PluginSettingsTest < ActiveSupport::TestCase
     assert_equal [], Sla::PluginSettings.access_role_ids
   end
 
-
-  # NOTE: Sla::PluginSettings.default_google_chat_webhook (Step 7.1's instance-wide fallback) was
-  # removed on 2026-08-05 along with its admin field; its tests went with it. A webhook is now a
-  # per-project setting only — see SlaNotificationSettingTest.
 end

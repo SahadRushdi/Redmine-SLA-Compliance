@@ -61,5 +61,21 @@
     return instance;
   }
 
-  window.slaTomSelect = { guard: guard };
+  // Shared by the project and admin notification forms. `decorate` lets the project page add its
+  // drop-up positioning while the admin page uses the common focus guard directly.
+  function initEmailChips(decorate) {
+    document.querySelectorAll('select[data-sla-emails]').forEach(function (el) {
+      if (el.tomselect || !window.TomSelect) { return; }
+
+      var instance = new TomSelect(el, {
+        plugins: ['remove_button'],
+        create: true,
+        persist: false,
+        createFilter: function (input) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(input); }
+      });
+      (decorate || guard)(instance);
+    });
+  }
+
+  window.slaTomSelect = { guard: guard, initEmailChips: initEmailChips };
 })();

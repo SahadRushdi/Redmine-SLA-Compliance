@@ -15,10 +15,9 @@ module Sla
   #   * at-risk — `SlaNotificationLog.claim!` is guarded by a unique index on
   #     (issue_id, notification_type, target, cycle_key); only one caller anywhere can ever win a
   #     given at-risk episode (see #queue_at_risk for what an episode is).
-  #   * stale digest — `SlaNotificationSetting.claim_stale_digest_window!` is an atomic
-  #     conditional UPDATE keyed on the project's `last_stale_digest_at`; only one caller can win
-  #     a given project's digest window, and it naturally re-opens once the configured frequency
-  #     interval has elapsed.
+  #   * stale digest — `SlaNotificationDigestState.claim_stale_window!` is an atomic conditional
+  #     UPDATE keyed on the TARGET project. Configuration may be inherited from one shared parent
+  #     or the admin default without letting one project consume another project's window.
   #
   # Nothing domain-specific is hard-coded: "open" means not in one of the policy's own configured
   # `resolved`-role statuses (see #open_issues), projects are those with the SLA module enabled and
@@ -40,13 +39,17 @@ module Sla
 
     def run
       swept = newly = queued = stale_queued = 0
+      projects = swept_projects.to_a
+      notification_resolvers = NotificationSettingsResolver.for_projects(projects)
 
-      swept_projects.each do |project|
+      projects.each do |project|
         context = PolicyContext.for_project(project)
         next unless context.policy # only projects with an enabled effective policy
 
-        notification_setting = SlaNotificationSetting.find_by(project_id: project.id)
-        track_stale = notification_setting&.stale_email_enabled? || false
+        notification_resolver = notification_resolvers.fetch(project)
+        at_risk_setting = notification_resolver.resolve(:at_risk_email).setting
+        stale_setting = notification_resolver.resolve(:stale_email).setting
+        track_stale = stale_setting.present?
         stale_candidates = []
 
         open_issues(project, context).find_each do |issue|
@@ -55,13 +58,13 @@ module Sla
 
           if outcome.newly_at_risk?
             newly += 1
-            queued += 1 if queue_at_risk(issue, outcome)
+            queued += 1 if at_risk_setting && queue_at_risk(issue, outcome, at_risk_setting)
           elsif track_stale && excluded_not_tracked?(outcome.record)
-            stale_candidates << issue if stale?(issue, notification_setting.stale_threshold_days)
+            stale_candidates << issue if stale?(issue, stale_setting.stale_threshold_days)
           end
         end
 
-        stale_queued += queue_stale_digest(project, stale_candidates) if track_stale
+        stale_queued += queue_stale_digest(project, stale_candidates, stale_setting) if track_stale
       end
 
       Summary.new(swept: swept, newly_at_risk: newly, queued: queued, stale_queued: stale_queued)
@@ -85,7 +88,7 @@ module Sla
     #     the first silence and suppressed every later one for the life of that cycle.
     # Falls back to the ticket-level key if the engine reported no target, so a result predating
     # these fields still de-dupes rather than notifying on every sweep.
-    def queue_at_risk(issue, outcome)
+    def queue_at_risk(issue, outcome, setting)
       result  = outcome.result
       target  = result&.at_risk_target.presence || SlaNotificationLog::NO_TARGET
       episode = result&.at_risk_since || result&.cycle_started_at
@@ -95,7 +98,7 @@ module Sla
         cycle_key: episode&.to_i&.to_s || SlaNotificationLog::NO_CYCLE
       )
 
-      @notifier.enqueue_at_risk(issue, outcome.record)
+      @notifier.enqueue_at_risk(issue, outcome.record, setting: setting)
       true
     end
 
@@ -114,21 +117,23 @@ module Sla
     # Claim this project's stale-digest window and queue whichever candidates are still stale at
     # claim time. Called on every sweep tick while stale email is enabled — cheap no-op (0 rows
     # updated) until the project's configured frequency interval has actually elapsed, at which
-    # point the schedule gate on `sla_notification_settings.last_stale_digest_at` advances. This
+    # point the target project's independent schedule gate advances. This
     # runs even with an empty candidate list so a project with zero stale tickets this period
     # still does not get re-checked repeatedly inside one manual run.
-    def queue_stale_digest(project, stale_candidates)
-      setting = SlaNotificationSetting.claim_stale_digest_window!(project.id, now: @now)
-      return 0 unless setting
+    def queue_stale_digest(project, stale_candidates, setting)
+      state = SlaNotificationDigestState.claim_stale_window!(
+        project.id, setting.stale_digest_interval, now: @now
+      )
+      return 0 unless state
 
       # The window's own claimed instant is the cycle_key: a still-stale ticket gets a fresh key
       # every window (rather than being claimed once, ever), so it keeps reappearing in
       # subsequent digests for as long as it stays stale — the whole point of a recurring digest.
-      window_key = setting.last_stale_digest_at.to_i.to_s
+      window_key = state.last_stale_digest_at.to_i.to_s
       claimed = stale_candidates.select do |issue|
         SlaNotificationLog.claim!(issue_id: issue.id, notification_type: 'stale', cycle_key: window_key)
       end
-      @stale_notifier.enqueue_stale_digest(project, claimed) if claimed.any?
+      @stale_notifier.enqueue_stale_digest(project, claimed, setting: setting) if claimed.any?
       claimed.size
     end
 

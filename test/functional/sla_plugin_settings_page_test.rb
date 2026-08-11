@@ -105,8 +105,8 @@ class SlaPluginSettingsPageTest < ActionController::TestCase
     get_settings_page
 
     assert_response :success
-    assert_select '[data-sla-admin-section]', 1,
-                  'General is the only panel section left; access was folded into it'
+    assert_select '[data-sla-admin-section]', 2,
+                  'General and Notifications are the two panel sections; access remains folded in'
     assert_select "[data-sla-admin-section='access']", 0
     assert_select "[data-sla-admin-panel='access']", 0
   end

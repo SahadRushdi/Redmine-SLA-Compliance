@@ -12,7 +12,7 @@ class SlaSweepState < ActiveRecord::Base
 
   # Atomically claim a sweep run: succeeds (returns true) only if no other process has already
   # claimed one within the current interval. A conditional `UPDATE ... WHERE` — the same
-  # DB-constraint pattern as `SlaNotificationSetting.claim_stale_digest_window!` — so this is safe
+  # DB-constraint pattern as `SlaNotificationDigestState.claim_stale_window!` — so this is safe
   # under concurrent callers across any number of processes with no distributed lock needed.
   def self.claim_run!(now:, interval_minutes:)
     ensure_row!

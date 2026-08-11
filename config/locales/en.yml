@@ -108,7 +108,7 @@ en:
   # SLA Policy tab's own section strings further down this file.
   text_sla_admin_intro: "Instance-wide settings shared by every project's SLA policy."
   label_sla_admin_section_general: "General"
-  text_sla_admin_section_general: "Access roles, sweep & priority"
+  label_sla_admin_section_notifications: "Notifications"
 
   # Shown above a create/edit form that failed to save, over the list of messages.
   text_sla_form_errors:
@@ -262,11 +262,11 @@ en:
   label_sla_frequency_daily: "Daily"
   label_sla_frequency_weekly: "Weekly"
   label_sla_frequency_monthly: "Monthly"
+  text_sla_notification_parent_fallback: "Using notification settings from parent project %{project}. Save a project-specific configuration here to override them."
+  text_sla_notification_admin_fallback: "Using the instance-wide notification settings from Administration → SLA Compliance. Save a project-specific configuration here to override them."
+  label_sla_open_admin_notifications: "Open admin notifications"
 
   # --- Google Chat notification (7.1) -------------------------------------------------------
-  # The instance-wide "Default Google Chat webhook" strings that were here are gone with the
-  # setting itself (removed 2026-08-05) — a webhook is per-project only now, and its own field
-  # strings are under the notification section above.
   label_sla_chat_header: "📋 *Issue Notification — %{project}*"
   text_sla_chat_intro: "A new issue has been submitted and requires your attention."
   text_sla_chat_outro: "Please review and take appropriate action."

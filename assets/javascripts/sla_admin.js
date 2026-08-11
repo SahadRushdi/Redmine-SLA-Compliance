@@ -132,6 +132,10 @@
     });
   }
 
+  function initEmailChips() {
+    if (window.slaTomSelect) { window.slaTomSelect.initEmailChips(guard); }
+  }
+
   // A real calendar date, not merely something shaped like one — "2026-02-31" matches the regex
   // but is not a date, and the model would reject the whole record for it (Date.iso8601 raises).
   // Checking here means the chip is refused as you type instead of coming back as a save error.
@@ -238,6 +242,7 @@
     bindReveals();
     initChips();
     initSingleSelects();
+    initEmailChips();
     initDateChips();
     initSortableTables();
   });

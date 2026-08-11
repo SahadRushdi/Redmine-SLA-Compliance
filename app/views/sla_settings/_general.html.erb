@@ -37,7 +37,3 @@
           data: { sla_chips: true, sla_chip_placeholder: l(:label_sla_access_roles_placeholder) } %>
   </div>
 <% end %>
-
-<%# The instance-wide "Default Google Chat webhook" that used to sit here is gone, along with the %>
-<%# fallback it fed (SlaNotificationSetting.google_chat_webhook_for). A webhook is now a per-project %>
-<%# setting only — Project Settings → SLA Policy → Notifications. %>

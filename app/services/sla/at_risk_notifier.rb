@@ -11,9 +11,10 @@ module Sla
   class AtRiskNotifier
     # @param issue  [Issue]
     # @param result [SlaResult] the freshly cached result (carries breach_at)
-    def enqueue_at_risk(issue, result)
+    def enqueue_at_risk(issue, result, setting:)
       Rails.logger.info(
-        "[SLA] at-risk notification queued for issue ##{issue.id} (breach_at=#{result.breach_at})"
+        "[SLA] at-risk notification queued for issue ##{issue.id} " \
+        "(breach_at=#{result.breach_at}, setting=#{setting.scope_key})"
       )
     end
   end

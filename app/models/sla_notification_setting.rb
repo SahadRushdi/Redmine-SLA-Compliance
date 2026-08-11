@@ -1,9 +1,11 @@
 # frozen_string_literal: true
 
-# Per-project notification configuration: Google Chat webhook, at-risk email (real-time or
-# digest) and stale-ticket email. Recipient lists are stored as JSON arrays of addresses.
+# Project-scoped or singleton-admin notification configuration: Google Chat webhook, at-risk email
+# (real-time or digest) and stale-ticket email. Recipient lists are stored as JSON arrays.
 class SlaNotificationSetting < ActiveRecord::Base
   self.table_name = 'sla_notification_settings'
+
+  GLOBAL_SCOPE_KEY = 'global'
 
   # Plugin-internal frequency enums.
   AT_RISK_FREQUENCIES = %w[realtime digest].freeze
@@ -13,21 +15,24 @@ class SlaNotificationSetting < ActiveRecord::Base
   # "name the copied slice once" convention as SlaDefinition::COPY_ATTRIBUTES, so a new column
   # cannot be remembered in the form and forgotten in the copier.
   #
-  # `last_stale_digest_at` is deliberately absent. It is the digest SCHEDULE's claim (see
-  # .claim_stale_digest_window!), not configuration: copying it would hand the target project the
-  # source's already-claimed window and swallow its first digest.
+  # `last_stale_digest_at` is deliberately absent. It is retained only as legacy upgrade state;
+  # active schedule claims live in SlaNotificationDigestState and are always per target project.
   COPY_ATTRIBUTES = %w[google_chat_webhook
                        at_risk_email_enabled at_risk_email_recipients at_risk_email_frequency
                        at_risk_digest_interval_minutes
                        stale_email_enabled stale_email_recipients stale_email_frequency
                        stale_threshold_days].freeze
 
-  belongs_to :project
+  belongs_to :project, optional: true
 
   serialize :at_risk_email_recipients, JSON
   serialize :stale_email_recipients, JSON
 
-  validates :project_id, presence: true, uniqueness: true
+  before_validation :assign_scope_key
+
+  validates :project_id, presence: true, uniqueness: true, unless: :global?
+  validates :project_id, absence: true, if: :global?
+  validates :scope_key, presence: true, uniqueness: true
   validates :at_risk_email_frequency, inclusion: { in: AT_RISK_FREQUENCIES }
   validates :stale_email_frequency, inclusion: { in: STALE_FREQUENCIES }
   validates :at_risk_digest_interval_minutes,
@@ -40,21 +45,25 @@ class SlaNotificationSetting < ActiveRecord::Base
   validates :google_chat_webhook, format: { with: %r{\Ahttps://\S+\z} }, allow_blank: true
   validate :recipients_are_valid_emails
 
-  # Step 7.1 — which webhook does +project+ post to? Its own value, or nothing.
-  #
-  # DEVIATION FROM THE IMPLEMENTATION PLAN, recorded deliberately. The plan specifies "per-project
-  # setting, with a global fallback", and an instance-wide default did live in the plugin settings
-  # (Sla::PluginSettings.default_google_chat_webhook). It was removed on request on 2026-08-05 along
-  # with its admin field; a webhook is now per-project only. Raise it if the plan should be amended.
-  #
-  # This also deliberately does NOT walk up the project tree the way SLA policies do: the form shows
-  # a single field with no indication that a value might be inherited from a parent, so inheriting
-  # one silently would post to a space the project's admin never saw. A project with no webhook of
-  # its own now simply sends no Google Chat notification.
+  def self.global
+    find_by(scope_key: GLOBAL_SCOPE_KEY)
+  end
+
+  def self.global_for_form
+    global || new(scope_key: GLOBAL_SCOPE_KEY)
+  end
+
+  # Compatibility facade for the Google Chat job. All precedence lives in the shared resolver so
+  # every channel follows the same project → nearest parent → administration rule.
   def self.google_chat_webhook_for(project)
     return nil unless project
 
-    find_by(project_id: project.id)&.google_chat_webhook.presence
+    Sla::NotificationSettingsResolver.new(project).resolve(:google_chat)
+                                     .setting&.google_chat_webhook.presence
+  end
+
+  def global?
+    scope_key == GLOBAL_SCOPE_KEY
   end
 
   # --- Step 4.7: clone ------------------------------------------------------------------------
@@ -85,24 +94,11 @@ class SlaNotificationSetting < ActiveRecord::Base
     FREQUENCY_INTERVALS.fetch(stale_email_frequency, 1.week)
   end
 
-  # Atomically claim +project_id+'s stale-digest window: this is the sweep's schedule gate,
-  # mirroring `SlaNotificationLog.claim!`'s use of a real DB constraint instead of an app-level
-  # check-then-act. The conditional `UPDATE ... WHERE` only affects a row (and returns 1) if no
-  # other process has already claimed this window — safe under concurrent sweeps across multiple
-  # app-server workers. Returns the setting (for its recipients/threshold) when this call won the
-  # claim, or nil when digests are disabled or another process already claimed this period.
-  def self.claim_stale_digest_window!(project_id, now: Time.current)
-    setting = find_by(project_id: project_id)
-    return nil unless setting&.stale_email_enabled?
-
-    cutoff = now - setting.stale_digest_interval
-    claimed_rows = where(id: setting.id)
-                   .where('last_stale_digest_at IS NULL OR last_stale_digest_at <= ?', cutoff)
-                   .update_all(last_stale_digest_at: now)
-    claimed_rows == 1 ? setting : nil
-  end
-
   private
+
+  def assign_scope_key
+    self.scope_key = "project:#{project_id}" if project_id.present?
+  end
 
   EMAIL_RE = URI::MailTo::EMAIL_REGEXP
 

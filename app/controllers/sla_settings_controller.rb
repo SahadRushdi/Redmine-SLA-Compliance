@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Home of the SLA Compliance admin module (Administration → SLA Compliance): the General and
-# Access control sections, alongside the two lookup CRUD screens that share its shell and sidebar.
+# Home of the SLA Compliance admin module (Administration → SLA Compliance): General and the
+# instance-wide Notifications fallback.
 #
 # WHY THIS EXISTS RATHER THAN A PLUGIN SETTINGS PARTIAL
 # -----------------------------------------------------

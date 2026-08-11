@@ -308,6 +308,24 @@ module SlaPoliciesHelper
                                   SlaNotificationSetting.new(project_id: project.id)
   end
 
+  def sla_notification_fallbacks(project)
+    return {} if sla_tracking_off?(project)
+
+    resolver = Sla::NotificationSettingsResolver.new(project)
+    %i[google_chat at_risk_email stale_email].index_with do |channel|
+      resolution = resolver.resolve(channel)
+      resolution if resolution.inherited?
+    end.compact
+  end
+
+  def sla_notification_fallback_text(resolution)
+    if resolution.source == :parent
+      l(:text_sla_notification_parent_fallback, project: resolution.source_project.name)
+    else
+      l(:text_sla_notification_admin_fallback)
+    end
+  end
+
   # Shared Flowbite control classes (single source, per CLAUDE.md — don't re-type per field).
   def sla_input_classes
     'tw-bg-gray-50 tw-border tw-border-gray-300 tw-text-gray-900 tw-text-sm tw-rounded-lg ' \

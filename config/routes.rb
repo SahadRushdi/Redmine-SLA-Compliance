@@ -17,4 +17,6 @@ Rails.application.routes.draw do
   # settings/plugin/:id page — see SlaSettingsController for why it had to move.
   get 'sla_settings', to: 'sla_settings#show', as: :sla_settings
   patch 'sla_settings', to: 'sla_settings#update'
+  patch 'sla_settings/notifications', to: 'sla_notification_settings#update_global',
+                                      as: :sla_global_notification_setting
 end

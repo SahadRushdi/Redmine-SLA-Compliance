@@ -2,13 +2,15 @@
 
 # Shell for the plugin's ADMIN configuration module (Administration → SLA Compliance).
 #
-# The admin module now has one section: General. Targets are configured directly on project
-# policies, so there are no instance-wide lookup resources or lookup navigation entries.
+# General owns access configuration; Notifications owns the instance-wide channel fallbacks.
 module SlaAdminHelper
   # Order here IS the sidebar order. Keys are the single source of truth shared by the nav, the
   # panels, the section query param and sla_admin.js — do not rename one without the others.
   #
-  SECTIONS = [{ key: 'general', panel: true }].freeze
+  SECTIONS = [
+    { key: 'general', panel: true },
+    { key: 'notifications', panel: true }
+  ].freeze
 
   # The sections rendered as panels on the settings page, in sidebar order. Used by that page to
   # decide what to render and which panel opens; kept derived rather than a second literal list.
@@ -29,7 +31,7 @@ module SlaAdminHelper
     PANEL_KEYS.include?(requested) ? requested : PANEL_KEYS.first
   end
 
-  # The sole section remains a real URL for the no-JavaScript fallback.
+  # Every section remains a real URL for the no-JavaScript fallback.
   def sla_admin_section_path(key)
     sla_settings_path(section: key)
   end
@@ -38,16 +40,13 @@ module SlaAdminHelper
     l(:"label_sla_admin_section_#{key}")
   end
 
-  def sla_admin_section_description(key)
-    l(:"text_sla_admin_section_#{key}")
-  end
-
   # Feather-style 24×24 outline icons, keyed by section — same convention (and same rendering
   # helper) as the project tab's sidebar, so the two navs are visually identical. Static
   # developer-authored markup, no user data, which is what makes SlaPoliciesHelper#sla_inline_icon's
   # html_safe correct here too.
   SECTION_ICON_PATHS = {
-    'general' => SlaPoliciesHelper::SECTION_ICON_PATHS['general']
+    'general' => SlaPoliciesHelper::SECTION_ICON_PATHS['general'],
+    'notifications' => SlaPoliciesHelper::SECTION_ICON_PATHS['notifications']
   }.freeze
 
   def sla_admin_section_icon(key)

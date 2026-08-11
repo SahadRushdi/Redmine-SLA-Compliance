@@ -3,8 +3,9 @@
 require_relative '../../test_helper'
 
 class Sla::LiveTransitionSchedulerTest < ActiveSupport::TestCase
-  IssueStub = Struct.new(:id)
+  IssueStub = Struct.new(:id, :project)
   ResultStub = Struct.new(:at_risk_at, :breach_at, :calculated_at)
+  ClassificationStub = Struct.new(:at_risk_target, :at_risk_since, :cycle_started_at)
   OutcomeStub = Struct.new(:record, :result, :newly_at_risk_value) do
     def newly_at_risk?
       newly_at_risk_value
@@ -31,5 +32,37 @@ class Sla::LiveTransitionSchedulerTest < ActiveSupport::TestCase
     SlaLiveTransitionJob.expects(:set).never
 
     Sla::LiveTransitionScheduler.call(IssueStub.new(42), outcome, now: now)
+  end
+
+  test 'does not claim or notify an at-risk transition without effective email settings' do
+    now = Time.zone.local(2026, 8, 10, 10, 0)
+    project = Object.new
+    outcome = OutcomeStub.new(ResultStub.new(nil, nil, now), ClassificationStub.new, true)
+    resolver = mock('notification-resolver')
+    resolver.expects(:resolve).with(:at_risk_email)
+            .returns(Sla::NotificationSettingsResolver::Resolution.new)
+    Sla::NotificationSettingsResolver.expects(:new).with(project).returns(resolver)
+    SlaNotificationLog.expects(:claim!).never
+
+    Sla::LiveTransitionScheduler.call(IssueStub.new(42, project), outcome, now: now)
+  end
+
+  test 'passes the effective setting to the notifier after winning the dedup claim' do
+    now = Time.zone.local(2026, 8, 10, 10, 0)
+    project = Object.new
+    issue = IssueStub.new(42, project)
+    row = ResultStub.new(nil, nil, now)
+    result = ClassificationStub.new('response', now - 1.minute, now - 1.hour)
+    outcome = OutcomeStub.new(row, result, true)
+    setting = SlaNotificationSetting.new(project_id: 1)
+    resolver = mock('notification-resolver')
+    resolver.expects(:resolve).with(:at_risk_email)
+            .returns(Sla::NotificationSettingsResolver::Resolution.new(setting: setting))
+    Sla::NotificationSettingsResolver.expects(:new).with(project).returns(resolver)
+    SlaNotificationLog.expects(:claim!).returns(true)
+    Sla::AtRiskNotifier.any_instance.expects(:enqueue_at_risk)
+                       .with(issue, row, setting: setting)
+
+    Sla::LiveTransitionScheduler.call(issue, outcome, now: now)
   end
 end

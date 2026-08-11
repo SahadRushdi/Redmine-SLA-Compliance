@@ -118,9 +118,26 @@ class SlaGoogleChatNotificationJobTest < ActiveSupport::TestCase
   end
 
   test "posts to the project's own webhook" do
-    # There is no instance-wide fallback any more (removed 2026-08-05 with its admin field), so the
-    # project's own value is the only source there is.
     set_webhook(WEBHOOK)
+    issue = make_issue
+
+    assert_equal WEBHOOK, run_job(issue.id, FakeClient.new).calls.first.first
+  end
+
+  test "uses the nearest parent webhook when the project has none" do
+    child = Project.find(3)
+    child.enable_module!(:sla_compliance)
+    configure_sla(child)
+    set_webhook(WEBHOOK, project: @project)
+    issue = make_issue(project: child)
+
+    assert_equal WEBHOOK, run_job(issue.id, FakeClient.new).calls.first.first
+  end
+
+  test "uses the admin webhook when neither project nor parent has one" do
+    global = SlaNotificationSetting.global_for_form
+    global.google_chat_webhook = WEBHOOK
+    global.save!
     issue = make_issue
 
     assert_equal WEBHOOK, run_job(issue.id, FakeClient.new).calls.first.first

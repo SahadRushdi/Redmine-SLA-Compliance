@@ -1,105 +1,11 @@
-<%# Per-project notification settings, as three cards matching the other sections. Own form + save, %>
-<%# gated separately from the policy form by :manage_sla_notifications. Locals: project. %>
-<%# %>
-<%# Each card states its purpose once in its header; alert switches sit on that same header row. %>
-<%# %>
-<%# The detail fields of an alert card ARE that card's body, marked data-sla-reveal so %>
-<%# sla_policy_form.js collapses the whole body — padding included — while the switch is off, %>
-<%# leaving the header row alone rather than an empty white strip. The fields are HIDDEN, never %>
-<%# removed: they still post, so toggling a switch off and on again never silently drops a %>
-<%# recipient list the user had already saved. %>
+<%# Project notification form. Card markup is shared with the admin surface through _fields. %>
 <% setting = sla_notification_setting_for_form(project) %>
 <%= form_tag project_sla_notification_setting_path(project), method: :put, id: 'sla-notification-form' do %>
   <%= hidden_field_tag 'tab', 'sla_policy' %>
-
-  <%# Notifications only fire for a policy that is being evaluated, so this section locks with the %>
-  <%# other three while SLA tracking is off — see sla_policies/_lock.html.erb. %>
   <%= render layout: 'sla_policies/lock',
              locals: { project: project, locked: sla_tracking_off?(project) } do %>
-    <%# One control, so the card heading is its label and the field carries the field name as an %>
-    <%# aria-label — the same treatment the General section's coverage select gets. %>
-    <%= render layout: 'sla_policies/card',
-               locals: { title: l(:label_sla_google_chat_card) } do %>
-      <%= url_field_tag 'sla_notification_setting[google_chat_webhook]', setting.google_chat_webhook,
-            id: 'sla_notification_google_chat_webhook', class: sla_input_classes,
-            'aria-label': l(:field_sla_webhook_url),
-            placeholder: l(:text_sla_webhook_placeholder) %>
-    <% end %>
-
-    <%= render layout: 'sla_policies/card',
-               locals: { title: l(:label_sla_at_risk_email_card),
-                         control: render('sla_compliance/toggle',
-                                         name: 'sla_notification_setting[at_risk_email_enabled]',
-                                         checked: setting.at_risk_email_enabled?,
-                                         reveals: 'at-risk-email'),
-                         body_reveal: 'at-risk-email',
-                         body_hidden: !setting.at_risk_email_enabled? } do %>
-      <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-4">
-        <div>
-          <label for="sla-at-risk-recipients" class="<%= sla_label_classes %>"><%= l(:field_at_risk_email_recipients) %></label>
-          <% recipients = setting.at_risk_email_recipients.to_a %>
-          <%= hidden_field_tag 'sla_notification_setting[at_risk_email_recipients][]', '', id: nil %>
-          <%= select_tag 'sla_notification_setting[at_risk_email_recipients][]',
-                options_for_select(recipients.map { |e| [e, e] }, recipients),
-                multiple: true, id: 'sla-at-risk-recipients', data: { sla_emails: true } %>
-        </div>
-        <div>
-          <span class="<%= sla_label_classes %>"><%= l(:field_at_risk_email_frequency) %></span>
-          <div class="tw-grid tw-grid-cols-2 tw-gap-3">
-            <% SlaNotificationSetting::AT_RISK_FREQUENCIES.each do |frequency| %>
-              <label class="sla-option-card">
-                <%= radio_button_tag 'sla_notification_setting[at_risk_email_frequency]', frequency,
-                      setting.at_risk_email_frequency == frequency, class: sla_radio_classes %>
-                <%= l("label_sla_frequency_#{frequency}") %>
-              </label>
-            <% end %>
-          </div>
-          <div id="sla-digest-interval-field" class="tw-mt-4 md:tw-w-56 <%= 'hidden' unless setting.at_risk_email_frequency == 'digest' %>">
-            <label for="sla_notification_digest_interval" class="<%= sla_label_classes %>"><%= l(:field_at_risk_digest_interval_minutes) %></label>
-            <%= number_field_tag 'sla_notification_setting[at_risk_digest_interval_minutes]',
-                  setting.at_risk_digest_interval_minutes, min: 1,
-                  id: 'sla_notification_digest_interval', class: sla_input_classes %>
-          </div>
-        </div>
-      </div>
-    <% end %>
-
-    <%= render layout: 'sla_policies/card',
-               locals: { title: l(:label_sla_stale_email_card),
-                         control: render('sla_compliance/toggle',
-                                         name: 'sla_notification_setting[stale_email_enabled]',
-                                         checked: setting.stale_email_enabled?,
-                                         reveals: 'stale-email'),
-                         body_reveal: 'stale-email',
-                         body_hidden: !setting.stale_email_enabled? } do %>
-      <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-4">
-        <div>
-          <label for="sla-stale-recipients" class="<%= sla_label_classes %>"><%= l(:field_stale_email_recipients) %></label>
-          <% stale_recipients = setting.stale_email_recipients.to_a %>
-          <%= hidden_field_tag 'sla_notification_setting[stale_email_recipients][]', '', id: nil %>
-          <%= select_tag 'sla_notification_setting[stale_email_recipients][]',
-                options_for_select(stale_recipients.map { |e| [e, e] }, stale_recipients),
-                multiple: true, id: 'sla-stale-recipients', data: { sla_emails: true } %>
-        </div>
-        <div>
-          <div class="tw-mb-4">
-            <label for="sla_notification_stale_frequency" class="<%= sla_label_classes %>"><%= l(:field_stale_email_frequency) %></label>
-            <%= select_tag 'sla_notification_setting[stale_email_frequency]',
-                  options_for_select(SlaNotificationSetting::STALE_FREQUENCIES.map { |f| [l("label_sla_frequency_#{f}"), f] },
-                                     setting.stale_email_frequency),
-                  id: 'sla_notification_stale_frequency', class: sla_input_classes,
-                  data: { sla_select: true } %>
-          </div>
-          <div>
-            <label for="sla_notification_stale_threshold_days" class="<%= sla_label_classes %>"><%= l(:field_stale_threshold_days) %></label>
-            <%= number_field_tag 'sla_notification_setting[stale_threshold_days]',
-                  setting.stale_threshold_days, min: 1,
-                  id: 'sla_notification_stale_threshold_days', class: sla_input_classes %>
-          </div>
-        </div>
-      </div>
-    <% end %>
-
+    <%= render 'sla_notification_settings/fields', setting: setting,
+               fallbacks: sla_notification_fallbacks(project) %>
     <%= render 'sla_policies/save_bar', label: l(:button_sla_save_notifications) %>
   <% end %>
 <% end %>

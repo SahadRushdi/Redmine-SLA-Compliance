@@ -9,9 +9,10 @@ module Sla
     # @param project [Project]
     # @param issues  [Array<Issue>] open, no_sla/not_tracked issues stale past the project's
     #   configured threshold
-    def enqueue_stale_digest(project, issues)
+    def enqueue_stale_digest(project, issues, setting:)
       Rails.logger.info(
-        "[SLA] stale-ticket digest queued for project ##{project.id} (#{issues.size} ticket(s))"
+        "[SLA] stale-ticket digest queued for project ##{project.id} " \
+        "(#{issues.size} ticket(s), setting=#{setting.scope_key})"
       )
     end
   end

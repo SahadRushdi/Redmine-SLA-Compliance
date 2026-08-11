@@ -162,16 +162,7 @@
   }
 
   function initEmailChips() {
-    document.querySelectorAll('select[data-sla-emails]').forEach(function (el) {
-      if (!el.tomselect && window.TomSelect) {
-        bindDropUp(new TomSelect(el, {
-          plugins: ['remove_button'],
-          create: true,
-          persist: false,
-          createFilter: function (input) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(input); }
-        }));
-      }
-    });
+    if (window.slaTomSelect) { window.slaTomSelect.initEmailChips(bindDropUp); }
   }
 
   // Single-value dropdowns (Tracker and stale-digest frequency). Native <select> popups are

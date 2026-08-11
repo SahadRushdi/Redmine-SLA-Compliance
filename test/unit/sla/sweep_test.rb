@@ -26,7 +26,7 @@ class Sla::SweepTest < ActiveSupport::TestCase
       @calls = []
     end
 
-    def enqueue_at_risk(issue, _result)
+    def enqueue_at_risk(issue, _result, setting:)
       @calls << issue.id
     end
   end
@@ -38,7 +38,7 @@ class Sla::SweepTest < ActiveSupport::TestCase
       @calls = []
     end
 
-    def enqueue_stale_digest(project, issues)
+    def enqueue_stale_digest(project, issues, setting:)
       @calls << [project.id, issues.map(&:id)]
     end
   end
@@ -60,6 +60,7 @@ class Sla::SweepTest < ActiveSupport::TestCase
     SlaStatusMapping.create!(sla_policy: @policy, role: 'created', status_id: NEW)
     SlaDefinition.create!(sla_policy: @policy, tracker_id: TRACKER, priority_id: PRIORITY,
                           response_seconds: 3600) # 1h response target
+    SlaNotificationSetting.create!(project_id: @project.id, at_risk_email_enabled: true)
   end
 
   def make_issue(status_id: NEW, priority_id: PRIORITY)
@@ -323,10 +324,12 @@ class Sla::SweepTest < ActiveSupport::TestCase
   UNTRACKED_PRIORITY = 5 # "Normal" in fixtures; not covered by the setup's SlaDefinition
 
   def enable_stale_digest(threshold_days: 5, frequency: 'weekly', last_at: nil)
-    SlaNotificationSetting.create!(project_id: @project.id, stale_email_enabled: true,
-                                   stale_email_frequency: frequency,
-                                   stale_threshold_days: threshold_days,
-                                   last_stale_digest_at: last_at)
+    SlaNotificationSetting.find_by!(project_id: @project.id).update!(
+      stale_email_enabled: true, stale_email_frequency: frequency,
+      stale_threshold_days: threshold_days
+    )
+    SlaNotificationDigestState.create!(project_id: @project.id,
+                                       last_stale_digest_at: last_at) if last_at
   end
 
   test "an excluded ticket past its inactivity threshold is queued in the stale digest" do

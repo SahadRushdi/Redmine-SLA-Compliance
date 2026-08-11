@@ -39,6 +39,9 @@ module Sla
     end
 
     def notify_at_risk
+      setting = NotificationSettingsResolver.new(@issue.project).resolve(:at_risk_email).setting
+      return unless setting
+
       result = @outcome.result
       target = result&.at_risk_target.presence || SlaNotificationLog::NO_TARGET
       episode = result&.at_risk_since || result&.cycle_started_at
@@ -46,7 +49,7 @@ module Sla
                                                target: target,
                                                cycle_key: episode&.to_i&.to_s || SlaNotificationLog::NO_CYCLE)
 
-      AtRiskNotifier.new.enqueue_at_risk(@issue, @outcome.record)
+      AtRiskNotifier.new.enqueue_at_risk(@issue, @outcome.record, setting: setting)
     end
   end
 end

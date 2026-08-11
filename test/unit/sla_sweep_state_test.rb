@@ -4,7 +4,7 @@ require_relative '../test_helper'
 
 # SlaSweepState — the atomic multi-process claim that lets only one app-server worker actually
 # perform the sweep per interval (Phase 3 hardening, A4). Mirrors
-# SlaNotificationSetting.claim_stale_digest_window!'s conditional-UPDATE pattern.
+# SlaNotificationDigestState.claim_stale_window!'s conditional-UPDATE pattern.
 class SlaSweepStateTest < ActiveSupport::TestCase
   teardown { SlaSweepState.delete_all }
 

@@ -4,20 +4,15 @@
 <% current = sla_admin_current_panel %>
 
 <%= render layout: 'sla_admin/shell', locals: { current: current } do %>
-  <%# ONE form over every panel. A panel is always in the DOM and only its visibility changes, so %>
-  <%# a single submit saves the whole module's settings whichever section is open — which is also %>
-  <%# why a panel must never be omitted rather than hidden: it would post nothing and its settings %>
-  <%# would be cleared. General is the only panel left since Access control was folded into it %>
-  <%# (2026-08-06); the machinery stays because it is what lets a second one be added back. %>
-  <%= form_tag sla_settings_path, method: :patch, id: 'sla-settings-form' do %>
-    <%# Kept in step with the open panel by sla_admin.js, so the redirect after saving returns to %>
-    <%# the section the user was actually on. %>
-    <%= hidden_field_tag 'section', current, id: 'sla-settings-section' %>
-
-    <%= render layout: 'sla_admin/panel', locals: { key: 'general', current: current } do %>
+  <%= render layout: 'sla_admin/panel', locals: { key: 'general', current: current } do %>
+    <%= form_tag sla_settings_path, method: :patch, id: 'sla-settings-form' do %>
+      <%= hidden_field_tag 'section', 'general', id: 'sla-settings-section' %>
       <%= render 'sla_settings/general', settings: @settings %>
+      <%= render 'sla_policies/save_bar', label: l(:button_save) %>
     <% end %>
+  <% end %>
 
-    <%= render 'sla_policies/save_bar', label: l(:button_save) %>
+  <%= render layout: 'sla_admin/panel', locals: { key: 'notifications', current: current } do %>
+    <%= render 'sla_settings/notifications' %>
   <% end %>
 <% end %>
