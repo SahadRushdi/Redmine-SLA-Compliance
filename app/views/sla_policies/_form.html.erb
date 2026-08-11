@@ -46,6 +46,28 @@
           <%= sla_save_icon %><span><%= l(:button_sla_save_policy) %></span>
         </button>
       </div>
+
+      <%# Persisted project progress is discovered on load even without a flash token, so another %>
+      <%# authorized viewer can follow an active run. The token makes the initiating redirect keep %>
+      <%# showing a run that completed before the page finished loading. %>
+      <div id="sla-recalculation-progress" data-sla-recalculation-progress data-status="idle"
+           data-status-url="<%= recalculation_status_project_sla_policy_path(project) %>"
+           data-run-token="<%= h flash[:sla_recalculation_token].to_s %>"
+           class="hidden tw-space-y-3 tw-pb-2">
+        <div class="tw-flex tw-items-center tw-justify-between tw-gap-4">
+          <p data-sla-recalculation-status aria-live="polite"
+             class="sla-recalculation-status tw-m-0 tw-text-sm tw-font-semibold tw-italic">
+            <%= l(:text_sla_recalculation_waiting) %>
+          </p>
+          <span data-sla-recalculation-percent
+                class="sla-recalculation-percent tw-text-xs tw-font-medium">0%</span>
+        </div>
+        <div class="sla-recalculation-track" role="progressbar"
+             aria-label="<%= l(:label_sla_recalculation_progress) %>"
+             aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div data-sla-recalculation-fill class="sla-recalculation-fill"></div>
+        </div>
+      </div>
     <% end %>
   <% end %>
 <% end %>

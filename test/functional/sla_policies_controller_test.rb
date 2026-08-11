@@ -998,9 +998,14 @@ class SlaPoliciesControllerTest < ActionController::TestCase
   # --- recalc tick (4.8) ----------------------------------------------------------------------
 
   test "recalculate tick enqueues the historical recalculation job" do
-    assert_enqueued_with(job: SlaPolicyRecalculationJob, args: [@project.id]) do
+    SlaRecalculationState.delete_all
+    assert_enqueued_jobs 1, only: SlaPolicyRecalculationJob do
       put :update, params: targets_params(recalculate: '1')
     end
+    job = enqueued_jobs.last
+    state = SlaRecalculationState.find_by!(project_id: @project.id)
+    assert_equal [@project.id, state.run_token], job[:args]
+    assert_equal state.run_token, flash[:sla_recalculation_token]
   end
 
   test "save without the tick enqueues nothing" do
@@ -1029,6 +1034,39 @@ class SlaPoliciesControllerTest < ActionController::TestCase
       )
     end
     assert flash[:error].present?
+  end
+
+  test "recalculation status is project-authorized and returns progress JSON" do
+    state, = SlaRecalculationState.request!(@project)
+    state.start!(state.run_token)
+    state.record_progress!(state.run_token, processed: 2, total: 4)
+
+    get :recalculation_status, params: { project_id: @project.id, run_token: state.run_token }
+
+    assert_response :success
+    payload = JSON.parse(response.body)
+    assert_equal 'running', payload['status']
+    assert_equal 2, payload['processed']
+    assert_equal 4, payload['total']
+    assert_equal 50, payload['progress']
+  end
+
+  test "recalculation status is forbidden without policy edit permission" do
+    @role.remove_permission!(:edit_sla_policy)
+
+    get :recalculation_status, params: { project_id: @project.id }
+
+    assert_response :forbidden
+  end
+
+  test "recalculation status does not expose a superseded run token" do
+    state, = SlaRecalculationState.request!(@project)
+
+    get :recalculation_status, params: { project_id: @project.id, run_token: 'old-token' }
+
+    assert_response :success
+    assert_equal 'idle', JSON.parse(response.body)['status']
+    assert_not_equal 'old-token', state.run_token
   end
 
   # --- dynamic re-renders (4.4 switch / 4.7 prefill) ------------------------------------------
@@ -1109,11 +1147,12 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     saved_policy = SlaPolicy.create!(project_id: @project.id, enabled: true)
     result = SlaResult.create!(issue_id: 999_001, project_id: @project.id, primary_state: 'met')
 
-    assert_enqueued_with(job: SlaPolicyRecalculationJob, args: [@project.id]) do
+    assert_enqueued_jobs 1, only: SlaPolicyRecalculationJob do
       delete :destroy, params: { project_id: @project.id }
     end
 
     assert SlaResult.exists?(result.id), 'sla_results must never be deleted by a revert'
+    assert_equal @project.id, enqueued_jobs.last[:args].first
   end
 
   test "destroy is a no-op (no error) when the project has no own policy to revert" do
@@ -1189,9 +1228,10 @@ class SlaPoliciesControllerTest < ActionController::TestCase
   test "enablement enqueues a recalculation, since cached results change meaning" do
     child, = inheriting_child
 
-    assert_enqueued_with(job: SlaPolicyRecalculationJob, args: [child.id]) do
+    assert_enqueued_jobs 1, only: SlaPolicyRecalculationJob do
       put :update, params: enablement_params(child, 'disabled')
     end
+    assert_equal child.id, enqueued_jobs.last[:args].first
   end
 
   test "enablement writes nothing but the on/off decision, whatever else is posted" do

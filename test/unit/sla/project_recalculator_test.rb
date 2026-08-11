@@ -61,6 +61,22 @@ class Sla::ProjectRecalculatorTest < ActiveSupport::TestCase
     assert_equal 'met', child_row.primary_state
   end
 
+  test "run reports progress against the same issue scope it recalculates" do
+    make_issue(@root)
+    make_issue(@child)
+    updates = []
+
+    count = Sla::ProjectRecalculator.run(
+      @root, include_descendants: true, now: @base + 1800,
+      progress: ->(processed:, total:) { updates << [processed, total] }
+    )
+
+    assert_equal [0, count], updates.first
+    assert_equal [count, count], updates.last
+    assert_equal (0..count).to_a, updates.map(&:first)
+    assert updates.all? { |(_, total)| total == count }
+  end
+
   test "saving or updating a policy alone does not recompute (forward-only default)" do
     issues = Array.new(2) { make_issue(@root) }
 

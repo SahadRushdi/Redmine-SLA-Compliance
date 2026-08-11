@@ -116,7 +116,7 @@ class SlaPoliciesController < ApplicationController
     flash[:notice] = l(:notice_successful_update)
     announce_clone_outcome(clone_source, notifications_skipped)
     if section == 'targets' && params[:recalculate] == '1'
-      SlaPolicyRecalculationJob.perform_later(@project.id)
+      queue_recalculation
       flash[:notice] = "#{flash[:notice]} #{l(:notice_sla_recalculation_queued)}"
     end
     redirect_to settings_project_path(@project, tab: 'sla_policy', section: section)
@@ -151,8 +151,10 @@ class SlaPoliciesController < ApplicationController
       definition.public_send("#{target_type}_unit=", target[:unit])
       definition_has_target?(definition) ? definition.save! : definition.destroy!
     end
-    SlaPolicyRecalculationJob.perform_later(@project.id) if params[:recalculate].to_s == '1'
-    render json: target.merge(display: Sla::DirectDuration.label(target), message: l(:text_sla_target_saved))
+    recalculation = queue_recalculation if params[:recalculate].to_s == '1'
+    render json: target.merge(display: Sla::DirectDuration.label(target),
+                              message: l(:text_sla_target_saved),
+                              recalculation: recalculation_payload(recalculation))
   rescue Sla::DirectDuration::InvalidDuration, ActiveRecord::RecordInvalid => e
     render json: { error: e.message.presence || l(:error_sla_target_invalid) },
            status: :unprocessable_entity
@@ -190,10 +192,22 @@ class SlaPoliciesController < ApplicationController
         @sla_policy.sla_definitions.create!(attributes)
       end
     end
-    SlaPolicyRecalculationJob.perform_later(@project.id) if params[:recalculate].to_s == '1'
-    render json: { message: l(:text_sla_tracker_clone_saved) }
+    recalculation = queue_recalculation if params[:recalculate].to_s == '1'
+    render json: { message: l(:text_sla_tracker_clone_saved),
+                   recalculation: recalculation_payload(recalculation) }
   rescue ActiveRecord::RecordInvalid => e
     render json: { error: e.record.errors.full_messages.join(', ') }, status: :unprocessable_entity
+  end
+
+  # GET /projects/:project_id/sla_policy/recalculation_status
+  # `before_action :authorize` applies the same project permission as every policy edit action.
+  def recalculation_status
+    state = SlaRecalculationState.find_by(project_id: @project.id)
+    requested_token = params[:run_token].to_s
+    state = nil if state && requested_token.present? && state.run_token != requested_token
+    state = nil if state && requested_token.blank? && !state.active?
+
+    render json: recalculation_status_payload(state)
   end
 
   # B3 — "Revert to inherited policy": deletes THIS project's own policy row (cascading to its
@@ -204,13 +218,50 @@ class SlaPoliciesController < ApplicationController
     sla_policy = SlaPolicy.find_by(project_id: @project.id)
     if sla_policy
       sla_policy.destroy!
-      SlaPolicyRecalculationJob.perform_later(@project.id)
+      queue_recalculation
       flash[:notice] = l(:notice_sla_reverted_to_inherited)
     end
     redirect_to settings_project_path(@project, tab: 'sla_policy')
   end
 
   private
+
+  def queue_recalculation
+    state = Sla::RecalculationDispatcher.call(@project)
+    flash[:sla_recalculation_token] = state.run_token
+    state
+  end
+
+  def recalculation_payload(state)
+    return nil unless state
+
+    { run_token: state.run_token, status: state.status }
+  end
+
+  def recalculation_status_payload(state)
+    return { status: 'idle', progress: 0 } unless state
+
+    message = case state.status
+              when 'queued'
+                l(:text_sla_recalculation_waiting)
+              when 'running'
+                l(:text_sla_recalculation_running,
+                  processed: state.processed_count, total: state.total_count)
+              when 'completed'
+                l(:text_sla_recalculation_completed, count: state.processed_count)
+              else
+                state.error_message.presence || l(:error_sla_recalculation_failed)
+              end
+    {
+      run_token: state.run_token,
+      status: state.status,
+      processed: state.processed_count,
+      total: state.total_count,
+      progress: state.progress_percentage,
+      message: message,
+      updated_at: state.updated_at&.iso8601
+    }
+  end
 
   # Tri-state SLA on/off for a project that inherits its configuration (Global Rule 5). Writes a
   # LIGHTWEIGHT policy row — `inherits_config: true`, carrying only the enabled decision — so the
@@ -254,7 +305,7 @@ class SlaPoliciesController < ApplicationController
     policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
     policy.assign_attributes(enabled: enabled, inherits_config: true)
     policy.save!
-    SlaPolicyRecalculationJob.perform_later(@project.id)
+    queue_recalculation
     flash[:notice] = l(:notice_successful_update)
   end
 
@@ -266,7 +317,7 @@ class SlaPoliciesController < ApplicationController
     return flash[:notice] = l(:notice_successful_update) if policy.nil?
 
     policy.destroy!
-    SlaPolicyRecalculationJob.perform_later(@project.id)
+    queue_recalculation
     flash[:notice] = l(:notice_sla_reverted_to_inherited)
   end
 

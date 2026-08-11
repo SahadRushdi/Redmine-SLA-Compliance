@@ -70,6 +70,15 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_select '.sla-plugin'
   end
 
+  test "the dashboard does not load a browser auto-refresh script" do
+    grant_sla_access!
+
+    get :index, params: { project_id: @project.id }
+
+    assert_response :success
+    assert_select 'script[src*="sla_dashboard_live"]', 0
+  end
+
   # Redmine picks the highlighted menu entry by comparing each item's name to the controller's
   # current_menu_item, which defaults to the CONTROLLER name (:sla_dashboard) — not the name the
   # menu entry is registered under (:sla_compliance). Without the explicit `menu_item` declarations

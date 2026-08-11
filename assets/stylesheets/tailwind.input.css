@@ -47,6 +47,7 @@
 @import 'partials/_detail_table.css';
 @import 'partials/_pill_group.css';
 @import 'partials/_admin_settings.css';
+@import 'partials/_recalculation_progress.css';
 
 @tailwind base;
 @tailwind components;

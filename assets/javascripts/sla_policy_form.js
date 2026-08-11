@@ -5,9 +5,74 @@
 (function () {
   'use strict';
 
-  var state = { bound: false, section: '', tracker: '' };
+  var state = { bound: false, section: '', tracker: '', recalculationTimer: null };
 
   function byId(id) { return document.getElementById(id); }
+
+  // --- Historical recalculation progress ----------------------------------------------------
+  function stopRecalculationPolling() {
+    window.clearTimeout(state.recalculationTimer);
+    state.recalculationTimer = null;
+  }
+
+  function renderRecalculationProgress(container, data) {
+    if (!container || data.status === 'idle') {
+      if (container) { container.classList.add('hidden'); }
+      stopRecalculationPolling();
+      return;
+    }
+
+    var percentage = Math.max(0, Math.min(100, Number(data.progress) || 0));
+    var status = data.status || 'queued';
+    var statusText = container.querySelector('[data-sla-recalculation-status]');
+    var percentText = container.querySelector('[data-sla-recalculation-percent]');
+    var fill = container.querySelector('[data-sla-recalculation-fill]');
+    var progressbar = container.querySelector('[role="progressbar"]');
+
+    container.classList.remove('hidden');
+    container.setAttribute('data-status', status);
+    if (data.run_token) { container.setAttribute('data-run-token', data.run_token); }
+    if (statusText) { statusText.textContent = data.message || ''; }
+    if (percentText) { percentText.textContent = percentage + '%'; }
+    if (fill) { fill.style.width = percentage + '%'; }
+    if (progressbar) { progressbar.setAttribute('aria-valuenow', String(percentage)); }
+
+    if (status === 'completed' || status === 'failed') { stopRecalculationPolling(); }
+  }
+
+  function pollRecalculationProgress() {
+    var container = byId('sla-recalculation-progress');
+    if (!container) { return; }
+
+    stopRecalculationPolling();
+    var url = new URL(container.getAttribute('data-status-url'), window.location.origin);
+    var token = container.getAttribute('data-run-token');
+    if (token) { url.searchParams.set('run_token', token); }
+
+    window.fetch(url.toString(), { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+      .then(function (response) {
+        if (!response.ok) { throw new Error('Unable to read recalculation progress'); }
+        return response.json();
+      })
+      .then(function (data) {
+        renderRecalculationProgress(container, data);
+        if (data.status === 'queued' || data.status === 'running') {
+          state.recalculationTimer = window.setTimeout(pollRecalculationProgress, 1500);
+        }
+      })
+      .catch(function () {
+        // A transient request failure must not claim that the background work itself failed.
+        state.recalculationTimer = window.setTimeout(pollRecalculationProgress, 3000);
+      });
+  }
+
+  function startRecalculationPolling(runToken) {
+    var container = byId('sla-recalculation-progress');
+    if (!container) { return; }
+    if (runToken) { container.setAttribute('data-run-token', runToken); }
+    container.classList.remove('hidden');
+    pollRecalculationProgress();
+  }
 
   // --- Sidebar section navigation ------------------------------------------------------------
   // The sections are all in the DOM; switching only toggles visibility, so an unsaved edit in one
@@ -261,6 +326,9 @@
       parts.display.textContent = response.display;
       parts.status.textContent = response.message;
       parts.status.className = 'tw-mt-1 tw-block tw-text-xs tw-text-green-600';
+      if (response.recalculation) {
+        startRecalculationPolling(response.recalculation.run_token);
+      }
     }).fail(function (xhr) {
       var response = xhr.responseJSON || {};
       parts.status.textContent = response.error || 'Unable to save';
@@ -423,6 +491,7 @@
     syncLocks();
     syncReveals();
     toggleDigestInterval();
+    pollRecalculationProgress();
     bindOnce();
   }
 

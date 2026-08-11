@@ -582,6 +582,20 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select 'button#sla-override-load', 0
   end
 
+  test "SLA Targets renders the scoped historical recalculation progress component" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+    assert_response :success
+
+    assert_select '[data-sla-panel="targets"]' do
+      assert_select '#sla-recalculation-progress[data-sla-recalculation-progress][data-status="idle"]', 1 do
+        assert_select '[data-status-url*="recalculation_status"]', 1
+        assert_select '[role="progressbar"][aria-valuemin="0"][aria-valuemax="100"]', 1
+        assert_select '[data-sla-recalculation-status][aria-live="polite"]', 1
+        assert_select '[data-sla-recalculation-fill]', 1
+      end
+    end
+  end
+
   def revert_delete_form_selector(project)
     "form[action='#{project_sla_policy_path(project)}'] input[name='_method'][value='delete']"
   end

@@ -230,7 +230,12 @@ en:
   label_sla_enablement_currently_off: "currently off"
   button_sla_save_enablement: "Save SLA Status"
   label_sla_recalculate_historical: "Recalculate historical tickets"
+  label_sla_recalculation_progress: "Historical ticket recalculation progress"
   notice_sla_recalculation_queued: "Historical recalculation has been queued."
+  text_sla_recalculation_waiting: "Waiting to recalculate historical tickets..."
+  text_sla_recalculation_running: "%{processed} of %{total} tickets recalculated"
+  text_sla_recalculation_completed: "Historical recalculation completed for %{count} tickets."
+  error_sla_recalculation_failed: "Historical recalculation failed. Check the Redmine log for details."
   notice_sla_clone_applied: "The full SLA policy was copied from %{project}."
   warning_sla_clone_notifications_skipped: "Notification settings were not copied — you do not have permission to manage notifications on %{project}. Everything else was copied."
 

@@ -3,7 +3,8 @@
 class AddUnitsToSlaDefinitions < ActiveRecord::Migration[6.1]
   def change
     %w[response workaround resolution update_frequency].each do |target_type|
-      add_column :sla_definitions, "#{target_type}_unit", :string, limit: 5
+      column = "#{target_type}_unit"
+      add_column :sla_definitions, column, :string, limit: 5 unless column_exists?(:sla_definitions, column)
     end
   end
 end

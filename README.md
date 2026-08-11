@@ -2,13 +2,13 @@
 
 Per-project SLA policies and automatic SLA-compliance measurement for incident tickets in
 Redmine, presented as a filterable dashboard, with Google Chat + email notifications and a
-live, time-aware dashboard state.
+time-aware dashboard state.
 
-The plugin recomputes cached SLA projections whenever a ticket changes. While a dashboard is open,
-it refreshes every 15 seconds and evaluates indexed `at_risk_at` / `breach_at` projections against
-the current time. This keeps the visible dashboard current without a recurring server scheduler or
-reconstructing ticket journals on dashboard reads. SLA timelines are reconstructed from Redmine's
-journal history, never from the issue's current state.
+The plugin recomputes cached SLA projections whenever a ticket changes and schedules targeted
+background transitions for projected `at_risk_at` / `breach_at` timestamps. There is no recurring
+server sweep and the dashboard does not automatically refresh; users refresh it when they need a
+new view of the current cached state. SLA timelines are reconstructed from Redmine's journal
+history, never from the issue's current state.
 
 See `SLA_Compliance_Plugin_Implementation_Plan.md` for the full spec and phased plan.
 
@@ -21,7 +21,7 @@ See `SLA_Compliance_Plugin_Implementation_Plan.md` for the full spec and phased 
 | Rails | 6.1.x |
 
 - **Background jobs:** ActiveJob using Redmine's configured adapter (default `:async`).
-- **Live dashboard:** event-driven cache writes plus indexed, read-time state projections.
+- **Live calculations:** event-driven cache writes plus targeted background state transitions.
 
 ## Install
 
