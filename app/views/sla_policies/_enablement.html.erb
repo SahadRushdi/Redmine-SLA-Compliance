@@ -17,8 +17,7 @@
   <%= hidden_field_tag 'section', 'enablement' %>
 
   <%= render layout: 'sla_policies/card',
-             locals: { title: l(:label_sla_enablement_card),
-                       description: l(:text_sla_enablement_card) } do %>
+             locals: { title: l(:label_sla_enablement_card) } do %>
     <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-3 tw-gap-3">
       <label class="sla-option-card">
         <%= radio_button_tag 'sla_policy[enablement]', 'inherit', state == :inherit,
@@ -41,7 +40,6 @@
         <%= l(:label_sla_enablement_disabled) %>
       </label>
     </div>
-    <p class="tw-mt-3 tw-mb-0 tw-text-xs tw-text-gray-500"><%= l(:text_sla_enablement_hint) %></p>
   <% end %>
 
   <%= render 'sla_policies/save_bar', label: l(:button_sla_save_enablement) %>

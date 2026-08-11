@@ -75,10 +75,6 @@ module SlaPoliciesHelper
     l(:"label_sla_section_#{key}")
   end
 
-  def sla_section_description(key)
-    l(:"text_sla_section_#{key}")
-  end
-
   # --- Locking the configuration sections while SLA tracking is off ---------------------------
   # These four sections only describe how an ACTIVE policy behaves; with tracking off, nothing they
   # hold is ever evaluated, so leaving them editable invites someone to spend an afternoon
@@ -222,16 +218,6 @@ module SlaPoliciesHelper
     days, _source = inherited
     days ? l(:label_sla_stale_threshold_placeholder_inherited, days: days)
          : l(:label_sla_stale_threshold_placeholder_unset)
-  end
-
-  def sla_stale_threshold_source_text(project, policy, inherited)
-    own = sla_inherited_policy_source(project).blank? && policy.stale_threshold_days.present?
-    return l(:text_sla_stale_threshold_own) if own
-
-    days, source = inherited
-    return l(:text_sla_stale_threshold_unset_anywhere) if days.nil?
-
-    l(:text_sla_stale_threshold_inherited, days: days, source: source.name)
   end
 
   # Status IDs selected for a milestone role, read from the in-memory association so unsaved

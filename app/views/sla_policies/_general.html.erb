@@ -19,13 +19,10 @@
     <%= hidden_field_tag 'tab', 'sla_policy' %>
     <%= hidden_field_tag 'section', 'general' %>
 
-    <%# The setting is one row — name and
-        helper line on the left, control on the right — rather than a titled card wrapping a
-        field that restates the title. See sla_policies/_setting_card.html.erb. %>
+    <%# The setting is one row — name on the left and control on the right. %>
     <% if inherited_source.blank? %>
       <%= render layout: 'sla_policies/setting_card',
-                 locals: { title: l(:field_sla_tracking),
-                           description: l(:text_sla_tracking_hint) } do %>
+                 locals: { title: l(:field_sla_tracking) } do %>
         <%= render 'sla_compliance/toggle', name: 'sla_policy[enabled]', checked: policy.enabled? %>
       <% end %>
     <% end %>
@@ -45,8 +42,7 @@
     <% ancestor_project, = SlaPolicy.source_for(project.parent) %>
     <% if ancestor_project.present? %>
       <%= render layout: 'sla_policies/setting_card',
-                 locals: { title: l(:button_sla_revert_to_inherited),
-                           description: l(:text_sla_revert_hint, project: ancestor_project.name) } do %>
+                 locals: { title: l(:button_sla_revert_to_inherited) } do %>
         <%# form_class strips button_to's default `button_to` class, which Purplemine2 styles; the %>
         <%# button carries the plugin's own primary classes instead. %>
         <%= button_to l(:button_sla_revert), project_sla_policy_path(project),

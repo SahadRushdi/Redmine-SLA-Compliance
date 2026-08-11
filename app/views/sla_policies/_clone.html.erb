@@ -1,7 +1,7 @@
 <%# Clone from another project: ONE card, because it is one sequential action. Picking a project %>
 <%# and pressing Load are not two independent steps — Load only ever acts on the project chosen in %>
 <%# the dropdown directly above it, so a card break between them implied a relationship the two %>
-<%# controls don't have. The single heading and description cover both. %>
+<%# controls don't have. The single heading covers both. %>
 <%# %>
 <%# The picker is NOT a form param — the Load button fetches a prefilled re-render, and %>
 <%# clone_source_id (hidden, in _form) is what rides along on save. %>
@@ -13,10 +13,10 @@
   <%# cloned, or when the recorded source is no longer a project this user can pick from. %>
   <% cloned_from = sla_cloned_from_project(policy, sources) %>
   <%= render layout: 'sla_policies/card',
-             locals: { title: l(:label_sla_clone_from_project_card),
-                       description: l(:text_sla_clone_from_project_card) } do %>
-    <div class="md:tw-w-96">
-      <label for="sla-clone-source" class="<%= sla_label_classes %>"><%= l(:field_sla_clone_source) %></label>
+             locals: { title: l(:label_sla_clone_from_project_card) } do %>
+    <div class="tw-flex tw-flex-col tw-gap-3 md:tw-flex-row md:tw-items-end">
+      <div class="tw-w-full md:tw-w-96">
+        <label for="sla-clone-source" class="<%= sla_label_classes %>"><%= l(:field_sla_clone_source) %></label>
       <%# data-sla-select: the same styled Tom Select dropdown every other picker in the plugin %>
       <%# uses, rather than the OS-rendered native <select> popup this field kept. Per CLAUDE.md, %>
       <%# reuse the component already solving this instead of introducing another pattern. %>
@@ -25,21 +25,11 @@
       <%# always emits an option containing a non-breaking space, which Tom Select renders as a %>
       <%# blank, seemingly broken first row. Either way the empty option must exist, so that no %>
       <%# project is preselected and Load can't act on one the user never chose. %>
-      <%= select_tag 'sla_clone_picker',
-            options_from_collection_for_select(sources, :id, :name, cloned_from&.id),
-            prompt: l(:label_sla_clone_source_blank), id: 'sla-clone-source',
-            class: sla_input_classes, data: { sla_select: true } %>
-      <%# Says what the preselection MEANS. Without it a filled-in dropdown reads as a pending %>
-      <%# action ("this is about to be loaded") rather than as history ("this is where these %>
-      <%# settings came from") — nothing is re-copied until Load is pressed. %>
-      <% if cloned_from %>
-        <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500">
-          <%= l(:text_sla_cloned_from_hint, project: cloned_from.name) %>
-        </p>
-      <% end %>
-    </div>
-
-    <div class="tw-mt-4">
+        <%= select_tag 'sla_clone_picker',
+              options_from_collection_for_select(sources, :id, :name, cloned_from&.id),
+              prompt: l(:label_sla_clone_source_blank), id: 'sla-clone-source',
+              class: sla_input_classes, data: { sla_select: true } %>
+      </div>
       <button type="button" id="sla-clone-load" class="<%= sla_secondary_button_classes %>">
         <%= sla_copy_icon %><span><%= l(:button_sla_clone_load) %></span>
       </button>

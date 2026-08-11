@@ -2,12 +2,9 @@
 <%# Empty = no pauses. Rendered inside the section's own <form>. Locals: project, policy. %>
 <%# %>
 <%# The switch rides on the card's HEADER row: "Pause Handling" and the decision to do it are one %>
-<%# concept, so the heading and its description are the switch's label. It previously carried a %>
-<%# second label ("Pause handling") and a second hint of its own directly underneath — the same %>
-<%# sentence three times before the reader reached a control. %>
+<%# concept, so the heading is the switch's visible label. %>
 <%= render layout: 'sla_policies/card',
            locals: { title: l(:label_sla_pause_card),
-                     description: l(:text_sla_pause_card),
                      control: render('sla_compliance/toggle',
                                      name: 'sla_policy[pause_enabled]',
                                      checked: policy.pause_enabled?) } do %>
@@ -16,5 +13,4 @@
         options_from_collection_for_select(project.rolled_up_statuses, :id, :name,
                                            sla_status_ids(policy, :pause)),
         multiple: true, id: 'sla-status-pause', data: { sla_chips: true } %>
-  <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500"><%= l(:text_sla_pause_statuses_hint) %></p>
 <% end %>

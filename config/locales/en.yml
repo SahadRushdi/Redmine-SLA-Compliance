@@ -125,22 +125,13 @@ en:
   # --- SLA Policy tab (Phase 4) ------------------------------------------------------------
   label_sla_policy: "SLA Policy"
 
-  # Sectioned settings shell — page header, sidebar nav entries (label + sub-label).
+  # Sectioned settings shell — page header and sidebar nav entries.
   label_sla_policy_settings: "SLA Policy Settings"
-  # One short line, not a sentence naming every section: the page header sits ABOVE the sidebar and
-  # so is on screen for all five sections, where a list of what they contain only repeats the
-  # sidebar's own labels and sub-labels back at the reader.
-  text_sla_policy_settings_intro: "SLA behaviour for this project."
   label_sla_section_general: "General"
-  text_sla_section_general: "SLA status & coverage hours"
   label_sla_section_measurement: "Measurement Rules"
-  text_sla_section_measurement: "Statuses, first response & at-risk"
   label_sla_section_targets: "SLA Targets"
-  text_sla_section_targets: "Per-tracker priority targets"
   label_sla_section_exclusions: "Exclusions"
-  text_sla_section_exclusions: "Pause statuses & handling"
   label_sla_section_notifications: "Notifications"
-  text_sla_section_notifications: "Email & webhook alerts"
 
   # Shown at the top of SLA Targets, Measurement Rules, Exclusions and Notifications while SLA
   # tracking is off — the only thing on those sections that explains why their controls are inert.
@@ -148,15 +139,10 @@ en:
   label_sla_section_locked_title: "Locked"
 
   label_sla_policy_general: "General"
-  # Each General setting is one row: the *_card / field_* string is its bold name and the *_hint is
-  # the single helper line under it. The old wrapper-card titles ("SLA Status", "Coverage Hours" as
-  # a heading over a separately-labelled field) are gone — they restated the row below them.
   field_sla_tracking: "SLA Tracking"
-  text_sla_tracking_hint: "When disabled, no SLA targets will be evaluated for new issues."
   label_sla_coverage_card: "Coverage Hours"
   # Also the coverage select's aria-label, since the row's own title is its visible name.
   field_sla_coverage_schedule: "Coverage schedule"
-  text_sla_coverage_schedule_hint: "Specifies the hours during which SLA time is counted. E.g. 24×7×365 for always-on."
   field_sla_enabled: "SLA enabled"
   field_coverage_hours: "Coverage hours"
   label_coverage_24x7: "24×7×365"
@@ -164,13 +150,10 @@ en:
   label_sla_measurement_rules: "Measurement Rules"
   label_sla_milestones_card: "Status Milestones"
   label_sla_first_response_card: "First Response Rule"
-  text_sla_first_response_card: "What counts as the first response to an issue."
   label_sla_at_risk_card: "At-Risk Threshold"
-  text_sla_at_risk_card: "Flag a ticket at-risk once this much of its target has elapsed."
   field_sla_created_statuses: "Created statuses"
   field_sla_work_started_statuses: "Work-started statuses"
   field_sla_resolved_statuses: "Resolved statuses"
-  text_sla_status_roles_hint: "Statuses that mark each milestone. Leave a field empty to skip that milestone."
   field_first_response_rule: "First response counts as"
   label_first_response_first_comment: "First public comment"
   label_first_response_first_status_change: "First status change"
@@ -180,9 +163,7 @@ en:
 
   label_sla_definitions_section: "SLA Targets per Tracker and Priority"
   label_sla_tracker_card: "Tracker Selection"
-  text_sla_tracker_card: "Each tracker gets its own targets table below."
   label_sla_priority_targets_card: "Priority Targets — %{tracker}"
-  text_sla_priority_targets_intro: "A priority with every target unset is also excluded."
   field_sla_trackers: "Trackers"
   label_sla_tracker_placeholder: "Add a tracker"
   label_sla_clone_tracker_source: "Copy targets from tracker"
@@ -191,7 +172,6 @@ en:
   text_sla_clone_tracker_confirm: "Replace this tracker's targets with the selected tracker's targets?"
   text_sla_tracker_clone_saved: "Tracker targets cloned"
   error_sla_tracker_clone_invalid: "Choose a different configured source tracker and target tracker."
-  text_sla_tracker_selection_hint: "Removing a tracker hides its table; its saved targets are kept."
   label_sla_priority: "Priority"
   label_sla_target_response: "Response"
   label_sla_target_workaround: "Workaround"
@@ -207,42 +187,22 @@ en:
   field_sla_duration_unit: "Duration unit"
   text_sla_target_saved: "Saved"
   error_sla_target_invalid: "Enter a positive duration in Hours or Days, or choose Best Effort."
-  text_sla_definitions_hint: "A priority with every target unset is excluded from SLA tracking. Saving updates the selected trackers only."
   text_sla_no_trackers: "This project has no trackers enabled."
   label_sla_stale_card: "Stale Tickets"
-  text_sla_stale_card: "Days of inactivity before an open ticket is flagged stale."
   # Also the input's aria-label — the card heading is its visible name now.
   field_sla_stale_threshold_days_project: "Stale after"
   label_sla_days_suffix: "days of inactivity"
-  # ONE dynamic status line under the field, replacing a static "leave empty to inherit" hint that
-  # sat beneath it. Three states, and it must state the one that is actually true: the old line
-  # always answered "what would apply if this box were empty", so a project with its own value read
-  # "Not set anywhere — never flagged stale" directly under a field showing a number.
-  text_sla_stale_threshold_own: "Set for this project; subprojects without their own inherit it."
-  text_sla_stale_threshold_inherited: "Inheriting %{days} days from %{source}."
-  text_sla_stale_threshold_unset_anywhere: "Not set — tickets in this project are never flagged stale."
   label_sla_stale_threshold_placeholder_inherited: "Inherited: %{days}"
   label_sla_stale_threshold_placeholder_unset: "Not set"
 
   label_sla_pause_section: "Exclusions (Pauses)"
-  # The card heading IS the switch's label (the switch sits on the header row), so there is no
-  # separate "Pause handling" field label/hint underneath repeating it.
   label_sla_pause_card: "Pause Handling"
-  text_sla_pause_card: "Time in these statuses is subtracted from SLA measurements."
   field_sla_pause_statuses: "Pause statuses"
   field_sla_pause_enabled: "Pause handling enabled"
-  text_sla_pause_hint: "Time spent in these statuses is subtracted from SLA measurements. Leave empty for no pauses."
-  text_sla_pause_statuses_hint: "Leave empty for no pauses."
 
-  # Picking a project and pressing Load are one action, so they are one card with one description
-  # (formerly split across "Project Selection" and "Clone Policy").
   label_sla_clone_from_project_card: "Clone from existing project"
-  text_sla_clone_from_project_card: "Copy another project's whole SLA policy into this one."
   field_sla_clone_source: "Project"
   label_sla_clone_source_blank: "— Select a project —"
-  # Under a preselected dropdown, so a filled-in picker reads as history rather than as an action
-  # about to happen — nothing is copied again until Load is pressed.
-  text_sla_cloned_from_hint: "These settings were cloned from %{project}."
   button_sla_clone_load: "Load"
   text_sla_clone_confirm_overwrite: "Loading will replace everything currently entered in every section of this policy, not just this one. Continue?"
 
@@ -255,43 +215,32 @@ en:
   # --- Inheritance notice + Revert (B3) ------------------------------------------------------
   text_sla_inherited_notice: "These settings are inherited from %{project} and apply to this project already. Change anything and save, and this project keeps its own copy from then on — %{project}'s later changes will no longer reach it."
   button_sla_view_source_policy: "View source project's policy"
-  # The long string names the settings row; the button beside it only has to say what it does.
   button_sla_revert_to_inherited: "Revert to inherited policy"
   button_sla_revert: "Revert"
   text_sla_revert_confirm: "This removes this project's own SLA policy. It will go back to inheriting from %{project}. Continue?"
-  text_sla_revert_hint: "Removes this project's own policy so it inherits from %{project} again. Cached SLA results are recalculated, not deleted."
   notice_sla_reverted_to_inherited: "Reverted to the inherited SLA policy."
   text_sla_no_policy_anywhere_hint: "No SLA policy is configured for this project or any parent project yet. Fill in the form below to create one."
 
   # --- Tri-state SLA on/off for an inheriting subproject -------------------------------------
   label_sla_enablement_card: "SLA for This Project"
-  text_sla_enablement_card: "Turn SLA tracking on or off for this project without taking a copy of the inherited settings."
   label_sla_enablement_inherit: "Inherit from %{project}"
   label_sla_enablement_enabled: "Enabled"
   label_sla_enablement_disabled: "Disabled"
   label_sla_enablement_currently_on: "currently on"
   label_sla_enablement_currently_off: "currently off"
-  text_sla_enablement_hint: "Enabled and Disabled apply to this project only. Coverage, targets and statuses still follow the inherited policy, so later changes to it keep reaching this project."
   button_sla_save_enablement: "Save SLA Status"
   label_sla_recalculate_historical: "Recalculate historical tickets"
-  text_sla_forward_only_hint: "By default, saving applies to new activity only. Tick to re-evaluate all existing tickets against the new policy in the background."
   notice_sla_recalculation_queued: "Historical recalculation has been queued."
   notice_sla_clone_applied: "The full SLA policy was copied from %{project}."
   warning_sla_clone_notifications_skipped: "Notification settings were not copied — you do not have permission to manage notifications on %{project}. Everything else was copied."
 
   # --- Notification settings (4.6) ----------------------------------------------------------
   label_sla_notifications_section: "Notification Settings"
-  # Each card here states its purpose ONCE, in the header. The alert cards' switches sit on that
-  # same header row and the webhook field takes its heading as an aria-label, so none of them
-  # repeats the heading as a second field label plus a second hint underneath.
   label_sla_google_chat_card: "Google Chat Integration"
-  text_sla_google_chat_card: "Post a message when an issue is created on an SLA-configured tracker."
   field_sla_webhook_url: "Webhook URL"
   text_sla_webhook_placeholder: "https://chat.googleapis.com/v1/spaces/…"
   label_sla_at_risk_email_card: "At-Risk Email Alerts"
-  text_sla_at_risk_email_card: "Email recipients when a ticket approaches its SLA deadline."
   label_sla_stale_email_card: "Stale-Ticket Email Digest"
-  text_sla_stale_email_card: "Periodic digest of SLA-excluded tickets with no recent activity."
   field_google_chat_webhook: "Google Chat webhook URL"
   label_sla_at_risk_email: "At-risk email alerts"
   field_at_risk_email_enabled: "Enabled"
@@ -300,17 +249,14 @@ en:
   label_sla_frequency_realtime: "Real-time"
   label_sla_frequency_digest: "Digest"
   field_at_risk_digest_interval_minutes: "Digest interval (minutes)"
-  text_sla_digest_interval_hint: "At-risk transitions are scheduled for their projected time; this controls how often queued digest notifications are grouped."
   label_sla_stale_email: "Stale-ticket email digest"
   field_stale_email_enabled: "Enabled"
   field_stale_email_recipients: "Recipients"
   field_stale_email_frequency: "Frequency"
   field_stale_threshold_days: "Stale after (days of inactivity)"
-  text_sla_stale_threshold_hint: "A ticket excluded from SLA because its applicable target is unset, with no comment or status change for this many days, is included in THIS PROJECT'S email digest. The dashboard's Stale card uses the instance-wide threshold under Administration → SLA Compliance instead."
   label_sla_frequency_daily: "Daily"
   label_sla_frequency_weekly: "Weekly"
   label_sla_frequency_monthly: "Monthly"
-  text_sla_recipients_hint: "Type an address and press Enter to add it."
 
   # --- Google Chat notification (7.1) -------------------------------------------------------
   # The instance-wide "Default Google Chat webhook" strings that were here are gone with the

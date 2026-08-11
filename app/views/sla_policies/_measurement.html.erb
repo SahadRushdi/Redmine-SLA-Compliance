@@ -3,8 +3,7 @@
 <%# Rendered inside the section's own <form> (see _form.html.erb). Locals: project, policy. %>
 
 <%= render layout: 'sla_policies/card',
-           locals: { title: l(:label_sla_milestones_card),
-                     description: l(:text_sla_status_roles_hint) } do %>
+           locals: { title: l(:label_sla_milestones_card) } do %>
   <% statuses = project.rolled_up_statuses %>
   <% { created: :field_sla_created_statuses,
        work_started: :field_sla_work_started_statuses,
@@ -22,8 +21,7 @@
 <%# The selected border/tint is driven straight off the input's :checked state in CSS (see %>
 <%# partials/_option_card.css) — no JS, so the highlight can never disagree with what is posted. %>
 <%= render layout: 'sla_policies/card',
-           locals: { title: l(:label_sla_first_response_card),
-                     description: l(:text_sla_first_response_card) } do %>
+           locals: { title: l(:label_sla_first_response_card) } do %>
   <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-3 tw-gap-3">
     <% SlaPolicy::FIRST_RESPONSE_RULES.each do |rule| %>
       <label class="sla-option-card">
@@ -35,48 +33,40 @@
   </div>
 <% end %>
 
-<%# The card heading and its one description ARE this field's label — it holds a single control, so %>
-<%# the "Threshold (%)" label and the hint underneath said the heading twice more before you %>
-<%# reached the input. The field carries its name as an aria-label instead, the same way the %>
-<%# General section's coverage select does. %>
-<%= render layout: 'sla_policies/card',
-           locals: { title: l(:label_sla_at_risk_card),
-                     description: l(:text_sla_at_risk_card) } do %>
-  <div class="tw-flex tw-items-center tw-gap-2">
-    <div class="tw-w-32">
-      <%= number_field_tag 'sla_policy[at_risk_threshold]', policy.at_risk_threshold,
-            min: 1, max: 100, id: 'sla_policy_at_risk_threshold', class: sla_input_classes,
-            'aria-label': l(:field_at_risk_threshold) %>
+<%# The card heading is this field's visible label; the input also carries an aria-label. %>
+<div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-5">
+  <%= render layout: 'sla_policies/card',
+             locals: { title: l(:label_sla_at_risk_card) } do %>
+    <div class="tw-flex tw-items-center tw-gap-2">
+      <div class="tw-w-32">
+        <%= number_field_tag 'sla_policy[at_risk_threshold]', policy.at_risk_threshold,
+              min: 1, max: 100, id: 'sla_policy_at_risk_threshold', class: sla_input_classes,
+              'aria-label': l(:field_at_risk_threshold) %>
+      </div>
+      <span class="tw-text-sm tw-text-gray-500">%</span>
     </div>
-    <span class="tw-text-sm tw-text-gray-500">%</span>
-  </div>
-<% end %>
+  <% end %>
 
 <%# Step 6.2a — the Stale card's inactivity threshold, per project and inherited down the tree. %>
 <%# Sits beside the at-risk threshold because both answer "at what point do we say something is %>
 <%# wrong with this ticket"; the same input pattern is reused rather than a new one invented. %>
 <%# %>
 <%# EMPTY IS A REAL STATE here, not a missing value: it means "inherit", and it is how the user %>
-<%# removes an override. The placeholder shows what would apply if left empty, and the status line %>
-<%# under the field says what applies now — so clearing the box is never a leap in the dark. %>
-<%= render layout: 'sla_policies/card',
-           locals: { title: l(:label_sla_stale_card),
-                     description: l(:text_sla_stale_card) } do %>
-  <% inherited = sla_inherited_stale_threshold(project) %>
-  <%# Same single-control treatment as the at-risk card above: heading once, aria-label on the %>
-  <%# input, no repeated "Stale after" label. %>
-  <div class="tw-flex tw-items-center tw-gap-2">
-    <div class="tw-w-32">
-      <%= number_field_tag 'sla_policy[stale_threshold_days]', policy.stale_threshold_days,
-            min: SlaPolicy::STALE_THRESHOLD_DAYS.min, max: SlaPolicy::STALE_THRESHOLD_DAYS.max,
-            id: 'sla_policy_stale_threshold_days', class: sla_input_classes,
-            'aria-label': l(:field_sla_stale_threshold_days_project),
-            placeholder: sla_stale_threshold_placeholder(inherited) %>
+<%# removes an override. The placeholder shows what would apply if the field is left empty. %>
+  <%= render layout: 'sla_policies/card',
+             locals: { title: l(:label_sla_stale_card) } do %>
+    <% inherited = sla_inherited_stale_threshold(project) %>
+    <%# Same single-control treatment as the at-risk card above: heading once, aria-label on the %>
+    <%# input, no repeated "Stale after" label. %>
+    <div class="tw-flex tw-items-center tw-gap-2">
+      <div class="tw-w-32">
+        <%= number_field_tag 'sla_policy[stale_threshold_days]', policy.stale_threshold_days,
+              min: SlaPolicy::STALE_THRESHOLD_DAYS.min, max: SlaPolicy::STALE_THRESHOLD_DAYS.max,
+              id: 'sla_policy_stale_threshold_days', class: sla_input_classes,
+              'aria-label': l(:field_sla_stale_threshold_days_project),
+              placeholder: sla_stale_threshold_placeholder(inherited) %>
+      </div>
+      <span class="tw-text-sm tw-text-gray-500"><%= l(:label_sla_days_suffix) %></span>
     </div>
-    <span class="tw-text-sm tw-text-gray-500"><%= l(:label_sla_days_suffix) %></span>
-  </div>
-  <%# ONE line, and it is STATE rather than description — which state it reports depends on whether %>
-  <%# this project set a value, inherits one, or has none anywhere. The static "leave empty to %>
-  <%# inherit" hint that used to sit under it is gone: this line already names the alternative. %>
-  <p class="tw-mt-2 tw-mb-0 tw-text-xs tw-text-gray-500" id="sla-stale-threshold-source"><%= sla_stale_threshold_source_text(project, policy, inherited) %></p>
-<% end %>
+  <% end %>
+</div>

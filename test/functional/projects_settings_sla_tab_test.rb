@@ -289,7 +289,7 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     Setting.plugin_redmine_sla_compliance = {}
   end
 
-  # --- Step 6.2a: the Stale threshold field, and the "what happens if I leave this empty" line ---
+  # --- Step 6.2a: the Stale threshold field -----------------------------------------------
 
   def get_measurement_section(project = @project)
     get :settings, params: { id: project.identifier, tab: 'sla_policy', section: 'measurement' }
@@ -312,11 +312,11 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select "input[name='sla_policy[stale_threshold_days]'][value='4']", 1
   end
 
-  test "with nothing set anywhere the field is empty and says so" do
+  test "with nothing set anywhere the field is empty without helper text" do
     get_measurement_section
 
     assert_select "input[name='sla_policy[stale_threshold_days]'][value]", 0, 'no value, so it inherits'
-    assert_select '#sla-stale-threshold-source', text: I18n.t(:text_sla_stale_threshold_unset_anywhere)
+    assert_select '#sla-stale-threshold-source', 0
   end
 
   test "a subproject shows which ancestor its inherited threshold comes from" do
@@ -326,32 +326,17 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
 
     get_measurement_section(child)
 
-    assert_select '#sla-stale-threshold-source',
-                  text: I18n.t(:text_sla_stale_threshold_inherited, days: 4, source: @project.name)
     # The placeholder repeats it inside the empty box, so the number is visible where it is typed.
     assert_select "input[name='sla_policy[stale_threshold_days]'][placeholder=?]",
                   I18n.t(:label_sla_stale_threshold_placeholder_inherited, days: 4)
   end
 
-  # There is ONE status line under the field now, so it has to report the state the project is
-  # ACTUALLY in. It used to always answer "what would apply if this box were empty" — the parent's
-  # answer — which put "Not set — never flagged stale" directly beneath a field showing a number.
-  test "a project with its own value says so, not that nothing is set" do
+  test "a project with its own value has no label below the field" do
     SlaPolicy.create!(project_id: @project.id, enabled: true, stale_threshold_days: 9)
 
     get_measurement_section
 
-    assert_select '#sla-stale-threshold-source', text: I18n.t(:text_sla_stale_threshold_own)
-  end
-
-  # The consolidation: one line, never a second static paragraph restating how empty behaves.
-  test "the stale card carries exactly one line under its field" do
-    SlaPolicy.create!(project_id: @project.id, enabled: true, stale_threshold_days: 9)
-
-    get_measurement_section
-
-    assert_select '#sla-stale-threshold-source', 1
-    assert_select "[data-sla-panel='measurement'] p", text: /Leave empty to inherit/, count: 0
+    assert_select '#sla-stale-threshold-source', 0
   end
 
   # The render half of the "I add a tracker, save, and it is gone" bug (the save half is covered in
@@ -415,7 +400,6 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select '[data-sla-panel="targets"] h3', text: I18n.t(:field_sla_trackers), count: 1
     assert_select '#sla-definitions-trackers[data-sla-chips][multiple]' \
                   "[placeholder='#{I18n.t(:label_sla_tracker_placeholder)}']", 1
-    assert_select '[data-sla-panel="targets"]', text: I18n.t(:text_sla_tracker_selection_hint), count: 0
   end
 
   test "selected trackers render as tabs with one target table visible" do

@@ -1,12 +1,7 @@
 <%# Per-project notification settings, as three cards matching the other sections. Own form + save, %>
 <%# gated separately from the policy form by :manage_sla_notifications. Locals: project. %>
 <%# %>
-<%# Each card states its purpose ONCE, in its header, and the alert cards' switches sit on that %>
-<%# same header row — the heading and its description are the switch's label. They used to be %>
-<%# followed immediately by a near-identical field label and hint ("At-Risk Email Alerts" / "Send %>
-<%# email alerts when a ticket approaches its SLA deadline." then "At-risk alerts" / "Notify %>
-<%# recipients when tickets exceed the at-risk threshold."), which is the same idea stated twice %>
-<%# before the reader reaches a control. %>
+<%# Each card states its purpose once in its header; alert switches sit on that same header row. %>
 <%# %>
 <%# The detail fields of an alert card ARE that card's body, marked data-sla-reveal so %>
 <%# sla_policy_form.js collapses the whole body — padding included — while the switch is off, %>
@@ -24,8 +19,7 @@
     <%# One control, so the card heading is its label and the field carries the field name as an %>
     <%# aria-label — the same treatment the General section's coverage select gets. %>
     <%= render layout: 'sla_policies/card',
-               locals: { title: l(:label_sla_google_chat_card),
-                         description: l(:text_sla_google_chat_card) } do %>
+               locals: { title: l(:label_sla_google_chat_card) } do %>
       <%= url_field_tag 'sla_notification_setting[google_chat_webhook]', setting.google_chat_webhook,
             id: 'sla_notification_google_chat_webhook', class: sla_input_classes,
             'aria-label': l(:field_sla_webhook_url),
@@ -34,7 +28,6 @@
 
     <%= render layout: 'sla_policies/card',
                locals: { title: l(:label_sla_at_risk_email_card),
-                         description: l(:text_sla_at_risk_email_card),
                          control: render('sla_compliance/toggle',
                                          name: 'sla_notification_setting[at_risk_email_enabled]',
                                          checked: setting.at_risk_email_enabled?,
@@ -49,7 +42,6 @@
           <%= select_tag 'sla_notification_setting[at_risk_email_recipients][]',
                 options_for_select(recipients.map { |e| [e, e] }, recipients),
                 multiple: true, id: 'sla-at-risk-recipients', data: { sla_emails: true } %>
-          <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500"><%= l(:text_sla_recipients_hint) %></p>
         </div>
         <div>
           <span class="<%= sla_label_classes %>"><%= l(:field_at_risk_email_frequency) %></span>
@@ -67,9 +59,6 @@
             <%= number_field_tag 'sla_notification_setting[at_risk_digest_interval_minutes]',
                   setting.at_risk_digest_interval_minutes, min: 1,
                   id: 'sla_notification_digest_interval', class: sla_input_classes %>
-            <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500">
-              <%= l(:text_sla_digest_interval_hint) %>
-            </p>
           </div>
         </div>
       </div>
@@ -77,7 +66,6 @@
 
     <%= render layout: 'sla_policies/card',
                locals: { title: l(:label_sla_stale_email_card),
-                         description: l(:text_sla_stale_email_card),
                          control: render('sla_compliance/toggle',
                                          name: 'sla_notification_setting[stale_email_enabled]',
                                          checked: setting.stale_email_enabled?,
@@ -92,7 +80,6 @@
           <%= select_tag 'sla_notification_setting[stale_email_recipients][]',
                 options_for_select(stale_recipients.map { |e| [e, e] }, stale_recipients),
                 multiple: true, id: 'sla-stale-recipients', data: { sla_emails: true } %>
-          <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500"><%= l(:text_sla_recipients_hint) %></p>
         </div>
         <div>
           <div class="tw-mb-4">
@@ -108,7 +95,6 @@
             <%= number_field_tag 'sla_notification_setting[stale_threshold_days]',
                   setting.stale_threshold_days, min: 1,
                   id: 'sla_notification_stale_threshold_days', class: sla_input_classes %>
-            <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500"><%= l(:text_sla_stale_threshold_hint) %></p>
           </div>
         </div>
       </div>
