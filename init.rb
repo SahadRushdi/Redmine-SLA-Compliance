@@ -37,7 +37,8 @@ Redmine::Plugin.register :redmine_sla_compliance do
     # menu link and 403 on the URL — the tab could never be opened. This mirrors how core's own
     # :manage_members / :manage_versions / :manage_categories each claim projects/settings.
     # Holding it grants nothing else: every other tab stays filtered by its own permission.
-    permission :edit_sla_policy, { sla_policies: [:edit, :update, :update_target, :destroy],
+    permission :edit_sla_policy, { sla_policies: [:edit, :update, :update_target, :clone_tracker,
+                                                  :destroy],
                                    projects: [:settings] }
 
     # Manage per-project notification settings (Google Chat webhook, at-risk/stale email).

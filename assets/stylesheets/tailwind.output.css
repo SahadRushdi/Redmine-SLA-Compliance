@@ -590,6 +590,38 @@
   border-color: #2563eb;
   box-shadow: 0 0 0 1px #2563eb;
 }
+/* Tracker tabs need an explicit component state because Purplemine2 styles every bare button. */
+.sla-plugin button.sla-tracker-tab {
+  -webkit-appearance: none;
+     -moz-appearance: none;
+          appearance: none;
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0.5rem 0.5rem 0 0;
+  box-shadow: none !important;
+  color: #4b5563 !important; /* gray-600 */
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.625rem 1rem;
+}
+.sla-plugin button.sla-tracker-tab:hover {
+  background: #f9fafb !important; /* gray-50 */
+  color: #1d4ed8 !important; /* primary-700 */
+}
+.sla-plugin button.sla-tracker-tab.is-active {
+  background: #eff6ff !important; /* primary-50 */
+  border-bottom-color: #2563eb !important; /* primary-600 */
+  color: #1d4ed8 !important; /* primary-700 */
+}
+/* Match the Flowbite Clone policy button's py-2.5 height. Tom Select copies this class from the
+ * original select onto its wrapper, giving us a stable hook without relying on generated DOM. */
+.sla-plugin .ts-wrapper.sla-clone-tracker-select .ts-control {
+  min-height: 2.625rem;
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}
 /*
  * SLA Policy settings — sidebar section navigation.
  *
@@ -1715,10 +1747,6 @@
 .sla-plugin .tw-m-0 {
   margin: 0px;
 }
-.sla-plugin .tw-mx-1 {
-  margin-left: 0.25rem;
-  margin-right: 0.25rem;
-}
 .sla-plugin .tw-mx-auto {
   margin-left: auto;
   margin-right: auto;
@@ -1746,9 +1774,6 @@
 }
 .sla-plugin .tw-ms-3 {
   margin-inline-start: 0.75rem;
-}
-.sla-plugin .tw-mt-0 {
-  margin-top: 0px;
 }
 .sla-plugin .tw-mt-0\.5 {
   margin-top: 0.125rem;
@@ -1831,6 +1856,9 @@
 .sla-plugin .tw-h-full {
   height: 100%;
 }
+.sla-plugin .tw-min-h-9 {
+  min-height: 2.25rem;
+}
 .sla-plugin .tw-w-10 {
   width: 2.5rem;
 }
@@ -1867,6 +1895,9 @@
 .sla-plugin .tw-w-5 {
   width: 1.25rem;
 }
+.sla-plugin .tw-w-52 {
+  width: 13rem;
+}
 .sla-plugin .tw-w-6 {
   width: 1.5rem;
 }
@@ -1893,9 +1924,6 @@
 }
 .sla-plugin .tw-max-w-full {
   max-width: 100%;
-}
-.sla-plugin .tw-max-w-lg {
-  max-width: 32rem;
 }
 .sla-plugin .tw-max-w-md {
   max-width: 28rem;
@@ -1951,6 +1979,9 @@
 .sla-plugin .tw-items-start {
   align-items: flex-start;
 }
+.sla-plugin .tw-items-end {
+  align-items: flex-end;
+}
 .sla-plugin .tw-items-center {
   align-items: center;
 }
@@ -1994,10 +2025,6 @@
 .sla-plugin .tw-gap-x-4 {
   -moz-column-gap: 1rem;
        column-gap: 1rem;
-}
-.sla-plugin .tw-gap-x-5 {
-  -moz-column-gap: 1.25rem;
-       column-gap: 1.25rem;
 }
 .sla-plugin .tw-gap-x-6 {
   -moz-column-gap: 1.5rem;
@@ -2241,6 +2268,9 @@
 .sla-plugin .tw-p-1 {
   padding: 0.25rem;
 }
+.sla-plugin .tw-p-2 {
+  padding: 0.5rem;
+}
 .sla-plugin .tw-p-2\.5 {
   padding: 0.625rem;
 }
@@ -2315,6 +2345,9 @@
 .sla-plugin .tw-pb-2 {
   padding-bottom: 0.5rem;
 }
+.sla-plugin .tw-pb-3 {
+  padding-bottom: 0.75rem;
+}
 .sla-plugin .tw-pl-0 {
   padding-left: 0px;
 }
@@ -2347,6 +2380,9 @@
 }
 .sla-plugin .tw-text-center {
   text-align: center;
+}
+.sla-plugin .tw-align-top {
+  vertical-align: top;
 }
 .sla-plugin .tw-text-2xl {
   font-size: 1.5rem;
@@ -2712,12 +2748,6 @@
   }
 }
 @media (min-width: 768px) {
-  .sla-plugin .md\:tw-col-span-2 {
-    grid-column: span 2 / span 2;
-  }
-  .sla-plugin .md\:tw-w-40 {
-    width: 10rem;
-  }
   .sla-plugin .md\:tw-w-56 {
     width: 14rem;
   }
@@ -2741,6 +2771,9 @@
   }
   .sla-plugin .md\:tw-items-start {
     align-items: flex-start;
+  }
+  .sla-plugin .md\:tw-items-end {
+    align-items: flex-end;
   }
   .sla-plugin .md\:tw-justify-between {
     justify-content: space-between;

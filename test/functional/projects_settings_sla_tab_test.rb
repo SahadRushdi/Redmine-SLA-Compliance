@@ -418,6 +418,38 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select '[data-sla-panel="targets"]', text: I18n.t(:text_sla_tracker_selection_hint), count: 0
   end
 
+  test "selected trackers render as tabs with one target table visible" do
+    policy = SlaPolicy.create!(project_id: @project.id, enabled: true,
+                               selected_tracker_ids: @project.trackers.first(2).map(&:id))
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select '#sla-tracker-tabs [data-sla-tracker-tab]', 2
+    assert_select '#sla-tracker-tabs [aria-selected="true"]', 1
+    assert_select '[data-sla-definition-table]:not(.hidden)', 1
+    assert_select '[data-sla-definition-table].hidden', 1
+  ensure
+    policy&.destroy
+  end
+
+  test "clone sources exclude trackers removed from this project's selection" do
+    selected_tracker, removed_tracker = @project.trackers.first(2)
+    policy = SlaPolicy.create!(project_id: @project.id, enabled: true,
+                               selected_tracker_ids: [selected_tracker.id])
+    [selected_tracker, removed_tracker].each do |tracker|
+      policy.sla_definitions.create!(tracker_id: tracker.id, priority_id: IssuePriority.active.first.id,
+                                     response_seconds: 3600)
+    end
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select "#sla-clone-tracker-source option[value='#{selected_tracker.id}']", 1
+    assert_select "#sla-clone-tracker-source option[value='#{removed_tracker.id}']", 0
+  ensure
+    policy&.destroy
+  end
+
   # A disabled alert card collapses to just its switch, but its fields stay in the DOM and keep
   # posting — otherwise turning an alert off and on again would silently drop the recipients the
   # project had already saved.

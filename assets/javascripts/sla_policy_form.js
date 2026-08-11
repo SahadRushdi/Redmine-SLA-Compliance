@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  var state = { bound: false, section: '' };
+  var state = { bound: false, section: '', tracker: '' };
 
   function byId(id) { return document.getElementById(id); }
 
@@ -143,11 +143,72 @@
 
     wanted.forEach(function (trackerId) {
       if (byId('sla-definitions-table-' + trackerId)) { return; }
+      state.tracker = trackerId;
       jQuery.ajax({
         url: select.getAttribute('data-table-url'),
         data: { tracker_id: trackerId, section: currentSection() },
         dataType: 'script'
       });
+    });
+    if (wanted.indexOf(state.tracker) === -1) { state.tracker = wanted[0] || ''; }
+    renderTrackerTabs(select);
+  }
+
+  function activateTracker(trackerId) {
+    state.tracker = trackerId || '';
+    document.querySelectorAll('[data-sla-tracker-tab]').forEach(function (tab) {
+      var active = tab.getAttribute('data-sla-tracker-tab') === state.tracker;
+      tab.classList.toggle('is-active', active);
+      tab.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-sla-definition-table]').forEach(function (table) {
+      table.classList.toggle('hidden', table.getAttribute('data-sla-definition-table') !== state.tracker);
+    });
+    var source = byId('sla-clone-tracker-source');
+    if (source && source.value === state.tracker) {
+      if (source.tomselect) { source.tomselect.clear(true); } else { source.value = ''; }
+    }
+  }
+
+  function renderTrackerTabs(select) {
+    var bar = byId('sla-tracker-tabs');
+    if (!bar || !select) { return; }
+    var options = Array.prototype.slice.call(select.selectedOptions);
+    if (!state.tracker || !options.some(function (option) { return option.value === state.tracker; })) {
+      state.tracker = options.length ? options[0].value : '';
+    }
+    bar.innerHTML = '';
+    options.forEach(function (option) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.setAttribute('role', 'tab');
+      button.setAttribute('data-sla-tracker-tab', option.value);
+      button.className = 'sla-tracker-tab';
+      button.textContent = option.textContent;
+      bar.appendChild(button);
+    });
+    activateTracker(state.tracker);
+  }
+
+  function cloneTrackerTargets() {
+    var button = byId('sla-clone-tracker-button');
+    var source = byId('sla-clone-tracker-source');
+    if (!button || !source || !source.value || !state.tracker || source.value === state.tracker) { return; }
+    if (!window.confirm(button.getAttribute('data-confirm'))) { return; }
+    var token = document.querySelector('meta[name="csrf-token"]');
+    var recalculate = document.querySelector('input[name="recalculate"]');
+    button.disabled = true;
+    jQuery.ajax({
+      url: button.getAttribute('data-endpoint'), method: 'PATCH', dataType: 'json',
+      headers: token ? { 'X-CSRF-Token': token.content } : {},
+      data: { source_tracker_id: source.value, target_tracker_id: state.tracker,
+              recalculate: recalculate && recalculate.checked ? '1' : '0' }
+    }).done(function () {
+      window.location.reload();
+    }).fail(function (xhr) {
+      var response = xhr.responseJSON || {};
+      window.alert(response.error || 'Unable to clone tracker targets');
+      button.disabled = false;
     });
   }
 
@@ -308,6 +369,10 @@
     jQuery(document).on('change', '#sla-definitions-trackers', function () {
       syncDefinitionTables(this);
     });
+    jQuery(document).on('click', '[data-sla-tracker-tab]', function () {
+      activateTracker(this.getAttribute('data-sla-tracker-tab'));
+    });
+    jQuery(document).on('click', '#sla-clone-tracker-button', cloneTrackerTargets);
 
     jQuery(document).on('click', '[data-sla-target-display]', function () {
       var cell = this.closest('[data-sla-target-cell]');
@@ -353,6 +418,7 @@
     initChips();
     initEmailChips();
     initSingleSelects();
+    renderTrackerTabs(byId('sla-definitions-trackers'));
     // After the Tom Select instances exist, so a section rendered locked disables them too.
     syncLocks();
     syncReveals();

@@ -56,6 +56,43 @@ class SlaDirectTargetsControllerTest < ActionController::TestCase
     assert_nil SlaPolicy.find_by(project_id: @project.id)
   end
 
+  test 'clones every priority target from a configured tracker into the selected tracker' do
+    target_tracker = @project.trackers.where.not(id: @tracker.id).first
+    policy = SlaPolicy.create!(project_id: @project.id, enabled: true,
+                               selected_tracker_ids: [@tracker.id, target_tracker.id])
+    source = policy.sla_definitions.create!(tracker_id: @tracker.id, priority_id: @priority.id,
+                                            response_seconds: 14_400, response_unit: 'hours',
+                                            resolution_best_effort: true)
+    policy.sla_definitions.create!(tracker_id: target_tracker.id, priority_id: @priority.id,
+                                   response_seconds: 3600)
+
+    patch :clone_tracker, params: { project_id: @project.id, source_tracker_id: @tracker.id,
+                                    target_tracker_id: target_tracker.id }
+
+    assert_response :success
+    copied = policy.sla_definitions.find_by!(tracker_id: target_tracker.id,
+                                             priority_id: @priority.id)
+    assert_equal source.response_seconds, copied.response_seconds
+    assert_equal 'hours', copied.response_unit
+    assert copied.resolution_best_effort?
+    assert_equal 1, policy.sla_definitions.where(tracker_id: @tracker.id).count,
+                 'cloning must not alter the source tracker'
+  end
+
+  test 'rejects cloning into an unselected tracker' do
+    target_tracker = @project.trackers.where.not(id: @tracker.id).first
+    policy = SlaPolicy.create!(project_id: @project.id, enabled: true,
+                               selected_tracker_ids: [@tracker.id])
+    policy.sla_definitions.create!(tracker_id: @tracker.id, priority_id: @priority.id,
+                                   response_seconds: 3600)
+
+    patch :clone_tracker, params: { project_id: @project.id, source_tracker_id: @tracker.id,
+                                    target_tracker_id: target_tracker.id }
+
+    assert_response :unprocessable_entity
+    assert_empty policy.sla_definitions.where(tracker_id: target_tracker.id)
+  end
+
   private
 
   def target_params(overrides = {})

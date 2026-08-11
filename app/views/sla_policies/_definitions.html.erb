@@ -10,6 +10,8 @@
   <% end %>
 <% else %>
   <% selected = sla_selected_trackers(project, policy) %>
+  <% selected_ids = selected.map(&:id) %>
+  <% configured_sources = policy.sla_definitions.map(&:tracker_id).uniq & selected_ids %>
 
   <%= render layout: 'sla_policies/card',
              locals: { title: l(:field_sla_trackers) } do %>
@@ -26,9 +28,42 @@
     </div>
   <% end %>
 
-  <div id="sla-definitions-tables">
-    <% selected.each do |tracker| %>
-      <%= render 'sla_policies/definition_table', policy: policy, tracker: tracker %>
+  <div class="tw-mb-4 tw-rounded-lg tw-border tw-border-gray-200 tw-bg-white">
+    <div class="tw-flex tw-flex-col tw-gap-3 tw-border-b tw-border-gray-200 tw-px-4 tw-pt-3
+                md:tw-flex-row md:tw-items-end md:tw-justify-between">
+      <div id="sla-tracker-tabs" class="tw-flex tw-min-w-0 tw-flex-wrap tw-gap-1" role="tablist"
+           aria-label="<%= l(:field_sla_trackers) %>">
+        <% selected.each_with_index do |tracker, index| %>
+          <button type="button" role="tab" data-sla-tracker-tab="<%= tracker.id %>"
+                  aria-selected="<%= index.zero? %>"
+                  class="sla-tracker-tab<%= ' is-active' if index.zero? %>"><%= h tracker.name %></button>
+        <% end %>
+      </div>
+      <% if configured_sources.any? %>
+        <div class="tw-flex tw-shrink-0 tw-items-end tw-gap-2 tw-pb-3">
+          <div class="tw-w-52">
+            <label for="sla-clone-tracker-source" class="tw-sr-only"><%= l(:label_sla_clone_tracker_source) %></label>
+            <%= select_tag 'sla_clone_tracker_source',
+                  options_for_select([[l(:label_sla_clone_tracker_placeholder), '']] +
+                    trackers.select { |tracker| configured_sources.include?(tracker.id) }
+                            .map { |tracker| [tracker.name, tracker.id] }),
+                  id: 'sla-clone-tracker-source',
+                  class: "#{sla_input_classes} sla-clone-tracker-select",
+                  data: { sla_select: true } %>
+          </div>
+          <button type="button" id="sla-clone-tracker-button"
+                  data-endpoint="<%= clone_tracker_project_sla_policy_path(project) %>"
+                  data-confirm="<%= l(:text_sla_clone_tracker_confirm) %>"
+                  class="<%= sla_secondary_button_classes %>"><%= l(:button_sla_clone_tracker) %></button>
+        </div>
+      <% end %>
+    </div>
+
+  <div id="sla-definitions-tables" class="tw-p-4">
+    <% selected.each_with_index do |tracker, index| %>
+      <%= render 'sla_policies/definition_table', policy: policy, tracker: tracker,
+                 hidden: index.positive? %>
     <% end %>
+  </div>
   </div>
 <% end %>

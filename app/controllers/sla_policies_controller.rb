@@ -158,6 +158,44 @@ class SlaPoliciesController < ApplicationController
            status: :unprocessable_entity
   end
 
+  # Copies all priority targets from one configured tracker into another tracker in this project.
+  def clone_tracker
+    @sla_policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
+    source_id = params[:source_tracker_id].to_i
+    target_id = params[:target_tracker_id].to_i
+    project_tracker_ids = @project.trackers.ids
+    inherited_source = forking_from_inherited? ? inherited_seed_source : nil
+    config_source = inherited_source || @sla_policy
+    source_definitions = config_source.sla_definitions.where(tracker_id: source_id)
+    selected_ids = config_source.selected_tracker_ids_or_nil
+    valid = source_id != target_id && project_tracker_ids.include?(source_id) &&
+            project_tracker_ids.include?(target_id) && source_definitions&.exists? &&
+            (selected_ids.nil? || (selected_ids.include?(source_id) && selected_ids.include?(target_id)))
+    return render json: { error: l(:error_sla_tracker_clone_invalid) },
+                  status: :unprocessable_entity unless valid
+
+    ActiveRecord::Base.transaction do
+      if inherited_source
+        seed_scalars_from!(inherited_source)
+        @sla_policy.coverage_hours = '24x7'
+        @sla_policy.inherits_config = false
+        @sla_policy.save!
+        copy_configuration_from!(inherited_source)
+      end
+      source_definitions = @sla_policy.sla_definitions.where(tracker_id: source_id)
+      @sla_policy.sla_definitions.where(tracker_id: target_id).delete_all
+      source_definitions.find_each do |definition|
+        attributes = definition.attributes.slice(*SlaDefinition::COPY_ATTRIBUTES)
+        attributes['tracker_id'] = target_id
+        @sla_policy.sla_definitions.create!(attributes)
+      end
+    end
+    SlaPolicyRecalculationJob.perform_later(@project.id) if params[:recalculate].to_s == '1'
+    render json: { message: l(:text_sla_tracker_clone_saved) }
+  rescue ActiveRecord::RecordInvalid => e
+    render json: { error: e.record.errors.full_messages.join(', ') }, status: :unprocessable_entity
+  end
+
   # B3 — "Revert to inherited policy": deletes THIS project's own policy row (cascading to its
   # definitions/status mappings, per their `dependent: :destroy`) so the project falls back to
   # its nearest ancestor's policy. Never touches `sla_results` — the recalculation job UPDATES

@@ -7,6 +7,7 @@ Rails.application.routes.draw do
     resources :sla_dashboard, only: [:index], controller: 'sla_dashboard'
     resource :sla_policy, only: [:edit, :update, :destroy], controller: 'sla_policies' do
       patch :target, action: :update_target
+      patch :clone_tracker, action: :clone_tracker
     end
     resource :sla_notification_setting, only: [:update], controller: 'sla_notification_settings'
   end

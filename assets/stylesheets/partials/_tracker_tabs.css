@@ -1,0 +1,33 @@
+/* Tracker tabs need an explicit component state because Purplemine2 styles every bare button. */
+button.sla-tracker-tab {
+  appearance: none;
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0.5rem 0.5rem 0 0;
+  box-shadow: none !important;
+  color: #4b5563 !important; /* gray-600 */
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 0.625rem 1rem;
+}
+
+button.sla-tracker-tab:hover {
+  background: #f9fafb !important; /* gray-50 */
+  color: #1d4ed8 !important; /* primary-700 */
+}
+
+button.sla-tracker-tab.is-active {
+  background: #eff6ff !important; /* primary-50 */
+  border-bottom-color: #2563eb !important; /* primary-600 */
+  color: #1d4ed8 !important; /* primary-700 */
+}
+
+/* Match the Flowbite Clone policy button's py-2.5 height. Tom Select copies this class from the
+ * original select onto its wrapper, giving us a stable hook without relying on generated DOM. */
+.ts-wrapper.sla-clone-tracker-select .ts-control {
+  min-height: 2.625rem;
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}
