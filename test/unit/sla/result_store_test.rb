@@ -24,8 +24,7 @@ class Sla::ResultStoreTest < ActiveSupport::TestCase
     @base    = Time.zone.local(2026, 6, 1, 9, 0, 0)
 
     @policy = SlaPolicy.create!(project_id: @project.id, enabled: true, coverage_hours: '24x7',
-                                first_response_rule: 'either', at_risk_threshold: 80,
-                                pause_enabled: true)
+                                first_response_rule: 'either', at_risk_threshold: 80)
     { created: NEW, work_started: WORK, resolved: RESOLVED }.each do |role, status_id|
       SlaStatusMapping.create!(sla_policy: @policy, role: role.to_s, status_id: status_id)
     end

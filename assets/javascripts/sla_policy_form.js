@@ -553,7 +553,7 @@
 
   // --- SLA tracking off => the configuration sections are locked ------------------------------
   // Server-rendered on load (SlaPoliciesHelper#sla_tracking_off?). Mirrored here so flipping the
-  // General switch locks or unlocks SLA Targets, Measurement Rules, Exclusions and Notifications
+  // General switch locks or unlocks SLA Targets, Measurement Rules and Notifications
   // straight away, instead of the page claiming they are editable until a save lands. Nothing here
   // decides anything the server doesn't re-decide on save — it only stops the UI from lying between
   // the flip and the save.
@@ -595,6 +595,27 @@
     // The attribute is on every nav row, true or false (see _nav.html.erb) — match on the value.
     document.querySelectorAll('[data-sla-lockable="true"]').forEach(function (link) {
       link.classList.toggle('is-locked', locked);
+    });
+  }
+
+  function saveTracking(input) {
+    var container = input.closest('#sla-general-form, #sla-enablement-form');
+    if (!container) { return; }
+
+    input.disabled = true;
+    var data = input.name === 'sla_policy[enablement]' ? { enablement: input.value } :
+      { enabled: input.checked ? '1' : '0' };
+    jQuery.ajax({
+      url: container.getAttribute('data-tracking-url'),
+      method: 'PATCH',
+      dataType: 'json',
+      headers: csrfHeaders(),
+      data: data
+    }).done(function () {
+      window.location.reload();
+    }).fail(function (xhr) {
+      input.disabled = false;
+      window.alert((xhr.responseJSON || {}).error || 'Unable to save SLA Tracking');
     });
   }
 
@@ -667,7 +688,10 @@
     });
 
     jQuery(document).on('change',
-      'input[name="sla_policy[enabled]"], input[name="sla_policy[enablement]"]', syncLocks);
+      'input[name="sla_policy[enabled]"], input[name="sla_policy[enablement]"]', function () {
+        syncLocks();
+        saveTracking(this);
+      });
 
     jQuery(document).on('change', '[data-sla-reveals]', syncReveals);
     jQuery(document).on('change',

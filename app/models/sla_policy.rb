@@ -38,7 +38,7 @@ class SlaPolicy < ActiveRecord::Base
 
   scope :enabled, -> { where(enabled: true) }
 
-  # Status IDs configured for a milestone role (created / work_started / resolved / pause).
+  # Status IDs configured for a milestone role (created / work_started / resolved).
   def status_ids_for(role)
     sla_status_mappings.where(role: role.to_s).pluck(:status_id)
   end
@@ -56,7 +56,7 @@ class SlaPolicy < ActiveRecord::Base
 
   # True for a LIGHTWEIGHT row: one that carries only the enabled DECISION for its project and
   # inherits every configuration field (coverage, calendar, first-response rule, at-risk threshold,
-  # pause, plus definitions and status mappings) from the nearest self-defining ancestor. Written
+  # definitions and status mappings) from the nearest self-defining ancestor. Written
   # by the tri-state control on the settings tab; see migration 005.
   def inherits_config?
     !!inherits_config

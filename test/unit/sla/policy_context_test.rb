@@ -13,8 +13,7 @@ class Sla::PolicyContextTest < ActiveSupport::TestCase
     Setting.plugin_redmine_sla_compliance = {}
     @project = Project.find(1)
     @policy = SlaPolicy.create!(project_id: @project.id, enabled: true, coverage_hours: '24x7',
-                                first_response_rule: 'either', at_risk_threshold: 80,
-                                pause_enabled: true)
+                                first_response_rule: 'either', at_risk_threshold: 80)
   end
 
   teardown do

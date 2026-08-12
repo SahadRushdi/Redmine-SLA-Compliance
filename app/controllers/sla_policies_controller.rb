@@ -15,7 +15,7 @@ class SlaPoliciesController < ApplicationController
   # every key here must appear there (pinned by a test). A submit carries the section it came from
   # and may only rewrite that section's slice of the policy — otherwise saving, say, General would post no
   # status_mappings and silently wipe every milestone status configured under Measurement Rules.
-  POLICY_SECTIONS = %w[general measurement targets exclusions].freeze
+  POLICY_SECTIONS = %w[general measurement targets].freeze
 
   # The tri-state SLA on/off control offered to a project that inherits its configuration. It is
   # NOT one of POLICY_SECTIONS: those all write policy fields through #policy_params, whereas this
@@ -29,14 +29,34 @@ class SlaPoliciesController < ApplicationController
   # allow-list and the set copied when a section other than General creates the row
   # (see #seed_scalars_from!). The two must not drift apart.
   POLICY_ATTRIBUTES = %i[enabled coverage_hours first_response_rule
-                         at_risk_threshold stale_threshold_days pause_enabled].freeze
+                         at_risk_threshold stale_threshold_days].freeze
 
   # Milestone roles owned by each section; roles NOT listed for the posted section are left
   # untouched. Every role in SlaStatusMapping::ROLES must appear in exactly one entry.
-  SECTION_STATUS_ROLES = {
-    'measurement' => %w[created work_started resolved],
-    'exclusions' => %w[pause]
-  }.freeze
+  SECTION_STATUS_ROLES = { 'measurement' => %w[created work_started resolved] }.freeze
+
+  # SLA Tracking is the one General setting and persists as soon as it changes.
+  def update_tracking
+    if params[:enablement].present?
+      return render_403 unless enablement_offered?
+
+      case posted_enablement_value(params[:enablement])
+      when 'inherit'  then revert_to_inherited_enablement
+      when 'enabled'  then write_lightweight_policy(true)
+      when 'disabled' then write_lightweight_policy(false)
+      end
+    else
+      policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
+      policy.update!(enabled: ActiveModel::Type::Boolean.new.cast(params[:enabled]),
+                     inherits_config: false)
+      queue_recalculation
+    end
+
+    flash.discard
+    render json: { message: l(:notice_successful_update) }
+  rescue ActiveRecord::RecordInvalid => e
+    render json: { error: e.record.errors.full_messages.join(', ') }, status: :unprocessable_entity
+  end
 
   # GET /projects/:project_id/sla_policy/edit (js only):
   #   ?tracker_id=N  -> re-render the definition rows for that tracker (from saved data)
@@ -357,7 +377,11 @@ class SlaPoliciesController < ApplicationController
   end
 
   def posted_enablement
-    value = params.fetch(:sla_policy, {})[:enablement].to_s
+    posted_enablement_value(params.fetch(:sla_policy, {})[:enablement])
+  end
+
+  def posted_enablement_value(raw_value)
+    value = raw_value.to_s
     ENABLEMENT_CHOICES.include?(value) ? value : 'inherit'
   end
 

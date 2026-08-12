@@ -15,7 +15,7 @@ module Sla
   # behaves as "not configured" — the classifier then yields `no_sla / not_configured`.
   class PolicyContext
     # Milestone roles, mirroring SlaStatusMapping::ROLES. Exposed to the classifier as symbols.
-    ROLES = %w[created work_started resolved pause].freeze
+    ROLES = %w[created work_started resolved].freeze
 
     # Resolve the effective policy for +project+ (inheriting up the tree) and build a context.
     def self.for_project(project)
@@ -69,7 +69,7 @@ module Sla
 
     private
 
-    # {created: [id, ...], work_started: [...], resolved: [...], pause: [...]} from one query.
+    # {created: [id, ...], work_started: [...], resolved: [...]} from one query.
     def build_status_roles(policy)
       grouped = policy.sla_status_mappings.to_a.group_by(&:role)
       ROLES.each_with_object({}) do |role, roles|

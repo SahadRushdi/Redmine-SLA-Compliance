@@ -130,10 +130,9 @@ en:
   label_sla_section_general: "General"
   label_sla_section_measurement: "Measurement Rules"
   label_sla_section_targets: "SLA Targets"
-  label_sla_section_exclusions: "Exclusions"
   label_sla_section_notifications: "Notifications"
 
-  # Shown at the top of SLA Targets, Measurement Rules, Exclusions and Notifications while SLA
+  # Shown at the top of SLA Targets, Measurement Rules and Notifications while SLA
   # tracking is off — the only thing on those sections that explains why their controls are inert.
   text_sla_section_locked: "SLA tracking is off for this project — turn it on under %{link} to edit these settings."
   label_sla_section_locked_title: "Locked"
@@ -211,10 +210,6 @@ en:
   label_sla_stale_threshold_placeholder_inherited: "Inherited: %{days}"
   label_sla_stale_threshold_placeholder_unset: "Not set"
 
-  label_sla_pause_section: "Exclusions (Pauses)"
-  label_sla_pause_card: "Pause Handling"
-  field_sla_pause_statuses: "Pause statuses"
-  field_sla_pause_enabled: "Pause handling enabled"
 
   label_sla_clone_from_project_card: "Clone from existing project"
   field_sla_clone_source: "Project"
@@ -229,9 +224,7 @@ en:
   button_sla_save_targets: "Save SLA Targets"
   button_sla_save_and_recalculate: "Save and Recalculate"
   button_sla_recalculate: "Recalculate"
-  button_sla_save_general: "Save General Settings"
   button_sla_save_measurement: "Save Measurement Rules"
-  button_sla_save_exclusions: "Save Exclusions"
   button_sla_save_notifications: "Save Notification Settings"
 
   # --- Inheritance notice + Revert (B3) ------------------------------------------------------
@@ -250,7 +243,6 @@ en:
   label_sla_enablement_disabled: "Disabled"
   label_sla_enablement_currently_on: "currently on"
   label_sla_enablement_currently_off: "currently off"
-  button_sla_save_enablement: "Save SLA Status"
   label_sla_recalculate_historical: "Recalculate historical tickets"
   label_sla_recalculation_progress: "Historical ticket recalculation progress"
   notice_sla_recalculation_queued: "Historical recalculation has been queued."

@@ -110,14 +110,17 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select "a[data-sla-section-link='general'].is-active"
     assert_select "[data-sla-panel='general']:not(.hidden)"
     assert_select "[data-sla-panel='targets'].hidden"
+    assert_select "[data-sla-panel='exclusions']", 0
+    assert_select '#sla-general-form button[type=submit]', 0,
+                  'SLA Tracking autosaves and General must not expose a save button'
   end
 
   test "the requested section is the one rendered open" do
-    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'exclusions' }
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'measurement' }
     assert_response :success
 
-    assert_select "a[data-sla-section-link='exclusions'].is-active"
-    assert_select "[data-sla-panel='exclusions']:not(.hidden)"
+    assert_select "a[data-sla-section-link='measurement'].is-active"
+    assert_select "[data-sla-panel='measurement']:not(.hidden)"
     assert_select "[data-sla-panel='general'].hidden"
   end
 
@@ -161,9 +164,9 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
 
   # Every section EXCEPT General, which owns the switch that would unlock the others — locking it
   # would be a one-way door.
-  LOCKED_PANELS = %w[targets measurement exclusions notifications].freeze
+  LOCKED_PANELS = %w[targets measurement notifications].freeze
 
-  test "the four configuration sections are locked while SLA tracking is off" do
+  test "the configuration sections are locked while SLA tracking is off" do
     SlaPolicy.create!(project_id: @project.id, enabled: false)
 
     get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
@@ -602,7 +605,7 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_response :success
 
     # Same sidebar and same sections as the project it inherits from — no read-only summary.
-    %w[general measurement targets exclusions notifications].each do |key|
+    %w[general measurement targets notifications].each do |key|
       assert_select "a[data-sla-section-link='#{key}']"
     end
     assert_select '#sla-policy-form'
@@ -625,11 +628,11 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     get :settings, params: { id: child.identifier, tab: 'sla_policy' }
     assert_response :success
 
-    assert_select 'form#sla-enablement-form' do
+    assert_select '#sla-enablement-form' do
       assert_select "input[name='sla_policy[enablement]'][value='inherit'][checked]"
       assert_select "input[name='sla_policy[enablement]'][value='enabled']:not([checked])"
       assert_select "input[name='sla_policy[enablement]'][value='disabled']:not([checked])"
-      assert_select "input[name='section'][value='enablement']", 1
+      assert_select '[data-tracking-url]', 1
     end
   end
 

@@ -55,8 +55,7 @@ class Sla::SweepTest < ActiveSupport::TestCase
     Issue.where(project_id: @project.id).open.update_all(status_id: CLOSED)
 
     @policy = SlaPolicy.create!(project_id: @project.id, enabled: true, coverage_hours: '24x7',
-                                first_response_rule: 'either', at_risk_threshold: 80,
-                                pause_enabled: true)
+                                first_response_rule: 'either', at_risk_threshold: 80)
     SlaStatusMapping.create!(sla_policy: @policy, role: 'created', status_id: NEW)
     SlaDefinition.create!(sla_policy: @policy, tracker_id: TRACKER, priority_id: PRIORITY,
                           response_seconds: 3600) # 1h response target

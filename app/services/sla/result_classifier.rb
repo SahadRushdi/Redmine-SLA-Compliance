@@ -6,7 +6,7 @@ module Sla
   # Produces an issue's SLA result: primary_state (met / breached / no_sla), the No-SLA sub-reason,
   # per-milestone elapsed seconds, deviation (breaches only), the at-risk flag, and projected
   # breach_at. This is the step that wires the engine together — timeline (2.1), the coverage
-  # calculator (2.2/2.3), pauses (2.4), first-response (2.5), and at-risk (2.7).
+  # calculator (2.2/2.3), first-response (2.5), and at-risk (2.7).
   #
   # It emits a plain Result value object and performs NO database writes (the Phase 3 sweep is
   # responsible for persisting to sla_results). Inputs are already-resolved config so the whole
@@ -47,12 +47,12 @@ module Sla
                         :update_frequency_seconds, :deviation_seconds, :cycle_started_at,
                         :resolved_at, keyword_init: true)
 
-    # @param policy [#first_response_rule,
-    #   #at_risk_threshold, #pause_enabled, nil] the effective SlaPolicy (nil ⇒ not configured).
+    # @param policy [#first_response_rule, #at_risk_threshold, nil] the effective SlaPolicy
+    #   (nil ⇒ not configured).
     # @param definition [#response_seconds, #workaround_seconds, #resolution_seconds,
     #   #any_target?, nil] the SlaDefinition for this tracker×priority (nil ⇒ not tracked).
     # @param tracker_configured [Boolean] whether the tracker is under SLA at all.
-    # @param status_roles [Hash] {created:, work_started:, resolved:, pause:} => [status_id, ...].
+    # @param status_roles [Hash] {created:, work_started:, resolved:} => [status_id, ...].
     # @param current_status_id [Integer, nil] the issue's status RIGHT NOW — see #closed_at rung 2.
     # @param fallback_resolved_at [Time, nil] the issue's own `closed_on` — see #closed_at rungs 2/3.
     # @param non_human_author_ids [Array<Integer>, #call] journal authors that are not a real person;
@@ -145,7 +145,7 @@ module Sla
       return nil if target.nil? && !best_effort
 
       gaps = UpdateFrequencyEvaluator.new(
-        @timeline, target_seconds: target, pause: pause, from: clock_start,
+        @timeline, target_seconds: target, calculator: calculator, from: clock_start,
         to: closed_at || @now, non_human_author_ids: non_human_author_ids
       ).evaluate
 
@@ -172,7 +172,7 @@ module Sla
       return nil if target.nil? && !best_effort
 
       end_time = achieved_at || closed_at || @now
-      elapsed  = pause.net_elapsed(clock_start, end_time)
+      elapsed  = calculator.elapsed(clock_start, end_time)
       { kind: kind, target: target, elapsed: elapsed,
         breached: best_effort ? false : elapsed > target,
         pending: achieved_at.nil? && open?, best_effort: best_effort }
@@ -314,14 +314,6 @@ module Sla
                           .map(&:at).max
         [reopen, @timeline.created_event&.at].compact.max
       end
-    end
-
-    def pause
-      @pause ||= PauseCalculator.new(
-        @timeline,
-        pause_status_ids: (@policy.pause_enabled ? role(:pause) : []),
-        calculator: calculator
-      )
     end
 
     def calculator

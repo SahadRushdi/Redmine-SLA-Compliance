@@ -37,7 +37,6 @@ module Sla
         first_response_rule: @source.first_response_rule,
         at_risk_threshold: @source.at_risk_threshold,
         stale_threshold_days: @source.stale_threshold_days,
-        pause_enabled: @source.pause_enabled,
         # Restricted to trackers THIS project has, like the definitions below: a selection naming a
         # tracker the project cannot use would ask the form for a table it can never render. nil
         # (source never saved a selection) is passed through as nil, so the form falls back to

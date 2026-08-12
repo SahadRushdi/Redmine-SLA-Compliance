@@ -1,8 +1,8 @@
 <%# The four policy sections of the sectioned settings tab (Steps 4.2–4.5, 4.7, 4.8). %>
 <%# Locals: project, policy, current (active section key), inherited_source. %>
 <%# %>
-<%# Panels are rendered in the sidebar's own order (General, SLA Targets, Measurement Rules, %>
-<%# Exclusions). Only one is visible at a time, so this is for the no-JS fallback and for reading %>
+<%# Panels are rendered in the sidebar's own order (General, SLA Targets, Measurement Rules). %>
+<%# Only one is visible at a time, so this is for the no-JS fallback and for reading %>
 <%# the file — but a file whose order contradicts the nav is a trap for the next person. %>
 <%# %>
 <%# Each section is its OWN <form> posting the same PUT with a hidden `section` field, so a save %>
@@ -73,17 +73,6 @@
     <%= render layout: 'sla_policies/lock', locals: { project: project, locked: locked } do %>
       <%= render 'sla_policies/measurement', project: project, policy: policy %>
       <%= render 'sla_policies/save_bar', label: l(:button_sla_save_measurement) %>
-    <% end %>
-  <% end %>
-<% end %>
-
-<%= render layout: 'sla_policies/panel', locals: { key: 'exclusions', current: current } do %>
-  <%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-exclusions-form' do %>
-    <%= hidden_field_tag 'tab', 'sla_policy' %>
-    <%= hidden_field_tag 'section', 'exclusions' %>
-    <%= render layout: 'sla_policies/lock', locals: { project: project, locked: locked } do %>
-      <%= render 'sla_policies/pause', project: project, policy: policy %>
-      <%= render 'sla_policies/save_bar', label: l(:button_sla_save_exclusions) %>
     <% end %>
   <% end %>
 <% end %>

@@ -15,9 +15,7 @@
                inherited_on: sla_inherited_enablement_on?(project) %>
   <% end %>
 
-  <%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-general-form' do %>
-    <%= hidden_field_tag 'tab', 'sla_policy' %>
-    <%= hidden_field_tag 'section', 'general' %>
+  <div id="sla-general-form" data-tracking-url="<%= tracking_project_sla_policy_path(project) %>">
 
     <%# The setting is one row — name on the left and control on the right. %>
     <% if inherited_source.blank? %>
@@ -32,8 +30,7 @@
     <%# submits; the clone prefill still rebuilds every policy section for review. %>
     <%= render 'sla_policies/clone', project: project, policy: policy %>
 
-    <%= render 'sla_policies/save_bar', label: l(:button_sla_save_general) %>
-  <% end %>
+  </div>
 
   <%# B3 — "Revert to inherited policy": only offered when this project has its OWN row AND some %>
   <%# further ancestor also has one to fall back to (otherwise there'd be nothing to revert TO). %>

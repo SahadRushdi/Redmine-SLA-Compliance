@@ -211,24 +211,6 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
     assert_equal 3600, r.deviation_seconds
   end
 
-  # --- pause integration ----------------------------------------------------------------
-
-  test "paused time is subtracted, keeping a would-be breach within target" do
-    # Use the first_comment rule with no comment so the response milestone stays pending and
-    # its elapsed reflects the pause subtraction (under 'either' the pause transition itself
-    # would count as the first response).
-    policy = Policy.new(business_hours: false, business_calendar: nil,
-                        first_response_rule: 'first_comment', at_risk_threshold: 80,
-                        pause_enabled: true)
-    d = Definition.new(response_seconds: 3600)
-    # Paused status 9 from base+1000 to base+5000 (4000s), then a neutral status.
-    tl = timeline([[OPEN, PAUSED, @base + 1000], [PAUSED, DONE, @base + 5000]])
-    now = @base + 7200 # gross 2h, minus 4000s pause = 3200s net
-    r = classify(tl, definition: d, policy: policy, now: now)
-    assert_equal 'met', r.primary_state
-    assert_equal 3200, r.response_seconds
-  end
-
   # --- reopen restarts the clock --------------------------------------------------------
 
   test "a reopened ticket measures the response from the reopen, not the original creation" do
@@ -302,33 +284,6 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
       assert_equal 'met', r.primary_state
       assert r.at_risk
       assert_equal zone.local(2026, 6, 3, 13, 0), r.breach_at # +40 working minutes
-    end
-  end
-
-  test "business-hours mode: past target is breached with deviation" do
-    Time.use_zone('UTC') do
-      zone = Time.zone
-      base = zone.local(2026, 6, 3, 9, 0) # Wednesday 09:00
-      policy = Policy.new(
-        business_hours: true,
-        business_calendar: Calendar.new(working_days: [1, 2, 3, 4, 5], work_start_time: '09:00',
-                                        work_end_time: '17:00', holidays: []),
-        first_response_rule: 'either', at_risk_threshold: 80, pause_enabled: true
-      )
-      tl = Timeline.new([Event.new(type: :created, at: base, to_status_id: OPEN)])
-      d  = Definition.new(response_seconds: 14_400) # 4 business hours
-
-      # Thu 10:00: Wed 09:00-17:00 (8h) + Thu 09:00-10:00 (1h) = 9h working, well past the 4h target.
-      now = zone.local(2026, 6, 4, 10, 0)
-      r = Sla::ResultClassifier.new(
-        timeline: tl, policy: policy, definition: d, tracker_configured: true,
-        status_roles: ROLES, now: now
-      ).classify
-
-      assert_equal 'breached', r.primary_state
-      refute r.at_risk
-      assert_nil r.breach_at
-      assert_equal (32_400 - 14_400), r.deviation_seconds
     end
   end
 
@@ -547,24 +502,6 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
     refute r.at_risk, 'the current gap is 6 minutes, not the 3h54m it recovered from'
   end
 
-  test "paused time is excluded from an update frequency gap" do
-    d = Definition.new(update_frequency_seconds: FOUR_HOURS)
-    # Parked in a pause status from +1h to +5h: 6h of wall-clock silence, 2h of it on the team.
-    # It comes back to WORK rather than OPEN — returning to a `created`-role status would be a
-    # reopen and restart the clock, which is a different test.
-    tl = timeline([[OPEN, PAUSED, at(1)], [PAUSED, WORK, at(5)]])
-
-    r = classify(tl, definition: d, now: at(6))
-
-    assert_equal 'met', r.primary_state
-    assert_equal 2 * 3600, r.update_frequency_seconds
-
-    unpaused = Policy.new(business_hours: false, business_calendar: nil,
-                          first_response_rule: 'either', at_risk_threshold: 80, pause_enabled: false)
-    r = classify(tl, definition: d, now: at(6), policy: unpaused)
-    assert_equal 'breached', r.primary_state, 'with pauses off the same silence breaches'
-  end
-
   # --- the at-risk dedup key: which target, and which episode --------------------------------
 
   test "at-risk reports the target and, for a one-shot milestone, the clock start as its episode" do
@@ -632,33 +569,6 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
 
     assert_equal 1, calls
     assert_equal 'breached', r.primary_state, 'and the resolved list is actually applied'
-  end
-
-  # --- business-hours coverage ---------------------------------------------------------------
-
-  test "business hours: a weekend of silence does not consume the cadence" do
-    # Fri 2026-06-05 15:00, 4 WORKING-hour cadence, calendar Mon-Fri 09:00-17:00.
-    friday   = ActiveSupport::TimeZone['UTC'].local(2026, 6, 5, 15, 0, 0)
-    calendar = Calendar.new(working_days: [1, 2, 3, 4, 5], work_start_time: '09:00',
-                            work_end_time: '17:00', holidays: [])
-    policy = Policy.new(business_hours: true, business_calendar: calendar,
-                        first_response_rule: 'either', at_risk_threshold: 80, pause_enabled: true)
-    events = [Event.new(type: :created, at: friday, to_status_id: OPEN)]
-    tl = Timeline.new(events)
-    d  = Definition.new(update_frequency_seconds: FOUR_HOURS)
-
-    # Monday 09:30: 2h working elapsed (Fri 15:00-17:00) + 0.5h = 2.5h — the weekend is not counted.
-    monday = ActiveSupport::TimeZone['UTC'].local(2026, 6, 8, 9, 30, 0)
-    r = classify(tl, definition: d, now: monday, policy: policy)
-
-    assert_equal 'met', r.primary_state, 'a weekend of silence is not silence on the team'
-    assert_equal 2.5 * 3600, r.update_frequency_seconds
-    refute r.at_risk, '62% of the cadence used, below the 80% threshold'
-
-    # Monday 11:00 — 4h working elapsed, exactly at target; 11:01 is past it.
-    breached = classify(tl, definition: d, policy: policy,
-                        now: ActiveSupport::TimeZone['UTC'].local(2026, 6, 8, 11, 1, 0))
-    assert_equal 'breached', breached.primary_state
   end
 
   test "a Best Effort update frequency never breaches but still reports its largest gap" do

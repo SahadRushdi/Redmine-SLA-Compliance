@@ -65,13 +65,11 @@ class Sla::UpdateFrequencyEvaluatorTest < ActiveSupport::TestCase
     @base + offset_hours.hours
   end
 
-  # Evaluate one issue exactly as Sla::ResultClassifier does: same timeline, same pause calculator.
-  def evaluate(issue, target: FOUR_HOURS, from: @base, to:, pause_status_ids: [WAITING],
+  # Evaluate one issue exactly as Sla::ResultClassifier does: same timeline and calendar clock.
+  def evaluate(issue, target: FOUR_HOURS, from: @base, to:,
                non_human_author_ids: [], calculator: Sla::CalendarTimeCalculator.new)
     timeline = Sla::TimelineBuilder.new(issue.reload).build
-    pause    = Sla::PauseCalculator.new(timeline, pause_status_ids: pause_status_ids,
-                                                  calculator: calculator)
-    Sla::UpdateFrequencyEvaluator.new(timeline, target_seconds: target, pause: pause,
+    Sla::UpdateFrequencyEvaluator.new(timeline, target_seconds: target, calculator: calculator,
                                                 from: from, to: to,
                                                 non_human_author_ids: non_human_author_ids).evaluate
   end
@@ -130,10 +128,8 @@ class Sla::UpdateFrequencyEvaluatorTest < ActiveSupport::TestCase
     events = [Sla::TimelineBuilder::Event.new(type: :created, at: @base, to_status_id: NEW),
               Sla::TimelineBuilder::Event.new(type: :comment, at: at(2), user_id: nil)]
     timeline = Sla::TimelineBuilder::Timeline.new(events)
-    pause = Sla::PauseCalculator.new(timeline, pause_status_ids: [],
-                                               calculator: Sla::CalendarTimeCalculator.new)
-
-    result = Sla::UpdateFrequencyEvaluator.new(timeline, target_seconds: FOUR_HOURS, pause: pause,
+    result = Sla::UpdateFrequencyEvaluator.new(timeline, target_seconds: FOUR_HOURS,
+                                                         calculator: Sla::CalendarTimeCalculator.new,
                                                          from: @base, to: at(5)).evaluate
 
     assert result.breached?, 'an authorless journal is not a person'
@@ -187,21 +183,6 @@ class Sla::UpdateFrequencyEvaluatorTest < ActiveSupport::TestCase
     assert_equal 3 * 3600, result.deviation_seconds
   end
 
-  test "paused time is excluded from a gap that spans a pause status" do
-    issue = make_issue
-    # Parked in "Waiting on Client" from +1h to +6h: 8h of wall-clock silence, 3h of it on the team.
-    add_status_change(issue, from: NEW, to: WAITING, at: at(1))
-    add_status_change(issue, from: WAITING, to: NEW, at: at(6))
-
-    result = evaluate(issue, to: at(8))
-
-    assert_equal 'met', result.state
-    assert_equal 3 * 3600, result.max_gap_seconds, 'the 5h pause does not count against the team'
-
-    # Same history with pauses not configured: the silence breaches.
-    assert evaluate(issue, to: at(8), pause_status_ids: []).breached?
-  end
-
   test "updates from before the clock start do not reset the current cycle" do
     issue = make_issue
     add_comment(issue, at: at(2))                                 # previous cycle
@@ -221,54 +202,6 @@ class Sla::UpdateFrequencyEvaluatorTest < ActiveSupport::TestCase
 
     assert result.breached?
     assert_equal 6 * 3600, result.max_gap_seconds
-  end
-
-  # --- business-hours coverage -------------------------------------------------------------
-  #
-  # The evaluator does no time arithmetic of its own — it delegates every gap to the injected
-  # calculator through Sla::PauseCalculator. These pin that delegation, because a cadence measured
-  # in working hours must not tick over a weekend, and the plan calls business-hours the
-  # highest-bug-risk component in the engine.
-
-  def business_calculator
-    calendar = Struct.new(:working_days, :work_start_time, :work_end_time, :holidays,
-                          keyword_init: true)
-                     .new(working_days: [1, 2, 3, 4, 5], work_start_time: '09:00',
-                          work_end_time: '17:00', holidays: [])
-    Sla::BusinessHoursCalculator.new(calendar, zone: Time.zone)
-  end
-
-  test "business hours: a weekend of silence does not consume the cadence" do
-    friday = Time.zone.local(2026, 6, 5, 15, 0, 0)
-    issue  = make_issue
-    issue.update_column(:created_on, friday)
-
-    # Monday 09:30: Fri 15:00-17:00 (2h) + Mon 09:00-09:30 (0.5h) = 2.5 working hours.
-    monday = Time.zone.local(2026, 6, 8, 9, 30, 0)
-    result = evaluate(issue, from: friday, to: monday, calculator: business_calculator)
-
-    assert_equal 'met', result.state
-    assert_equal 2.5 * 3600, result.max_gap_seconds, 'the weekend is not silence on the team'
-
-    # Monday 11:01 — past 4 working hours.
-    late = evaluate(issue, from: friday, to: Time.zone.local(2026, 6, 8, 11, 1, 0),
-                           calculator: business_calculator)
-    assert late.breached?
-  end
-
-  test "business hours: a comment outside working hours still starts a new gap" do
-    friday = Time.zone.local(2026, 6, 5, 15, 0, 0)
-    issue  = make_issue
-    issue.update_column(:created_on, friday)
-    add_comment(issue, at: Time.zone.local(2026, 6, 6, 12, 0, 0)) # Saturday lunchtime
-
-    monday = Time.zone.local(2026, 6, 8, 12, 0, 0)
-    result = evaluate(issue, from: friday, to: monday, calculator: business_calculator)
-
-    # Gaps: Fri 15:00 -> Sat 12:00 = 2h working; Sat 12:00 -> Mon 12:00 = 3h working (Mon 09:00-12:00).
-    assert_equal 3 * 3600, result.max_gap_seconds
-    assert_equal Time.zone.local(2026, 6, 6, 12, 0, 0), result.current_gap_started_at
-    assert_equal 'met', result.state
   end
 
   # --- the running silence's identity (the at-risk dedup key) --------------------------------

@@ -20,7 +20,6 @@ module SlaPoliciesHelper
     { key: 'general',       permission: :edit_sla_policy },
     { key: 'targets',       permission: :edit_sla_policy },
     { key: 'measurement',   permission: :edit_sla_policy },
-    { key: 'exclusions',    permission: :edit_sla_policy },
     { key: 'notifications', permission: :manage_sla_notifications }
   ].freeze
 
@@ -81,7 +80,7 @@ module SlaPoliciesHelper
   # configuring a policy that does nothing. They stay VISIBLE and readable — only their controls
   # are disabled (see sla_policies/_lock.html.erb). General is deliberately never lockable: it is
   # where tracking gets switched back on, so locking it would be a one-way door.
-  LOCKABLE_SECTIONS = %w[targets measurement exclusions notifications].freeze
+  LOCKABLE_SECTIONS = %w[targets measurement notifications].freeze
 
   def sla_lockable_section?(key)
     LOCKABLE_SECTIONS.include?(key)
@@ -124,7 +123,6 @@ module SlaPoliciesHelper
     'general' => '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
     'measurement' => '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
     'targets' => '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
-    'exclusions' => '<circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/>',
     'notifications' => '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>'
   }.freeze
 

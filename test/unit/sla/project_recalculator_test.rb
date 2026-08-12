@@ -19,8 +19,7 @@ class Sla::ProjectRecalculatorTest < ActiveSupport::TestCase
     @child = Project.find(5)
 
     @policy = SlaPolicy.create!(project_id: @root.id, enabled: true, coverage_hours: '24x7',
-                                first_response_rule: 'either', at_risk_threshold: 80,
-                                pause_enabled: true)
+                                first_response_rule: 'either', at_risk_threshold: 80)
     SlaStatusMapping.create!(sla_policy: @policy, role: 'created', status_id: 1)
     SlaDefinition.create!(sla_policy: @policy, tracker_id: TRACKER, priority_id: PRIORITY,
                           response_seconds: 3600)

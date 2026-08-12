@@ -79,6 +79,30 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_response :forbidden
   end
 
+  test "tracking autosave persists the plain General toggle and queues recalculation" do
+    Sla::RecalculationDispatcher.expects(:call).with(@project)
+
+    patch :update_tracking, params: { project_id: @project.id, enabled: '1' }, xhr: true
+
+    assert_response :success
+    assert policy.enabled?
+    assert_not policy.inherits_config?
+  end
+
+  test "tracking autosave persists an inherited enablement choice without forking configuration" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    Sla::RecalculationDispatcher.expects(:call).with(child)
+
+    patch :update_tracking, params: { project_id: child.id, enablement: 'disabled' }, xhr: true
+
+    assert_response :success
+    saved = SlaPolicy.find_by(project_id: child.id)
+    assert_not saved.enabled?
+    assert saved.inherits_config?
+  end
+
   # --- Step 5.1: the SLA access roles ----------------------------------------------------------
   # rhill (user 4) holds no role and no membership, so nothing but the grant below can let them
   # through. The role itself ticks NO permissions — being named in the plugin settings is the
@@ -856,9 +880,9 @@ class SlaPoliciesControllerTest < ActionController::TestCase
   def build_full_clone_source
     source = build_clone_source
     source.update!(coverage_hours: '24x7', first_response_rule: 'first_comment',
-                   at_risk_threshold: 65, stale_threshold_days: 9, pause_enabled: false)
+                   at_risk_threshold: 65, stale_threshold_days: 9)
     { created: @status_ids.first, work_started: @status_ids.second,
-      resolved: @status_ids.first, pause: @status_ids.second }.each do |role, status_id|
+      resolved: @status_ids.first }.each do |role, status_id|
       source.sla_status_mappings.create!(role: role.to_s, status_id: status_id)
     end
     source
@@ -873,7 +897,6 @@ class SlaPoliciesControllerTest < ActionController::TestCase
                       stale_threshold_days: '3' },
         status_mappings: { created: [@status_ids.second.to_s] } }
     )
-    put :update, params: exclusions_params(sla_policy: { pause_enabled: '1' })
     assert_equal 95, policy.at_risk_threshold, 'precondition: the target owns a different policy'
 
     # The posted section carries what the prefilled form showed for the tracker on screen; the
@@ -895,9 +918,6 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_equal [@status_ids.second], saved.status_ids_for(:work_started)
     assert_equal [@status_ids.first], saved.status_ids_for(:created),
                  "the target's own created-status must be replaced by the source's"
-    # Exclusions
-    refute saved.pause_enabled?
-    assert_equal [@status_ids.second], saved.status_ids_for(:pause)
     # SLA Targets — both the tracker that was on screen and the one that was only in the source.
     assert_equal source.sla_definitions.count, saved.sla_definitions.count
     assert_equal 14_400, saved.sla_definitions
