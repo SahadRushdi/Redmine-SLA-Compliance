@@ -270,13 +270,14 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
 
   test "every active Redmine priority gets target controls without global priority configuration" do
     none = IssuePriority.create!(name: 'None', type: 'IssuePriority', position: 99)
+    tracker_id = @project.trackers.sorted.first.id
+    SlaPolicy.create!(project_id: @project.id, enabled: true, selected_tracker_ids: [tracker_id])
     # A stale value from an older plugin version must no longer hide that priority.
     Setting.plugin_redmine_sla_compliance = { 'unclassified_priority_id' => none.id.to_s }
 
     get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
     assert_response :success
 
-    tracker_id = @project.trackers.sorted.first.id
     assert_select '[data-sla-panel="targets"]' do
       IssuePriority.active.each do |priority|
         assert_select "[data-sla-target-cell][data-tracker-id='#{tracker_id}']" \
@@ -351,7 +352,7 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
 
     assert_response :success
     assert_select "#sla-definitions-table-#{targetless.id}", 1
-    assert_select "select[name='definitions[tracker_ids][]'] option[selected][value='#{targetless.id}']", 1
+    assert_select "#sla-tracker-tabs [data-sla-tracker-tab='#{targetless.id}']", 1
   end
 
   # The Clone card reopens saying where the configuration came from, instead of on a blank picker
@@ -374,10 +375,11 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
   end
 
   test "every configured target type gets its own column, header and inline editor per priority" do
+    tracker_id = @project.trackers.sorted.first.id
+    SlaPolicy.create!(project_id: @project.id, enabled: true, selected_tracker_ids: [tracker_id])
     get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
     assert_response :success
 
-    tracker_id = @project.trackers.sorted.first.id
     priority   = IssuePriority.active.first
     SlaDefinition::TARGET_TYPES.each do |target_type|
       assert_select "[data-sla-target-cell][data-tracker-id='#{tracker_id}']" \
@@ -393,13 +395,41 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     end
   end
 
-  test "tracker selection uses the simple full-width chip picker" do
+  test "an unconfigured policy shows the tracker empty state and labeled add control" do
     get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
 
     assert_response :success
-    assert_select '[data-sla-panel="targets"] h3', text: I18n.t(:field_sla_trackers), count: 1
-    assert_select '#sla-definitions-trackers[data-sla-chips][multiple]' \
-                  "[placeholder='#{I18n.t(:label_sla_tracker_placeholder)}']", 1
+    assert_select '#sla-definitions-trackers', 0
+    assert_select '#sla-tracker-empty:not(.hidden) h3', text: I18n.t(:label_sla_no_configured_trackers), count: 1
+    assert_select '#sla-tracker-empty [data-sla-add-tracker-toggle]', text: I18n.t(:button_sla_add_tracker), count: 1
+    assert_select '#sla-tracker-content.hidden', 1
+  end
+
+
+  test "the add tracker control only lists enabled trackers not already selected" do
+    selected = @project.trackers.sorted.first
+    policy = SlaPolicy.create!(project_id: @project.id, enabled: true,
+                               selected_tracker_ids: [selected.id])
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select "[data-sla-add-tracker='#{selected.id}']", 0
+    (@project.trackers - [selected]).each do |tracker|
+      assert_select "[data-sla-add-tracker='#{tracker.id}']", text: tracker.name, count: 1
+    end
+    assert_select '#sla-tracker-tabs [data-sla-add-tracker-toggle]', text: I18n.t(:button_sla_add_tracker), count: 1
+  end
+
+  test "the add tracker control is hidden when every project tracker is selected" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true,
+                      selected_tracker_ids: @project.trackers.ids)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select '[data-sla-add-tracker]', 0
+    assert_select '[data-sla-add-tracker-toggle]:not(.hidden)', 0
   end
 
   test "selected trackers render as tabs with one target table visible" do

@@ -160,6 +160,55 @@ class SlaPoliciesController < ApplicationController
            status: :unprocessable_entity
   end
 
+  # Tracker membership is managed directly from the tab row. Both mutations are immediate and
+  # project-scoped; a forged tracker id from another project is rejected.
+  def add_tracker
+    tracker = @project.trackers.find_by(id: params[:tracker_id])
+    return render json: { error: l(:error_sla_tracker_invalid) }, status: :unprocessable_entity unless tracker
+
+    @sla_policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
+    ActiveRecord::Base.transaction do
+      source = forking_from_inherited? ? inherited_seed_source : nil
+      seed_scalars_from!(source) if source
+      @sla_policy.coverage_hours = '24x7'
+      @sla_policy.inherits_config = false
+      @sla_policy.save!
+      copy_configuration_from!(source) if source
+      @sla_policy.with_lock do
+        ids = Array(@sla_policy.selected_tracker_ids_or_nil).map(&:to_i)
+        ids = @sla_policy.sla_definitions.distinct.pluck(:tracker_id) if @sla_policy.selected_tracker_ids_or_nil.nil?
+        @sla_policy.update!(selected_tracker_ids: (ids + [tracker.id]).uniq)
+      end
+    end
+
+    render json: { id: tracker.id, name: tracker.name,
+                   table_url: edit_project_sla_policy_path(@project, tracker_id: tracker.id) }
+  rescue ActiveRecord::RecordInvalid => e
+    render json: { error: e.record.errors.full_messages.join(', ') }, status: :unprocessable_entity
+  end
+
+  def remove_tracker
+    tracker = @project.trackers.find_by(id: params[:tracker_id])
+    return render json: { error: l(:error_sla_tracker_invalid) }, status: :unprocessable_entity unless tracker
+
+    @sla_policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
+    ActiveRecord::Base.transaction do
+      source = forking_from_inherited? ? inherited_seed_source : nil
+      seed_scalars_from!(source) if source
+      @sla_policy.coverage_hours = '24x7'
+      @sla_policy.inherits_config = false
+      @sla_policy.save!
+      copy_configuration_from!(source) if source
+      @sla_policy.with_lock do
+        ids = Array(@sla_policy.selected_tracker_ids_or_nil).map(&:to_i)
+        ids = @sla_policy.sla_definitions.distinct.pluck(:tracker_id) if @sla_policy.selected_tracker_ids_or_nil.nil?
+        @sla_policy.update!(selected_tracker_ids: ids - [tracker.id])
+        @sla_policy.sla_definitions.where(tracker_id: tracker.id).delete_all
+      end
+    end
+    render json: { id: tracker.id, message: l(:text_sla_tracker_removed, tracker: tracker.name) }
+  end
+
   # Copies all priority targets from one configured tracker into another tracker in this project.
   def clone_tracker
     @sla_policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
@@ -523,6 +572,8 @@ class SlaPoliciesController < ApplicationController
   # done by setting its rows to "not tracked" (all-blank rows create no record), not by hiding it —
   # so deselecting can never silently discard stored targets.
   def replace_tracker_definitions!
+    return unless params[:definitions].respond_to?(:key?) && params[:definitions].key?(:tracker_ids)
+
     tracker_ids = Array(params.dig(:definitions, :tracker_ids)).map(&:to_i).uniq &
                   @project.trackers.ids
 

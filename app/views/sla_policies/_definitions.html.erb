@@ -1,69 +1,98 @@
-<%# Step 4.4 — SLA targets per tracker × priority: a multi-tracker picker, then one Priority %>
-<%# Targets table per selected tracker, all written by the section's single Save. Trackers come %>
-<%# from the project; priorities and target durations are looked up live (Global Rules 1–3 — %>
-<%# nothing hard-coded). Locals: project, policy. %>
+<%# Tracker membership is autosaved from this tab row; target cells retain their own autosave. %>
 <% trackers = project.trackers.sorted.to_a %>
-<% if trackers.empty? %>
-  <%= render layout: 'sla_policies/card',
-             locals: { title: l(:label_sla_tracker_card) } do %>
-    <p class="tw-m-0 tw-text-sm tw-text-gray-500"><%= l(:text_sla_no_trackers) %></p>
-  <% end %>
-<% else %>
-  <% selected = sla_selected_trackers(project, policy) %>
-  <% selected_ids = selected.map(&:id) %>
-  <% configured_sources = policy.sla_definitions.map(&:tracker_id).uniq & selected_ids %>
+<% selected = sla_selected_trackers(project, policy) %>
+<% selected_ids = selected.map(&:id) %>
+<% available = trackers.reject { |tracker| selected_ids.include?(tracker.id) } %>
+<% configured_sources = policy.sla_definitions.map(&:tracker_id).uniq & selected_ids %>
 
-  <%= render layout: 'sla_policies/card',
-             locals: { title: l(:field_sla_trackers) } do %>
-    <div class="tw-w-full">
-      <%# data-sla-chips (not data-sla-select): the same Tom Select multi-select already used for %>
-      <%# the milestone status pickers, so adding several trackers is one interaction and needs no %>
-      <%# new component (CLAUDE.md — reuse what's already solved). Each selection adds that %>
-      <%# tracker's table below via sla_policy_form.js; nothing is saved until Save Policy. %>
-      <%= select_tag 'definitions[tracker_ids][]',
-            options_from_collection_for_select(trackers, :id, :name, selected.map(&:id)),
-            id: 'sla-definitions-trackers', multiple: true, class: sla_input_classes,
-            placeholder: l(:label_sla_tracker_placeholder),
-            data: { sla_chips: true, table_url: edit_project_sla_policy_path(project) } %>
+<div id="sla-tracker-manager"
+     data-add-endpoint="<%= add_tracker_project_sla_policy_path(project) %>"
+     data-remove-endpoint="<%= remove_tracker_project_sla_policy_path(project) %>">
+  <% if trackers.empty? %>
+    <%= render layout: 'sla_policies/card', locals: { title: l(:label_sla_tracker_card) } do %>
+      <p class="tw-m-0 tw-text-sm tw-text-gray-500"><%= l(:text_sla_no_trackers) %></p>
+    <% end %>
+  <% else %>
+    <div id="sla-tracker-empty" class="<%= 'hidden' if selected.any? %> tw-rounded-lg tw-border tw-border-dashed
+                tw-border-gray-300 tw-bg-gray-50 tw-px-6 tw-py-10 tw-text-center">
+      <h3 class="tw-m-0 tw-text-base tw-font-semibold tw-text-gray-900"><%= l(:label_sla_no_configured_trackers) %></h3>
+      <p class="tw-mt-2 tw-mb-5 tw-text-sm tw-text-gray-500"><%= l(:text_sla_add_tracker_hint) %></p>
+      <button type="button" data-sla-add-tracker-toggle
+              class="<%= 'hidden' if available.empty? %> <%= sla_primary_button_classes %>">
+        <%= l(:button_sla_add_tracker) %>
+      </button>
     </div>
-  <% end %>
 
-  <div class="tw-mb-4 tw-rounded-lg tw-border tw-border-gray-200 tw-bg-white">
-    <div class="tw-flex tw-flex-col tw-gap-3 tw-border-b tw-border-gray-200 tw-px-4 tw-pt-3
-                md:tw-flex-row md:tw-items-end md:tw-justify-between">
-      <div id="sla-tracker-tabs" class="tw-flex tw-min-w-0 tw-flex-wrap tw-gap-1" role="tablist"
-           aria-label="<%= l(:field_sla_trackers) %>">
-        <% selected.each_with_index do |tracker, index| %>
-          <button type="button" role="tab" data-sla-tracker-tab="<%= tracker.id %>"
-                  aria-selected="<%= index.zero? %>"
-                  class="sla-tracker-tab<%= ' is-active' if index.zero? %>"><%= h tracker.name %></button>
+    <div id="sla-tracker-content" class="<%= 'hidden' if selected.empty? %> tw-mb-4 tw-rounded-lg
+                tw-border tw-border-gray-200 tw-bg-white">
+      <div class="tw-flex tw-flex-col tw-gap-3 tw-border-b tw-border-gray-200 tw-px-4 tw-pt-3
+                  md:tw-flex-row md:tw-items-end md:tw-justify-between">
+        <div id="sla-tracker-tabs" class="tw-flex tw-min-w-0 tw-flex-wrap tw-items-end tw-gap-1"
+             role="tablist" aria-label="<%= l(:field_sla_trackers) %>">
+          <% selected.each_with_index do |tracker, index| %>
+            <div class="sla-tracker-tab-wrap">
+              <button type="button" role="tab" data-sla-tracker-tab="<%= tracker.id %>"
+                      data-tracker-name="<%= h tracker.name %>" aria-selected="<%= index.zero? %>"
+                      class="sla-tracker-tab<%= ' is-active' if index.zero? %>"><%= h tracker.name %></button>
+              <button type="button" data-sla-remove-tracker
+                      aria-label="<%= l(:button_sla_remove_tracker, tracker: tracker.name) %>">×</button>
+            </div>
+          <% end %>
+          <button type="button" data-sla-add-tracker-toggle
+                  class="<%= 'hidden' if available.empty? %> sla-add-tracker-button"><%= l(:button_sla_add_tracker) %></button>
+        </div>
+        <% if configured_sources.any? %>
+          <div class="tw-flex tw-shrink-0 tw-items-end tw-gap-2 tw-pb-3">
+            <div class="tw-w-52">
+              <label for="sla-clone-tracker-source" class="tw-sr-only"><%= l(:label_sla_clone_tracker_source) %></label>
+              <%= select_tag 'sla_clone_tracker_source',
+                    options_for_select([[l(:label_sla_clone_tracker_placeholder), '']] +
+                      selected.select { |tracker| configured_sources.include?(tracker.id) }.map { |tracker| [tracker.name, tracker.id] }),
+                    id: 'sla-clone-tracker-source', class: "#{sla_input_classes} sla-clone-tracker-select",
+                    data: { sla_select: true } %>
+            </div>
+            <button type="button" id="sla-clone-tracker-button" data-endpoint="<%= clone_tracker_project_sla_policy_path(project) %>"
+                    data-confirm="<%= l(:text_sla_clone_tracker_confirm) %>"
+                    class="<%= sla_secondary_button_classes %>"><%= l(:button_sla_clone_tracker) %></button>
+          </div>
         <% end %>
       </div>
-      <% if configured_sources.any? %>
-        <div class="tw-flex tw-shrink-0 tw-items-end tw-gap-2 tw-pb-3">
-          <div class="tw-w-52">
-            <label for="sla-clone-tracker-source" class="tw-sr-only"><%= l(:label_sla_clone_tracker_source) %></label>
-            <%= select_tag 'sla_clone_tracker_source',
-                  options_for_select([[l(:label_sla_clone_tracker_placeholder), '']] +
-                    trackers.select { |tracker| configured_sources.include?(tracker.id) }
-                            .map { |tracker| [tracker.name, tracker.id] }),
-                  id: 'sla-clone-tracker-source',
-                  class: "#{sla_input_classes} sla-clone-tracker-select",
-                  data: { sla_select: true } %>
-          </div>
-          <button type="button" id="sla-clone-tracker-button"
-                  data-endpoint="<%= clone_tracker_project_sla_policy_path(project) %>"
-                  data-confirm="<%= l(:text_sla_clone_tracker_confirm) %>"
-                  class="<%= sla_secondary_button_classes %>"><%= l(:button_sla_clone_tracker) %></button>
-        </div>
-      <% end %>
+      <div id="sla-definitions-tables" class="tw-p-4">
+        <% selected.each_with_index do |tracker, index| %>
+          <%= render 'sla_policies/definition_table', policy: policy, tracker: tracker, hidden: index.positive? %>
+        <% end %>
+      </div>
     </div>
 
-  <div id="sla-definitions-tables" class="tw-p-4">
-    <% selected.each_with_index do |tracker, index| %>
-      <%= render 'sla_policies/definition_table', policy: policy, tracker: tracker,
-                 hidden: index.positive? %>
-    <% end %>
-  </div>
-  </div>
-<% end %>
+    <div id="sla-add-tracker-menu" class="hidden tw-fixed tw-inset-0 tw-z-50 tw-flex tw-items-center
+                tw-justify-center tw-p-4" role="dialog" aria-modal="true" aria-labelledby="sla-add-tracker-title">
+      <div class="tw-absolute tw-inset-0 tw-bg-gray-900/50" data-sla-add-tracker-close></div>
+      <div class="tw-relative tw-w-full tw-max-w-md tw-rounded-xl tw-bg-white tw-p-5 tw-shadow-xl">
+        <h3 id="sla-add-tracker-title" class="tw-m-0 tw-text-base tw-font-semibold tw-text-gray-900"><%= l(:button_sla_add_tracker) %></h3>
+        <div data-sla-add-tracker-options class="tw-mt-4 tw-space-y-2">
+          <% available.each do |tracker| %>
+            <button type="button" data-sla-add-tracker="<%= tracker.id %>" data-tracker-name="<%= h tracker.name %>"
+                    class="tw-w-full tw-rounded-lg tw-border tw-border-gray-200 tw-bg-white tw-px-4 tw-py-3
+                           tw-text-left tw-text-sm tw-text-gray-900 hover:tw-bg-gray-50"><%= h tracker.name %></button>
+          <% end %>
+        </div>
+        <button type="button" data-sla-add-tracker-close class="<%= sla_secondary_button_classes %> tw-mt-4"><%= l(:button_cancel) %></button>
+      </div>
+    </div>
+
+    <div id="sla-remove-tracker-modal" data-confirm-template="<%= l(:text_sla_remove_tracker_confirm, tracker: '%{tracker}') %>"
+         class="hidden tw-fixed tw-inset-0 tw-z-50 tw-flex tw-items-center
+                tw-justify-center tw-p-4" role="dialog" aria-modal="true" aria-labelledby="sla-remove-tracker-title">
+      <div class="tw-absolute tw-inset-0 tw-bg-gray-900/50" data-sla-remove-cancel></div>
+      <div class="tw-relative tw-w-full tw-max-w-md tw-rounded-xl tw-bg-white tw-p-6 tw-shadow-xl">
+        <h3 id="sla-remove-tracker-title" class="tw-m-0 tw-text-base tw-font-semibold tw-text-gray-900"><%= l(:label_sla_remove_tracker) %></h3>
+        <p data-sla-remove-message class="tw-mt-3 tw-mb-5 tw-text-sm tw-text-gray-600"></p>
+        <div class="tw-flex tw-justify-end tw-gap-3">
+          <button type="button" data-sla-remove-cancel class="<%= sla_secondary_button_classes %>"><%= l(:button_cancel) %></button>
+          <button type="button" data-sla-remove-confirm class="tw-rounded-lg tw-bg-red-600 tw-px-4 tw-py-2.5
+                  tw-text-sm tw-font-medium tw-text-white hover:tw-bg-red-700"><%= l(:button_delete) %></button>
+        </div>
+      </div>
+    </div>
+  <% end %>
+</div>

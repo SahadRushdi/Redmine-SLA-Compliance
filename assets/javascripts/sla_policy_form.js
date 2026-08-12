@@ -246,6 +246,139 @@
     activateTracker(state.tracker);
   }
 
+  function trackerManager() { return byId('sla-tracker-manager'); }
+
+  function csrfHeaders() {
+    var token = document.querySelector('meta[name="csrf-token"]');
+    return token ? { 'X-CSRF-Token': token.content } : {};
+  }
+
+  function openAddTrackerMenu() {
+    var modal = byId('sla-add-tracker-menu');
+    if (!modal) { return; }
+    modal.classList.remove('hidden');
+    var first = modal.querySelector('[data-sla-add-tracker]');
+    if (first) { first.focus(); }
+  }
+
+  function closeAddTrackerMenu() {
+    var modal = byId('sla-add-tracker-menu');
+    if (modal) { modal.classList.add('hidden'); }
+  }
+
+  function buildTrackerTab(id, name) {
+    var wrapper = document.createElement('div');
+    wrapper.className = 'sla-tracker-tab-wrap';
+    var tab = document.createElement('button');
+    tab.type = 'button';
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('data-sla-tracker-tab', id);
+    tab.setAttribute('data-tracker-name', name);
+    tab.setAttribute('aria-selected', 'false');
+    tab.className = 'sla-tracker-tab';
+    tab.textContent = name;
+    var remove = document.createElement('button');
+    remove.type = 'button';
+    remove.setAttribute('data-sla-remove-tracker', '');
+    remove.setAttribute('aria-label', 'Remove ' + name);
+    remove.textContent = '×';
+    wrapper.appendChild(tab);
+    wrapper.appendChild(remove);
+    return wrapper;
+  }
+
+  function syncTrackerManagerVisibility() {
+    var tabs = document.querySelectorAll('[data-sla-tracker-tab]');
+    var empty = byId('sla-tracker-empty');
+    var content = byId('sla-tracker-content');
+    if (empty) { empty.classList.toggle('hidden', tabs.length > 0); }
+    if (content) { content.classList.toggle('hidden', tabs.length === 0); }
+    document.querySelectorAll('[data-sla-add-tracker-toggle]').forEach(function (button) {
+      button.classList.toggle('hidden', !document.querySelector('[data-sla-add-tracker]'));
+    });
+  }
+
+  function addTracker(button) {
+    var manager = trackerManager();
+    if (!manager || button.disabled) { return; }
+    button.disabled = true;
+    var id = button.getAttribute('data-sla-add-tracker');
+    var name = button.getAttribute('data-tracker-name');
+    jQuery.ajax({
+      url: manager.getAttribute('data-add-endpoint'), method: 'PATCH', dataType: 'json',
+      headers: csrfHeaders(), data: { tracker_id: id }
+    }).done(function (response) {
+      var tabs = byId('sla-tracker-tabs');
+      var addButton = tabs && tabs.querySelector('[data-sla-add-tracker-toggle]');
+      if (tabs && !document.querySelector('[data-sla-tracker-tab="' + id + '"]')) {
+        tabs.insertBefore(buildTrackerTab(id, name), addButton);
+      }
+      button.parentNode.removeChild(button);
+      closeAddTrackerMenu();
+      syncTrackerManagerVisibility();
+      jQuery.ajax({ url: response.table_url, dataType: 'script' }).done(function () {
+        activateTracker(id);
+      }).fail(function () {
+        // Membership is already durable; reload into the server-rendered source of truth rather
+        // than leaving a tab with no table after a transient render request failure.
+        window.location.reload();
+      });
+    }).fail(function (xhr) {
+      button.disabled = false;
+      window.alert((xhr.responseJSON || {}).error || 'Unable to add tracker');
+    });
+  }
+
+  function openRemoveTrackerModal(tab) {
+    var modal = byId('sla-remove-tracker-modal');
+    if (!modal) { return; }
+    modal.setAttribute('data-tracker-id', tab.getAttribute('data-sla-tracker-tab'));
+    modal.setAttribute('data-tracker-name', tab.getAttribute('data-tracker-name'));
+    var template = modal.getAttribute('data-confirm-template') || 'Delete tracker %{tracker}?';
+    modal.querySelector('[data-sla-remove-message]').textContent =
+      template.replace('%{tracker}', tab.getAttribute('data-tracker-name'));
+    modal.classList.remove('hidden');
+    modal.querySelector('[data-sla-remove-confirm]').focus();
+  }
+
+  function closeRemoveTrackerModal() {
+    var modal = byId('sla-remove-tracker-modal');
+    if (modal) { modal.classList.add('hidden'); }
+  }
+
+  function removeTracker() {
+    var manager = trackerManager();
+    var modal = byId('sla-remove-tracker-modal');
+    if (!manager || !modal) { return; }
+    var id = modal.getAttribute('data-tracker-id');
+    var name = modal.getAttribute('data-tracker-name');
+    jQuery.ajax({
+      url: manager.getAttribute('data-remove-endpoint'), method: 'DELETE', dataType: 'json',
+      headers: csrfHeaders(), data: { tracker_id: id }
+    }).done(function () {
+      var tab = document.querySelector('[data-sla-tracker-tab="' + id + '"]');
+      var table = byId('sla-definitions-table-' + id);
+      if (tab) { tab.parentNode.parentNode.removeChild(tab.parentNode); }
+      if (table) { table.parentNode.removeChild(table); }
+      var options = document.querySelector('[data-sla-add-tracker-options]');
+      if (options) {
+        var option = document.createElement('button');
+        option.type = 'button';
+        option.setAttribute('data-sla-add-tracker', id);
+        option.setAttribute('data-tracker-name', name);
+        option.className = 'tw-w-full tw-rounded-lg tw-border tw-border-gray-200 tw-bg-white tw-px-4 tw-py-3 tw-text-left tw-text-sm tw-text-gray-900 hover:tw-bg-gray-50';
+        option.textContent = name;
+        options.appendChild(option);
+      }
+      closeRemoveTrackerModal();
+      syncTrackerManagerVisibility();
+      var next = document.querySelector('[data-sla-tracker-tab]');
+      if (next) { activateTracker(next.getAttribute('data-sla-tracker-tab')); }
+    }).fail(function (xhr) {
+      window.alert((xhr.responseJSON || {}).error || 'Unable to remove tracker');
+    });
+  }
+
   function cloneTrackerTargets() {
     var button = byId('sla-clone-tracker-button');
     var source = byId('sla-clone-tracker-source');
@@ -469,6 +602,22 @@
     jQuery(document).on('click', '[data-sla-tracker-tab]', function () {
       activateTracker(this.getAttribute('data-sla-tracker-tab'));
     });
+    jQuery(document).on('click', '[data-sla-add-tracker-toggle]', openAddTrackerMenu);
+    jQuery(document).on('click', '[data-sla-add-tracker-close]', closeAddTrackerMenu);
+    jQuery(document).on('click', '[data-sla-add-tracker]', function () { addTracker(this); });
+    jQuery(document).on('click', '[data-sla-remove-tracker]', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      openRemoveTrackerModal(this.parentNode.querySelector('[data-sla-tracker-tab]'));
+    });
+    jQuery(document).on('click', '[data-sla-remove-cancel]', closeRemoveTrackerModal);
+    jQuery(document).on('click', '[data-sla-remove-confirm]', removeTracker);
+    jQuery(document).on('keydown', function (event) {
+      if (event.key === 'Escape') {
+        closeAddTrackerMenu();
+        closeRemoveTrackerModal();
+      }
+    });
     jQuery(document).on('click', '#sla-clone-tracker-button', cloneTrackerTargets);
 
     jQuery(document).on('click', '[data-sla-target-display]', function () {
@@ -528,6 +677,7 @@
     initEmailChips();
     initSingleSelects();
     renderTrackerTabs(byId('sla-definitions-trackers'));
+    syncTrackerManagerVisibility();
     // After the Tom Select instances exist, so a section rendered locked disables them too.
     syncLocks();
     syncReveals();

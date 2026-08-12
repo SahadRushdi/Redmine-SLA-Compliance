@@ -252,8 +252,7 @@ module SlaPoliciesHelper
     # but they must neither reappear on reload nor remain active in PolicyContext.
     return trackers.select { |tracker| saved_ids.include?(tracker.id) } unless saved_ids.nil?
 
-    derived = trackers.select { |tracker| policy.sla_definitions.map(&:tracker_id).include?(tracker.id) }
-    derived.presence || Array(trackers.first)
+    trackers.select { |tracker| policy.sla_definitions.map(&:tracker_id).include?(tracker.id) }
   end
 
   # Tracker ids named by THIS request: the picker's own array, or the single `tracker_id` the AJAX

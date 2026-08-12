@@ -98,6 +98,50 @@ class SlaDirectTargetsControllerTest < ActionController::TestCase
     assert_nil SlaPolicy.find_by(project_id: @project.id)
   end
 
+  test 'adds an enabled project tracker and persists it immediately' do
+    policy = SlaPolicy.create!(project_id: @project.id, enabled: true, selected_tracker_ids: [])
+
+    patch :add_tracker, params: { project_id: @project.id, tracker_id: @tracker.id }
+
+    assert_response :success
+    assert_equal [@tracker.id], policy.reload.selected_tracker_ids
+    assert_equal @tracker.id, response.parsed_body['id']
+    assert_includes response.parsed_body['table_url'], "tracker_id=#{@tracker.id}"
+  end
+
+  test 'add tracker rejects a tracker not enabled for the project' do
+    outsider = Tracker.create!(name: 'Outside tracker', default_status_id: IssueStatus.first.id)
+
+    patch :add_tracker, params: { project_id: @project.id, tracker_id: outsider.id }
+
+    assert_response :unprocessable_entity
+    assert_nil SlaPolicy.find_by(project_id: @project.id)
+  end
+
+  test 'removes tracker membership and its targets immediately' do
+    policy = SlaPolicy.create!(project_id: @project.id, enabled: true,
+                               selected_tracker_ids: [@tracker.id])
+    definition = policy.sla_definitions.create!(tracker_id: @tracker.id,
+                                                priority_id: @priority.id,
+                                                response_seconds: 3600)
+
+    delete :remove_tracker, params: { project_id: @project.id, tracker_id: @tracker.id }
+
+    assert_response :success
+    assert_empty policy.reload.selected_tracker_ids
+    refute SlaDefinition.exists?(definition.id)
+  end
+
+  test 'targets section save without the removed picker preserves tracker membership' do
+    policy = SlaPolicy.create!(project_id: @project.id, enabled: true,
+                               selected_tracker_ids: [@tracker.id])
+
+    put :update, params: { project_id: @project.id, section: 'targets' }
+
+    assert_redirected_to settings_project_path(@project, tab: 'sla_policy', section: 'targets')
+    assert_equal [@tracker.id], policy.reload.selected_tracker_ids
+  end
+
   test 'clones every priority target from a configured tracker into the selected tracker' do
     target_tracker = @project.trackers.where.not(id: @tracker.id).first
     policy = SlaPolicy.create!(project_id: @project.id, enabled: true,

@@ -7,6 +7,8 @@ Rails.application.routes.draw do
     resources :sla_dashboard, only: [:index], controller: 'sla_dashboard'
     resource :sla_policy, only: [:edit, :update, :destroy], controller: 'sla_policies' do
       patch :target, action: :update_target
+      patch :add_tracker
+      delete :remove_tracker
       patch :clone_tracker, action: :clone_tracker
       get :recalculation_status
     end
