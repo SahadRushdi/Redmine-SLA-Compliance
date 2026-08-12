@@ -14,7 +14,8 @@
              data-endpoint="<%= target_project_sla_policy_path(@project) %>"
              data-tracker-id="<%= tracker.id %>" data-priority-id="<%= priority.id %>"
              data-target-type="<%= target_type %>" data-seconds="<%= seconds %>"
-             data-best-effort="<%= best_effort %>">
+             data-best-effort="<%= best_effort %>"
+             data-whole-number-error="<%= l(:error_sla_target_whole_number) %>">
           <button type="button" data-sla-target-display
                   class="tw-w-full tw-min-h-9 tw-rounded-lg tw-border tw-border-gray-300 tw-bg-white
                          tw-px-3 tw-py-2 tw-text-left tw-text-sm tw-text-gray-900 hover:tw-bg-gray-50
@@ -24,14 +25,19 @@
           <div data-sla-target-editor class="hidden tw-mt-1 tw-rounded-lg tw-border tw-border-gray-200
                                              tw-bg-white tw-p-2 tw-shadow-sm">
             <div class="tw-flex tw-items-center tw-gap-1">
-              <input type="number" min="0.01" step="any" value="<%= amount %>"
+              <%# This is an AJAX-autosaved editor, not a posted form field. Keep native constraint %>
+              <%# validation off it so legacy decimal snapshots cannot block the enclosing policy %>
+              <%# form while hidden; JS + DirectDuration enforce positive whole numbers. %>
+              <input type="text" value="<%= amount %>" inputmode="numeric" autocomplete="off"
                      aria-label="<%= l(:field_sla_duration_value) %>" data-sla-target-value
-                     class="tw-w-20 tw-rounded-lg tw-border tw-border-gray-300 tw-px-2 tw-py-1 tw-text-sm">
+                     class="tw-h-10 tw-w-20 tw-rounded-lg tw-border tw-border-gray-300 tw-px-2 tw-py-1 tw-text-sm">
               <select aria-label="<%= l(:field_sla_duration_unit) %>" data-sla-target-unit
                       data-sla-select
                       class="tw-rounded-lg tw-border tw-border-gray-300 tw-bg-white tw-px-2 tw-py-1 tw-text-sm">
+                <option value="minutes" <%= 'selected' if unit == 'minutes' %>><%= l(:label_sla_minutes) %></option>
                 <option value="hours" <%= 'selected' if unit == 'hours' %>><%= l(:label_sla_hours) %></option>
                 <option value="days" <%= 'selected' if unit == 'days' %>><%= l(:label_sla_days) %></option>
+                <option value="weeks" <%= 'selected' if unit == 'weeks' %>><%= l(:label_sla_weeks) %></option>
               </select>
             </div>
             <label class="tw-mt-2 tw-flex tw-items-center tw-gap-2 tw-text-xs tw-text-gray-700">

@@ -28,6 +28,48 @@ class SlaDirectTargetsControllerTest < ActionController::TestCase
     assert_equal 'hours', definition.response_unit
   end
 
+  test 'autosaves the new minute and week units' do
+    patch :update_target, params: target_params(mode: 'duration', value: '15', unit: 'minutes')
+    assert_response :success
+    definition = SlaPolicy.find_by!(project_id: @project.id).sla_definitions.first
+    assert_equal 900, definition.response_seconds
+    assert_equal 'minutes', definition.response_unit
+
+    patch :update_target, params: target_params(mode: 'duration', value: '2', unit: 'weeks')
+    assert_response :success
+    definition.reload
+    assert_equal 1_209_600, definition.response_seconds
+    assert_equal 'weeks', definition.response_unit
+  end
+
+  test 'rejects a decimal duration without changing the saved target' do
+    policy = SlaPolicy.create!(project_id: @project.id, enabled: true)
+    definition = policy.sla_definitions.create!(tracker_id: @tracker.id,
+                                                priority_id: @priority.id,
+                                                response_seconds: 3600,
+                                                response_unit: 'hours')
+
+    patch :update_target, params: target_params(mode: 'duration', value: '1.5', unit: 'hours')
+
+    assert_response :unprocessable_entity
+    assert_equal 'Enter a whole number. Decimal values are not allowed.', response.parsed_body['error']
+    assert_equal 3600, definition.reload.response_seconds
+  end
+
+  test 'legacy decimal targets do not render as native-invalid form controls' do
+    policy = SlaPolicy.create!(project_id: @project.id, enabled: true,
+                               selected_tracker_ids: [@tracker.id])
+    policy.sla_definitions.create!(tracker_id: @tracker.id, priority_id: @priority.id,
+                                   response_seconds: 1440, response_unit: 'hours')
+
+    get :edit, params: { project_id: @project.id, tracker_id: @tracker.id }, format: 'js', xhr: true
+
+    assert_response :success
+    rendered_html = response.body.gsub('\\"', '"')
+    assert_includes rendered_html, 'input type="text" value="0.4" inputmode="numeric"'
+    refute_includes rendered_html, 'input type="number"'
+  end
+
   test 'autosaves Best Effort without a numeric deadline' do
     patch :update_target, params: target_params(mode: 'best_effort')
 

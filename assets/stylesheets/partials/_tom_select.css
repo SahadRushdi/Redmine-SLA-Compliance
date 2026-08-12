@@ -93,6 +93,13 @@
   flex: 1 1 0%;
 }
 
+/* Match the duration value field beside it in the inline Priority Targets editor. */
+.sla-target-cell .ts-wrapper.single .ts-control {
+  min-height: 2.5rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
 /*
  * Dashboard filter fields ONLY (Tracker/Priority/Project Tom Select controls, the custom
  * date-range inputs) — white background + a permanent blue border, per the reference design.

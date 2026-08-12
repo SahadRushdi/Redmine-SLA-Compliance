@@ -42,8 +42,11 @@
             <%= l(:label_sla_recalculate_historical) %>
           </label>
         </div>
-        <button type="submit" class="<%= sla_primary_button_classes %> tw-shrink-0">
-          <%= sla_save_icon %><span><%= l(:button_sla_save_policy) %></span>
+        <button type="submit" class="<%= sla_primary_button_classes %> tw-shrink-0"
+                data-sla-targets-save
+                data-save-label="<%= l(:button_sla_save_targets) %>"
+                data-recalculate-label="<%= l(:button_sla_save_and_recalculate) %>">
+          <%= sla_save_icon %><span data-sla-targets-save-label><%= l(:button_sla_save_targets) %></span>
         </button>
       </div>
 

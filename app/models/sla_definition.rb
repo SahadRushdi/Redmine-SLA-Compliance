@@ -30,7 +30,7 @@ class SlaDefinition < ActiveRecord::Base
             :update_frequency_seconds,
             numericality: { only_integer: true, greater_than: 0 }, allow_nil: true
   validates :response_unit, :workaround_unit, :resolution_unit, :update_frequency_unit,
-            inclusion: { in: %w[hours days] }, allow_nil: true
+            inclusion: { in: Sla::DirectDuration::UNITS.keys }, allow_nil: true
 
   # True when at least one target is configured — a numeric seconds value OR Best Effort — for
   # this priority (otherwise this row tracks nothing).

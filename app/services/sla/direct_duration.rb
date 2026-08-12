@@ -1,11 +1,16 @@
 # frozen_string_literal: true
 
 module Sla
-  # Converts the direct Hours/Days editor into the wall-clock seconds stored by SlaDefinition.
+  # Converts the direct duration editor into the wall-clock seconds stored by SlaDefinition.
   class DirectDuration
     class InvalidDuration < StandardError; end
 
-    UNITS = { 'hours' => 1.hour.to_i, 'days' => 1.day.to_i }.freeze
+    UNITS = {
+      'minutes' => 1.minute.to_i,
+      'hours' => 1.hour.to_i,
+      'days' => 1.day.to_i,
+      'weeks' => 1.week.to_i
+    }.freeze
     MAX_SECONDS = 2_147_483_647
 
     class << self
@@ -16,6 +21,8 @@ module Sla
 
         multiplier = UNITS[unit.to_s]
         amount = BigDecimal(value.to_s)
+        raise InvalidDuration, I18n.t(:error_sla_target_whole_number) unless amount.frac.zero?
+
         seconds = (amount * multiplier).to_i if multiplier && amount.positive?
         raise InvalidDuration, I18n.t(:error_sla_target_invalid) unless
           seconds&.positive? && seconds <= MAX_SECONDS

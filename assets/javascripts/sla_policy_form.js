@@ -289,8 +289,46 @@
     }
   }
 
+  function targetValueIsValid(cell, showWarning) {
+    var parts = targetParts(cell);
+    var raw = parts.value.value.trim();
+    var valid = parts.bestEffort.checked || raw === '' ||
+      (!parts.value.validity.badInput && /^\d+$/.test(raw) && Number(raw) > 0);
+
+    if (!valid && showWarning) {
+      parts.status.textContent = cell.getAttribute('data-whole-number-error');
+      parts.status.className = 'tw-mt-1 tw-block tw-text-xs tw-text-red-600';
+    } else if (valid && parts.status.classList.contains('tw-text-red-600')) {
+      parts.status.textContent = '';
+      parts.status.className = 'tw-mt-1 tw-block tw-text-xs';
+    }
+    return valid;
+  }
+
+  function showWholeNumberWarning(cell) {
+    var parts = targetParts(cell);
+    parts.status.textContent = cell.getAttribute('data-whole-number-error');
+    parts.status.className = 'tw-mt-1 tw-block tw-text-xs tw-text-red-600';
+  }
+
+  function syncTargetsSaveLabel() {
+    var button = document.querySelector('[data-sla-targets-save]');
+    var checkbox = document.querySelector('input[name="recalculate"]');
+    if (!button || !checkbox) { return; }
+    var label = button.querySelector('[data-sla-targets-save-label]');
+    if (label) {
+      label.textContent = button.getAttribute(
+        checkbox.checked ? 'data-recalculate-label' : 'data-save-label'
+      );
+    }
+  }
+
   function saveTargetCell(cell) {
     var parts = targetParts(cell);
+    if (!targetValueIsValid(cell, true)) {
+      parts.editor.classList.remove('hidden');
+      return;
+    }
     var mode = parts.bestEffort.checked ? 'best_effort' :
       (parts.value.value.trim() ? 'duration' : 'unset');
     var token = document.querySelector('meta[name="csrf-token"]');
@@ -440,8 +478,20 @@
       if (!targetParts(cell).bestEffort.checked) { targetParts(cell).value.focus(); }
     });
     jQuery(document).on('change', '[data-sla-target-best-effort]', function () {
-      syncTargetInputs(this.closest('[data-sla-target-cell]'));
+      var cell = this.closest('[data-sla-target-cell]');
+      syncTargetInputs(cell);
+      targetValueIsValid(cell, false);
     });
+    jQuery(document).on('input', '[data-sla-target-value]', function () {
+      targetValueIsValid(this.closest('[data-sla-target-cell]'), true);
+    });
+    jQuery(document).on('keydown', '[data-sla-target-value]', function (event) {
+      if (event.key === '.' || event.key === ',' || event.key.toLowerCase() === 'e') {
+        event.preventDefault();
+        showWholeNumberWarning(this.closest('[data-sla-target-cell]'));
+      }
+    });
+    jQuery(document).on('change', 'input[name="recalculate"]', syncTargetsSaveLabel);
     jQuery(document).on('focusout', '[data-sla-target-editor]', function () {
       var editor = this;
       window.setTimeout(function () {
@@ -482,6 +532,7 @@
     syncLocks();
     syncReveals();
     toggleDigestInterval();
+    syncTargetsSaveLabel();
     pollRecalculationProgress();
     bindOnce();
   }
