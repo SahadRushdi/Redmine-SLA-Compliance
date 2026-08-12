@@ -5,7 +5,8 @@
 (function () {
   'use strict';
 
-  var state = { bound: false, section: '', tracker: '', recalculationTimer: null };
+  var state = { bound: false, section: '', tracker: '', recalculationTimer: null,
+                reloadAfterRecalculation: false };
 
   function byId(id) { return document.getElementById(id); }
 
@@ -37,7 +38,13 @@
     if (fill) { fill.style.width = percentage + '%'; }
     if (progressbar) { progressbar.setAttribute('aria-valuenow', String(percentage)); }
 
-    if (status === 'completed' || status === 'failed') { stopRecalculationPolling(); }
+    if (status === 'completed' || status === 'failed') {
+      stopRecalculationPolling();
+      if (status === 'completed' && state.reloadAfterRecalculation) {
+        state.reloadAfterRecalculation = false;
+        window.setTimeout(function () { window.location.reload(); }, 700);
+      }
+    }
   }
 
   function pollRecalculationProgress() {
@@ -72,6 +79,33 @@
     if (runToken) { container.setAttribute('data-run-token', runToken); }
     container.classList.remove('hidden');
     pollRecalculationProgress();
+  }
+
+  function submitTargetsForm(event) {
+    event.preventDefault();
+    var form = event.currentTarget;
+    var button = form.querySelector('[data-sla-targets-save]');
+    var recalculate = form.querySelector('input[name="recalculate"]');
+    if (button) { button.disabled = true; }
+
+    jQuery.ajax({
+      url: form.action,
+      method: 'PUT',
+      dataType: 'json',
+      headers: csrfHeaders(),
+      data: jQuery(form).serialize()
+    }).done(function (response) {
+      if (response.recalculation) {
+        state.reloadAfterRecalculation = true;
+        startRecalculationPolling(response.recalculation.run_token);
+      } else {
+        window.location.reload();
+      }
+    }).fail(function (xhr) {
+      var response = xhr.responseJSON || {};
+      window.alert(response.error || 'Unable to save SLA targets');
+      if (button) { button.disabled = false; }
+    });
   }
 
   // --- Sidebar section navigation ------------------------------------------------------------
@@ -334,7 +368,10 @@
     if (!modal) { return; }
     modal.setAttribute('data-tracker-id', tab.getAttribute('data-sla-tracker-tab'));
     modal.setAttribute('data-tracker-name', tab.getAttribute('data-tracker-name'));
+    var titleTemplate = modal.getAttribute('data-title-template') || 'Remove tracker "%{tracker}"';
     var template = modal.getAttribute('data-confirm-template') || 'Delete tracker %{tracker}?';
+    modal.querySelector('#sla-remove-tracker-title').textContent =
+      titleTemplate.replace('%{tracker}', tab.getAttribute('data-tracker-name'));
     modal.querySelector('[data-sla-remove-message]').textContent =
       template.replace('%{tracker}', tab.getAttribute('data-tracker-name'));
     modal.classList.remove('hidden');
@@ -641,6 +678,7 @@
       }
     });
     jQuery(document).on('change', 'input[name="recalculate"]', syncTargetsSaveLabel);
+    jQuery(document).on('submit', '#sla-policy-form', submitTargetsForm);
     jQuery(document).on('focusout', '[data-sla-target-editor]', function () {
       var editor = this;
       window.setTimeout(function () {

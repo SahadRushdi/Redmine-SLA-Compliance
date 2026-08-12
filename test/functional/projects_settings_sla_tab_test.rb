@@ -648,6 +648,19 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     end
   end
 
+  test "tracker removal modal uses the centered remove copy and action" do
+    tracker = @project.trackers.first
+    SlaPolicy.create!(project_id: @project.id, enabled: true, selected_tracker_ids: [tracker.id])
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select '#sla-remove-tracker-modal [data-sla-remove-message]', 1
+    assert_select '#sla-remove-tracker-modal .tw-text-center', 1
+    assert_select '#sla-remove-tracker-modal [data-sla-remove-confirm]', text: I18n.t(:button_sla_remove), count: 1
+    assert_select '#sla-remove-tracker-modal [data-sla-remove-cancel]', text: I18n.t(:button_cancel), count: 1
+  end
+
   def revert_delete_form_selector(project)
     "form[action='#{project_sla_policy_path(project)}'] input[name='_method'][value='delete']"
   end

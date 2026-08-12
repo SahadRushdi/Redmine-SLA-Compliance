@@ -1005,7 +1005,18 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     job = enqueued_jobs.last
     state = SlaRecalculationState.find_by!(project_id: @project.id)
     assert_equal [@project.id, state.run_token], job[:args]
-    assert_equal state.run_token, flash[:sla_recalculation_token]
+    assert_nil flash[:sla_recalculation_token], 'the opaque run token must never render as a flash message'
+  end
+
+  test "AJAX recalculate save returns the run token without redirecting or flashing it" do
+    put :update, params: targets_params(recalculate: '1'), xhr: true
+
+    assert_response :success
+    payload = response.parsed_body
+    state = SlaRecalculationState.find_by!(project_id: @project.id)
+    assert_equal state.run_token, payload.dig('recalculation', 'run_token')
+    assert_equal 'queued', payload.dig('recalculation', 'status')
+    assert_nil flash[:sla_recalculation_token]
   end
 
   test "save without the tick enqueues nothing" do

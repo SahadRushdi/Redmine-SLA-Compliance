@@ -115,10 +115,17 @@ class SlaPoliciesController < ApplicationController
 
     flash[:notice] = l(:notice_successful_update)
     announce_clone_outcome(clone_source, notifications_skipped)
+    recalculation = nil
     if section == 'targets' && params[:recalculate] == '1'
-      queue_recalculation
+      recalculation = queue_recalculation
       flash[:notice] = "#{flash[:notice]} #{l(:notice_sla_recalculation_queued)}"
     end
+    if request.xhr? && section == 'targets'
+      message = flash[:notice]
+      flash.discard
+      return render json: { message: message, recalculation: recalculation_payload(recalculation) }
+    end
+
     redirect_to settings_project_path(@project, tab: 'sla_policy', section: section)
   end
 
@@ -276,9 +283,7 @@ class SlaPoliciesController < ApplicationController
   private
 
   def queue_recalculation
-    state = Sla::RecalculationDispatcher.call(@project)
-    flash[:sla_recalculation_token] = state.run_token
-    state
+    Sla::RecalculationDispatcher.call(@project)
   end
 
   def recalculation_payload(state)

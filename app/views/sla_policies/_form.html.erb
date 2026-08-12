@@ -55,7 +55,7 @@
       <%# showing a run that completed before the page finished loading. %>
       <div id="sla-recalculation-progress" data-sla-recalculation-progress data-status="idle"
            data-status-url="<%= recalculation_status_project_sla_policy_path(project) %>"
-           data-run-token="<%= h flash[:sla_recalculation_token].to_s %>"
+           data-run-token=""
            class="hidden tw-space-y-3 tw-pb-2">
         <div class="tw-flex tw-items-center tw-justify-between tw-gap-4">
           <p data-sla-recalculation-status aria-live="polite"

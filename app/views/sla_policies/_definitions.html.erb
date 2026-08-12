@@ -80,17 +80,19 @@
       </div>
     </div>
 
-    <div id="sla-remove-tracker-modal" data-confirm-template="<%= l(:text_sla_remove_tracker_confirm, tracker: '%{tracker}') %>"
+    <div id="sla-remove-tracker-modal"
+         data-title-template="<%= l(:label_sla_remove_tracker_named, tracker: '%{tracker}') %>"
+         data-confirm-template="<%= l(:text_sla_remove_tracker_confirm, tracker: '%{tracker}') %>"
          class="hidden tw-fixed tw-inset-0 tw-z-50 tw-flex tw-items-center
                 tw-justify-center tw-p-4" role="dialog" aria-modal="true" aria-labelledby="sla-remove-tracker-title">
       <div class="tw-absolute tw-inset-0 tw-bg-gray-900/50" data-sla-remove-cancel></div>
-      <div class="tw-relative tw-w-full tw-max-w-md tw-rounded-xl tw-bg-white tw-p-6 tw-shadow-xl">
+      <div class="tw-relative tw-w-full tw-max-w-md tw-rounded-xl tw-bg-white tw-p-6 tw-text-center tw-shadow-xl">
         <h3 id="sla-remove-tracker-title" class="tw-m-0 tw-text-base tw-font-semibold tw-text-gray-900"><%= l(:label_sla_remove_tracker) %></h3>
         <p data-sla-remove-message class="tw-mt-3 tw-mb-5 tw-text-sm tw-text-gray-600"></p>
-        <div class="tw-flex tw-justify-end tw-gap-3">
+        <div class="tw-flex tw-justify-center tw-gap-3">
           <button type="button" data-sla-remove-cancel class="<%= sla_secondary_button_classes %>"><%= l(:button_cancel) %></button>
           <button type="button" data-sla-remove-confirm class="tw-rounded-lg tw-bg-red-600 tw-px-4 tw-py-2.5
-                  tw-text-sm tw-font-medium tw-text-white hover:tw-bg-red-700"><%= l(:button_delete) %></button>
+                  tw-text-sm tw-font-medium tw-text-white hover:tw-bg-red-700"><%= l(:button_sla_remove) %></button>
         </div>
       </div>
     </div>
