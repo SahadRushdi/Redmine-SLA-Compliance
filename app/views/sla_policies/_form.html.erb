@@ -19,20 +19,14 @@
            inherited_source: inherited_source %>
 
 <%= render layout: 'sla_policies/panel', locals: { key: 'targets', current: current } do %>
-  <%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-policy-form',
-               data: { edit_url: edit_project_sla_policy_path(project),
-                       confirm_clone: l(:text_sla_clone_confirm_overwrite) } do %>
-    <%= hidden_field_tag 'tab', 'sla_policy' %>
-    <%= hidden_field_tag 'section', 'targets' %>
-    <%= hidden_field_tag 'clone_source_id', params[:clone_from].presence, id: 'sla-clone-source-id' %>
+  <div id="sla-policy-form" data-policy-url="<%= project_sla_policy_path(project) %>"
+       data-recalculate-url="<%= recalculate_project_sla_policy_path(project) %>">
 
     <%= render layout: 'sla_policies/lock', locals: { project: project, locked: locked } do %>
       <%= render 'sla_policies/definitions', project: project, policy: policy %>
 
-      <%# Step 4.8 — forward-only save by default; optional historical recalculation. It shares a %>
-      <%# row with this section's save button (rather than using the shared _save_bar) because the %>
-      <%# tick only means anything as a modifier of that very save. %>
-      <div class="tw-flex tw-flex-col md:tw-flex-row md:tw-items-start md:tw-justify-between
+      <%# Every target control autosaves; recalculation is a separate confirmed action. %>
+      <div class="tw-flex tw-flex-col md:tw-flex-row md:tw-items-center md:tw-justify-between
                   tw-gap-4 tw-pt-1 tw-pb-2">
         <div class="tw-min-w-0 md:tw-max-w-xl">
           <label class="tw-inline-flex tw-items-center tw-gap-2 tw-text-sm tw-font-medium tw-text-gray-900">
@@ -41,11 +35,9 @@
             <%= l(:label_sla_recalculate_historical) %>
           </label>
         </div>
-        <button type="submit" class="<%= sla_primary_button_classes %> tw-shrink-0"
-                data-sla-targets-save
-                data-save-label="<%= l(:button_sla_save_targets) %>"
-                data-recalculate-label="<%= l(:button_sla_save_and_recalculate) %>">
-          <%= sla_save_icon %><span data-sla-targets-save-label><%= l(:button_sla_save_targets) %></span>
+        <button type="button" disabled data-sla-recalculate-button
+                class="<%= sla_primary_button_classes %> tw-shrink-0 disabled:tw-cursor-not-allowed disabled:tw-opacity-50">
+          <%= l(:button_sla_recalculate) %>
         </button>
       </div>
 
@@ -71,7 +63,7 @@
         </div>
       </div>
     <% end %>
-  <% end %>
+  </div>
 <% end %>
 
 <%= render layout: 'sla_policies/panel', locals: { key: 'measurement', current: current } do %>

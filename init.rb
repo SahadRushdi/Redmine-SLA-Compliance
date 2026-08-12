@@ -39,7 +39,7 @@ Redmine::Plugin.register :redmine_sla_compliance do
     # Holding it grants nothing else: every other tab stays filtered by its own permission.
     permission :edit_sla_policy, { sla_policies: [:edit, :update, :update_target, :add_tracker,
                                                   :remove_tracker, :clone_tracker,
-                                                  :recalculation_status, :destroy],
+                                                  :recalculate, :recalculation_status, :destroy],
                                    projects: [:settings] }
 
     # Manage per-project notification settings (Google Chat webhook, at-risk/stale email).

@@ -1,40 +1,25 @@
-<%# Clone from another project: ONE card, because it is one sequential action. Picking a project %>
-<%# and pressing Load are not two independent steps — Load only ever acts on the project chosen in %>
-<%# the dropdown directly above it, so a card break between them implied a relationship the two %>
-<%# controls don't have. The single heading covers both. %>
-<%# %>
-<%# The picker is not submitted with General. Load opens a confirmation modal and then persists %>
-<%# the complete clone immediately through the policy endpoint; no second Save is required. %>
-<%# Locals: project, policy. %>
+<%# Immediate full-policy clone, presented as a compact header-only card. Locals: project, policy. %>
 <% sources = sla_clone_source_projects(project) %>
 <% if sources.any? %>
-  <%# Preselected to whichever project this policy was last cloned from, so the card reopens saying %>
-  <%# where the configuration came from instead of "— Select a project —". nil when nothing was %>
-  <%# cloned, or when the recorded source is no longer a project this user can pick from. %>
   <% cloned_from = sla_cloned_from_project(policy, sources) %>
-  <%= render layout: 'sla_policies/card',
-             locals: { title: l(:label_sla_clone_from_project_card) } do %>
-    <div class="tw-flex tw-flex-col tw-gap-3 md:tw-flex-row md:tw-items-end">
-      <div class="tw-w-full md:tw-w-96">
-        <label for="sla-clone-source" class="<%= sla_label_classes %>"><%= l(:field_sla_clone_source) %></label>
-      <%# data-sla-select: the same styled Tom Select dropdown every other picker in the plugin %>
-      <%# uses, rather than the OS-rendered native <select> popup this field kept. Per CLAUDE.md, %>
-      <%# reuse the component already solving this instead of introducing another pattern. %>
-      <%# %>
-      <%# prompt:, not include_blank: — select_tag's include_blank ignores a string label and %>
-      <%# always emits an option containing a non-breaking space, which Tom Select renders as a %>
-      <%# blank, seemingly broken first row. Either way the empty option must exist, so that no %>
-      <%# project is preselected and Load can't act on one the user never chose. %>
-        <%= select_tag 'sla_clone_picker',
-              options_from_collection_for_select(sources, :id, :name, cloned_from&.id),
-              prompt: l(:label_sla_clone_source_blank), id: 'sla-clone-source',
-              class: sla_input_classes, data: { sla_select: true } %>
+  <div class="tw-bg-white tw-border tw-border-gray-200 tw-rounded-lg tw-shadow-sm tw-mb-5">
+    <div class="tw-bg-gray-50 tw-rounded-lg tw-px-5 tw-py-4 tw-flex tw-flex-wrap tw-items-center
+                tw-justify-between tw-gap-4">
+      <h3 class="tw-m-0 tw-text-base tw-font-semibold tw-text-gray-900"><%= l(:label_sla_clone_from_project_card) %></h3>
+      <div class="tw-flex tw-w-full tw-flex-col tw-gap-2 md:tw-w-auto md:tw-flex-row md:tw-items-center">
+        <div class="tw-w-full md:tw-w-96">
+          <%= select_tag 'sla_clone_picker',
+                options_from_collection_for_select(sources, :id, :name, cloned_from&.id),
+                prompt: l(:label_sla_clone_source_blank), id: 'sla-clone-source',
+                aria: { label: l(:field_sla_clone_source) },
+                class: sla_input_classes, data: { sla_select: true } %>
+        </div>
+        <button type="button" id="sla-clone-load" class="<%= sla_secondary_button_classes %>">
+          <%= sla_copy_icon %><span><%= l(:button_sla_clone_load) %></span>
+        </button>
       </div>
-      <button type="button" id="sla-clone-load" class="<%= sla_secondary_button_classes %>">
-        <%= sla_copy_icon %><span><%= l(:button_sla_clone_load) %></span>
-      </button>
     </div>
-  <% end %>
+  </div>
 
   <div id="sla-clone-confirm-modal"
        data-confirm-template="<%= l(:text_sla_clone_direct_confirm, project: '%{project}') %>"
@@ -42,9 +27,7 @@
        role="dialog" aria-modal="true" aria-labelledby="sla-clone-confirm-title">
     <div class="tw-absolute tw-inset-0 tw-bg-gray-900/50" data-sla-clone-cancel></div>
     <div class="tw-relative tw-w-full tw-max-w-md tw-rounded-xl tw-bg-white tw-p-6 tw-text-center tw-shadow-xl">
-      <h3 id="sla-clone-confirm-title" class="tw-m-0 tw-text-base tw-font-semibold tw-text-gray-900">
-        <%= l(:label_sla_clone_confirm) %>
-      </h3>
+      <h3 id="sla-clone-confirm-title" class="tw-m-0 tw-text-base tw-font-semibold tw-text-gray-900"><%= l(:label_sla_clone_confirm) %></h3>
       <p data-sla-clone-confirm-message class="tw-mt-3 tw-mb-5 tw-text-sm tw-text-gray-600"></p>
       <div class="tw-flex tw-justify-center tw-gap-3">
         <button type="button" data-sla-clone-cancel class="<%= sla_secondary_button_classes %>"><%= l(:button_cancel) %></button>

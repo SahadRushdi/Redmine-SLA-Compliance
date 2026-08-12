@@ -81,30 +81,25 @@
     pollRecalculationProgress();
   }
 
-  function submitTargetsForm(event) {
-    event.preventDefault();
-    var form = event.currentTarget;
-    var button = form.querySelector('[data-sla-targets-save]');
-    var recalculate = form.querySelector('input[name="recalculate"]');
-    if (button) { button.disabled = true; }
+  function runHistoricalRecalculation() {
+    var form = byId('sla-policy-form');
+    var button = document.querySelector('[data-sla-recalculate-button]');
+    var checkbox = form && form.querySelector('input[name="recalculate"]');
+    if (!form || !button || !checkbox || !checkbox.checked) { return; }
+    button.disabled = true;
 
     jQuery.ajax({
-      url: form.action,
-      method: 'PUT',
+      url: form.getAttribute('data-recalculate-url'),
+      method: 'POST',
       dataType: 'json',
-      headers: csrfHeaders(),
-      data: jQuery(form).serialize()
+      headers: csrfHeaders()
     }).done(function (response) {
-      if (response.recalculation) {
-        state.reloadAfterRecalculation = true;
-        startRecalculationPolling(response.recalculation.run_token);
-      } else {
-        window.location.reload();
-      }
+      state.reloadAfterRecalculation = true;
+      startRecalculationPolling(response.recalculation.run_token);
     }).fail(function (xhr) {
       var response = xhr.responseJSON || {};
-      window.alert(response.error || 'Unable to save SLA targets');
-      if (button) { button.disabled = false; }
+      window.alert(response.error || 'Unable to recalculate historical tickets');
+      button.disabled = false;
     });
   }
 
@@ -145,11 +140,6 @@
       url.searchParams.set('section', key);
       window.history.replaceState({}, '', url.toString());
     }
-  }
-
-  function formData(key) {
-    var form = byId('sla-policy-form');
-    return form ? form.getAttribute('data-' + key) : null;
   }
 
   // Open the list UPWARDS when it wouldn't fit below the control in the viewport. The dropdown is
@@ -443,15 +433,13 @@
     var button = byId('sla-clone-tracker-button');
     var modal = byId('sla-clone-tracker-modal');
     if (!button || !modal) { return; }
-    var recalculate = document.querySelector('input[name="recalculate"]');
     var confirmButton = modal.querySelector('[data-sla-clone-tracker-confirm]');
     if (confirmButton) { confirmButton.disabled = true; }
     jQuery.ajax({
       url: button.getAttribute('data-endpoint'), method: 'PATCH', dataType: 'json',
       headers: csrfHeaders(),
       data: { source_tracker_id: modal.getAttribute('data-source-id'),
-              target_tracker_id: modal.getAttribute('data-target-id'),
-              recalculate: recalculate && recalculate.checked ? '1' : '0' }
+              target_tracker_id: modal.getAttribute('data-target-id') }
     }).done(function () {
       window.location.reload();
     }).fail(function (xhr) {
@@ -504,16 +492,11 @@
     parts.status.className = 'tw-mt-1 tw-block tw-text-xs tw-text-red-600';
   }
 
-  function syncTargetsSaveLabel() {
-    var button = document.querySelector('[data-sla-targets-save]');
+  function syncRecalculateButton() {
+    var button = document.querySelector('[data-sla-recalculate-button]');
     var checkbox = document.querySelector('input[name="recalculate"]');
     if (!button || !checkbox) { return; }
-    var label = button.querySelector('[data-sla-targets-save-label]');
-    if (label) {
-      label.textContent = button.getAttribute(
-        checkbox.checked ? 'data-recalculate-label' : 'data-save-label'
-      );
-    }
+    button.disabled = !checkbox.checked;
   }
 
   function saveTargetCell(cell) {
@@ -525,7 +508,6 @@
     var mode = parts.bestEffort.checked ? 'best_effort' :
       (parts.value.value.trim() ? 'duration' : 'unset');
     var token = document.querySelector('meta[name="csrf-token"]');
-    var recalculate = document.querySelector('input[name="recalculate"]');
     parts.status.textContent = '';
 
     jQuery.ajax({
@@ -539,8 +521,7 @@
         target_type: cell.getAttribute('data-target-type'),
         mode: mode,
         value: parts.value.value,
-        unit: parts.unit.value,
-        recalculate: recalculate && recalculate.checked ? '1' : '0'
+        unit: parts.unit.value
       }
     }).done(function (response) {
       cell.setAttribute('data-seconds', response.seconds || '');
@@ -626,12 +607,6 @@
     field.classList.toggle('hidden', !(checked && checked.value === 'digest'));
   }
 
-  function fetchRerender(params) {
-    // The re-render rebuilds the panels server-side, so it has to be told which one to show.
-    params.section = currentSection();
-    return jQuery.ajax({ url: formData('edit-url'), data: params, dataType: 'script' });
-  }
-
   function openCloneConfirmation() {
     var source = byId('sla-clone-source');
     var modal = byId('sla-clone-confirm-modal');
@@ -660,7 +635,7 @@
     if (confirmButton) { confirmButton.disabled = true; }
 
     jQuery.ajax({
-      url: form.action,
+      url: form.getAttribute('data-policy-url'),
       method: 'PUT',
       dataType: 'json',
       headers: csrfHeaders(),
@@ -746,8 +721,8 @@
         showWholeNumberWarning(this.closest('[data-sla-target-cell]'));
       }
     });
-    jQuery(document).on('change', 'input[name="recalculate"]', syncTargetsSaveLabel);
-    jQuery(document).on('submit', '#sla-policy-form', submitTargetsForm);
+    jQuery(document).on('change', 'input[name="recalculate"]', syncRecalculateButton);
+    jQuery(document).on('click', '[data-sla-recalculate-button]', runHistoricalRecalculation);
     jQuery(document).on('focusout', '[data-sla-target-editor]', function () {
       var editor = this;
       window.setTimeout(function () {
@@ -788,7 +763,7 @@
     syncLocks();
     syncReveals();
     toggleDigestInterval();
-    syncTargetsSaveLabel();
+    syncRecalculateButton();
     pollRecalculationProgress();
     bindOnce();
   }

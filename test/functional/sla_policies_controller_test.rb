@@ -1033,6 +1033,25 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_nil flash[:sla_recalculation_token]
   end
 
+  test "standalone recalculate action enqueues and returns observable progress" do
+    assert_enqueued_jobs 1, only: SlaPolicyRecalculationJob do
+      post :recalculate, params: { project_id: @project.id }, xhr: true
+    end
+
+    assert_response :success
+    state = SlaRecalculationState.find_by!(project_id: @project.id)
+    assert_equal state.run_token, response.parsed_body.dig('recalculation', 'run_token')
+    assert_equal 'queued', response.parsed_body.dig('recalculation', 'status')
+  end
+
+  test "standalone recalculate action is forbidden without policy edit permission" do
+    @role.remove_permission!(:edit_sla_policy)
+
+    post :recalculate, params: { project_id: @project.id }, xhr: true
+
+    assert_response :forbidden
+  end
+
   test "save without the tick enqueues nothing" do
     assert_no_enqueued_jobs do
       put :update, params: targets_params

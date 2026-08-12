@@ -2839,6 +2839,12 @@
   --tw-ring-opacity: 1;
   --tw-ring-color: rgb(59 130 246 / var(--tw-ring-opacity, 1));
 }
+.sla-plugin .disabled\:tw-cursor-not-allowed:disabled {
+  cursor: not-allowed;
+}
+.sla-plugin .disabled\:tw-opacity-50:disabled {
+  opacity: 0.5;
+}
 .sla-plugin .tw-peer:checked ~ .peer-checked\:tw-bg-primary-600 {
   --tw-bg-opacity: 1;
   background-color: rgb(37 99 235 / var(--tw-bg-opacity, 1));
@@ -2872,6 +2878,9 @@
   .sla-plugin .md\:tw-w-96 {
     width: 24rem;
   }
+  .sla-plugin .md\:tw-w-auto {
+    width: auto;
+  }
   .sla-plugin .md\:tw-max-w-xl {
     max-width: 36rem;
   }
@@ -2884,11 +2893,11 @@
   .sla-plugin .md\:tw-flex-row {
     flex-direction: row;
   }
-  .sla-plugin .md\:tw-items-start {
-    align-items: flex-start;
-  }
   .sla-plugin .md\:tw-items-end {
     align-items: flex-end;
+  }
+  .sla-plugin .md\:tw-items-center {
+    align-items: center;
   }
   .sla-plugin .md\:tw-justify-between {
     justify-content: space-between;

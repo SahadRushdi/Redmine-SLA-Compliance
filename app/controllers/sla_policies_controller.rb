@@ -266,6 +266,12 @@ class SlaPoliciesController < ApplicationController
     render json: recalculation_status_payload(state)
   end
 
+  def recalculate
+    state = queue_recalculation
+    render json: { message: l(:notice_sla_recalculation_queued),
+                   recalculation: recalculation_payload(state) }
+  end
+
   # B3 — "Revert to inherited policy": deletes THIS project's own policy row (cascading to its
   # definitions/status mappings, per their `dependent: :destroy`) so the project falls back to
   # its nearest ancestor's policy. Never touches `sla_results` — the recalculation job UPDATES

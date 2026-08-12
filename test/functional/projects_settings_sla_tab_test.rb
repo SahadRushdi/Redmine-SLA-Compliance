@@ -387,6 +387,8 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_response :success
     assert_select '[data-sla-panel="general"] #sla-clone-source', 1
     assert_select '[data-sla-panel="general"] #sla-clone-load', 1
+    assert_select '[data-sla-panel="general"] label[for="sla-clone-source"]', 0
+    assert_select '[data-sla-panel="general"] #sla-clone-source[aria-label=?]', I18n.t(:field_sla_clone_source)
     assert_select '#sla-clone-confirm-modal[role="dialog"][aria-modal="true"]', 1 do
       assert_select '[data-sla-clone-confirm]', text: I18n.t(:button_sla_load_policy), count: 1
       assert_select '[data-sla-clone-cancel]', text: I18n.t(:button_cancel), count: 1
@@ -501,6 +503,17 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
       assert_select '[data-sla-clone-tracker-confirm]', text: I18n.t(:button_sla_clone_tracker), count: 1
       assert_select '[data-sla-clone-tracker-cancel]', text: I18n.t(:button_cancel), count: 1
     end
+  end
+
+  test "SLA Targets has only a checkbox-enabled standalone Recalculate action" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select '[data-sla-panel="targets"] [data-sla-targets-save]', 0
+    assert_select '[data-sla-panel="targets"] button[type="submit"]', 0
+    assert_select '[data-sla-panel="targets"] input[name="recalculate"]', 1
+    assert_select '[data-sla-panel="targets"] [data-sla-recalculate-button][disabled]',
+                  text: I18n.t(:button_sla_recalculate), count: 1
   end
 
   # A disabled alert card collapses to just its switch, but its fields stay in the DOM and keep

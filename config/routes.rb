@@ -10,6 +10,7 @@ Rails.application.routes.draw do
       patch :add_tracker
       delete :remove_tracker
       patch :clone_tracker, action: :clone_tracker
+      post :recalculate
       get :recalculation_status
     end
     resource :sla_notification_setting, only: [:update], controller: 'sla_notification_settings'
