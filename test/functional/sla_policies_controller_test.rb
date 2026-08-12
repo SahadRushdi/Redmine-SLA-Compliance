@@ -790,6 +790,20 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_equal 2, policy.cloned_from_project_id
   end
 
+  test "AJAX Load persists the selected policy immediately without a second save" do
+    source = build_full_clone_source
+
+    put :update, params: targets_params(clone_source_id: source.project_id.to_s), xhr: true
+
+    assert_response :success
+    saved = policy
+    assert_equal source.project_id, saved.cloned_from_project_id
+    assert_equal source.first_response_rule, saved.first_response_rule
+    assert_equal source.at_risk_threshold, saved.at_risk_threshold
+    assert_equal source.sla_definitions.count, saved.sla_definitions.count
+    assert_nil response.parsed_body['recalculation']
+  end
+
   test "an ordinary later save keeps the recorded clone source" do
     build_clone_source
     put :update, params: targets_params(

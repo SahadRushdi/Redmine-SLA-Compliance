@@ -3,8 +3,8 @@
 <%# the dropdown directly above it, so a card break between them implied a relationship the two %>
 <%# controls don't have. The single heading covers both. %>
 <%# %>
-<%# The picker is NOT a form param — the Load button fetches a prefilled re-render, and %>
-<%# clone_source_id (hidden, in _form) is what rides along on save. %>
+<%# The picker is not submitted with General. Load opens a confirmation modal and then persists %>
+<%# the complete clone immediately through the policy endpoint; no second Save is required. %>
 <%# Locals: project, policy. %>
 <% sources = sla_clone_source_projects(project) %>
 <% if sources.any? %>
@@ -35,4 +35,21 @@
       </button>
     </div>
   <% end %>
+
+  <div id="sla-clone-confirm-modal"
+       data-confirm-template="<%= l(:text_sla_clone_direct_confirm, project: '%{project}') %>"
+       class="hidden tw-fixed tw-inset-0 tw-z-50 tw-flex tw-items-center tw-justify-center tw-p-4"
+       role="dialog" aria-modal="true" aria-labelledby="sla-clone-confirm-title">
+    <div class="tw-absolute tw-inset-0 tw-bg-gray-900/50" data-sla-clone-cancel></div>
+    <div class="tw-relative tw-w-full tw-max-w-md tw-rounded-xl tw-bg-white tw-p-6 tw-text-center tw-shadow-xl">
+      <h3 id="sla-clone-confirm-title" class="tw-m-0 tw-text-base tw-font-semibold tw-text-gray-900">
+        <%= l(:label_sla_clone_confirm) %>
+      </h3>
+      <p data-sla-clone-confirm-message class="tw-mt-3 tw-mb-5 tw-text-sm tw-text-gray-600"></p>
+      <div class="tw-flex tw-justify-center tw-gap-3">
+        <button type="button" data-sla-clone-cancel class="<%= sla_secondary_button_classes %>"><%= l(:button_cancel) %></button>
+        <button type="button" data-sla-clone-confirm class="<%= sla_primary_button_classes %>"><%= l(:button_sla_load_policy) %></button>
+      </div>
+    </div>
+  </div>
 <% end %>

@@ -27,6 +27,11 @@
       <% end %>
     <% end %>
 
+    <%# Policy lifecycle setup belongs beside the on/off decision. The picker remains JS-driven %>
+    <%# (its Load button is type=button), so placing it in this form does not change what General %>
+    <%# submits; the clone prefill still rebuilds every policy section for review. %>
+    <%= render 'sla_policies/clone', project: project, policy: policy %>
+
     <%= render 'sla_policies/save_bar', label: l(:button_sla_save_general) %>
   <% end %>
 

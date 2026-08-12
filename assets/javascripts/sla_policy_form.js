@@ -416,25 +416,48 @@
     });
   }
 
-  function cloneTrackerTargets() {
+  function openCloneTrackerModal() {
     var button = byId('sla-clone-tracker-button');
     var source = byId('sla-clone-tracker-source');
-    if (!button || !source || !source.value || !state.tracker || source.value === state.tracker) { return; }
-    if (!window.confirm(button.getAttribute('data-confirm'))) { return; }
-    var token = document.querySelector('meta[name="csrf-token"]');
+    var modal = byId('sla-clone-tracker-modal');
+    var targetTab = document.querySelector('[data-sla-tracker-tab="' + state.tracker + '"]');
+    if (!button || !source || !modal || !source.value || !targetTab || source.value === state.tracker) { return; }
+    var sourceName = source.options[source.selectedIndex].textContent;
+    var targetName = targetTab.getAttribute('data-tracker-name');
+    modal.setAttribute('data-source-id', source.value);
+    modal.setAttribute('data-target-id', state.tracker);
+    modal.querySelector('#sla-clone-tracker-title').textContent =
+      modal.getAttribute('data-title-template').replace('%{tracker}', targetName);
+    modal.querySelector('[data-sla-clone-tracker-message]').textContent =
+      modal.getAttribute('data-confirm-template').replace('%{source}', sourceName).replace('%{target}', targetName);
+    modal.classList.remove('hidden');
+    modal.querySelector('[data-sla-clone-tracker-confirm]').focus();
+  }
+
+  function closeCloneTrackerModal() {
+    var modal = byId('sla-clone-tracker-modal');
+    if (modal) { modal.classList.add('hidden'); }
+  }
+
+  function cloneTrackerTargets() {
+    var button = byId('sla-clone-tracker-button');
+    var modal = byId('sla-clone-tracker-modal');
+    if (!button || !modal) { return; }
     var recalculate = document.querySelector('input[name="recalculate"]');
-    button.disabled = true;
+    var confirmButton = modal.querySelector('[data-sla-clone-tracker-confirm]');
+    if (confirmButton) { confirmButton.disabled = true; }
     jQuery.ajax({
       url: button.getAttribute('data-endpoint'), method: 'PATCH', dataType: 'json',
-      headers: token ? { 'X-CSRF-Token': token.content } : {},
-      data: { source_tracker_id: source.value, target_tracker_id: state.tracker,
+      headers: csrfHeaders(),
+      data: { source_tracker_id: modal.getAttribute('data-source-id'),
+              target_tracker_id: modal.getAttribute('data-target-id'),
               recalculate: recalculate && recalculate.checked ? '1' : '0' }
     }).done(function () {
       window.location.reload();
     }).fail(function (xhr) {
       var response = xhr.responseJSON || {};
       window.alert(response.error || 'Unable to clone tracker targets');
-      button.disabled = false;
+      if (confirmButton) { confirmButton.disabled = false; }
     });
   }
 
@@ -609,6 +632,48 @@
     return jQuery.ajax({ url: formData('edit-url'), data: params, dataType: 'script' });
   }
 
+  function openCloneConfirmation() {
+    var source = byId('sla-clone-source');
+    var modal = byId('sla-clone-confirm-modal');
+    if (!source || !source.value || !modal) { return; }
+    var selected = source.options[source.selectedIndex];
+    modal.setAttribute('data-source-id', source.value);
+    modal.setAttribute('data-source-name', selected ? selected.textContent : '');
+    modal.querySelector('[data-sla-clone-confirm-message]').textContent =
+      modal.getAttribute('data-confirm-template').replace(
+        '%{project}', selected ? selected.textContent : ''
+      );
+    modal.classList.remove('hidden');
+    modal.querySelector('[data-sla-clone-confirm]').focus();
+  }
+
+  function closeCloneConfirmation() {
+    var modal = byId('sla-clone-confirm-modal');
+    if (modal) { modal.classList.add('hidden'); }
+  }
+
+  function loadClonePolicy() {
+    var modal = byId('sla-clone-confirm-modal');
+    var form = byId('sla-policy-form');
+    if (!modal || !form) { return; }
+    var confirmButton = modal.querySelector('[data-sla-clone-confirm]');
+    if (confirmButton) { confirmButton.disabled = true; }
+
+    jQuery.ajax({
+      url: form.action,
+      method: 'PUT',
+      dataType: 'json',
+      headers: csrfHeaders(),
+      data: { section: 'targets', tab: 'sla_policy',
+              clone_source_id: modal.getAttribute('data-source-id') }
+    }).done(function () {
+      window.location.reload();
+    }).fail(function (xhr) {
+      if (confirmButton) { confirmButton.disabled = false; }
+      window.alert((xhr.responseJSON || {}).error || 'Unable to load policy');
+    });
+  }
+
   function bindOnce() {
     if (state.bound) { return; }
     state.bound = true;
@@ -653,9 +718,13 @@
       if (event.key === 'Escape') {
         closeAddTrackerMenu();
         closeRemoveTrackerModal();
+        closeCloneConfirmation();
+        closeCloneTrackerModal();
       }
     });
-    jQuery(document).on('click', '#sla-clone-tracker-button', cloneTrackerTargets);
+    jQuery(document).on('click', '#sla-clone-tracker-button', openCloneTrackerModal);
+    jQuery(document).on('click', '[data-sla-clone-tracker-cancel]', closeCloneTrackerModal);
+    jQuery(document).on('click', '[data-sla-clone-tracker-confirm]', cloneTrackerTargets);
 
     jQuery(document).on('click', '[data-sla-target-display]', function () {
       var cell = this.closest('[data-sla-target-cell]');
@@ -695,11 +764,10 @@
     });
 
     jQuery(document).on('click', '#sla-clone-load', function () {
-      var source = byId('sla-clone-source');
-      if (!source || !source.value) { return; }
-      if (!window.confirm(formData('confirm-clone'))) { return; }
-      fetchRerender({ clone_from: source.value });
+      openCloneConfirmation();
     });
+    jQuery(document).on('click', '[data-sla-clone-cancel]', closeCloneConfirmation);
+    jQuery(document).on('click', '[data-sla-clone-confirm]', loadClonePolicy);
   }
 
   function init() {

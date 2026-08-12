@@ -52,7 +52,6 @@
                     data: { sla_select: true } %>
             </div>
             <button type="button" id="sla-clone-tracker-button" data-endpoint="<%= clone_tracker_project_sla_policy_path(project) %>"
-                    data-confirm="<%= l(:text_sla_clone_tracker_confirm) %>"
                     class="<%= sla_secondary_button_classes %>"><%= l(:button_sla_clone_tracker) %></button>
           </div>
         <% end %>
@@ -77,6 +76,22 @@
           <% end %>
         </div>
         <button type="button" data-sla-add-tracker-close class="<%= sla_secondary_button_classes %> tw-mt-4"><%= l(:button_cancel) %></button>
+      </div>
+    </div>
+
+    <div id="sla-clone-tracker-modal"
+         data-title-template="<%= l(:label_sla_clone_tracker_named, tracker: '%{tracker}') %>"
+         data-confirm-template="<%= l(:text_sla_clone_tracker_confirm, source: '%{source}', target: '%{target}') %>"
+         class="hidden tw-fixed tw-inset-0 tw-z-50 tw-flex tw-items-center tw-justify-center tw-p-4"
+         role="dialog" aria-modal="true" aria-labelledby="sla-clone-tracker-title">
+      <div class="tw-absolute tw-inset-0 tw-bg-gray-900/50" data-sla-clone-tracker-cancel></div>
+      <div class="tw-relative tw-w-full tw-max-w-md tw-rounded-xl tw-bg-white tw-p-6 tw-text-center tw-shadow-xl">
+        <h3 id="sla-clone-tracker-title" class="tw-m-0 tw-text-base tw-font-semibold tw-text-gray-900"><%= l(:button_sla_clone_tracker) %></h3>
+        <p data-sla-clone-tracker-message class="tw-mt-3 tw-mb-5 tw-text-sm tw-text-gray-600"></p>
+        <div class="tw-flex tw-justify-center tw-gap-3">
+          <button type="button" data-sla-clone-tracker-cancel class="<%= sla_secondary_button_classes %>"><%= l(:button_cancel) %></button>
+          <button type="button" data-sla-clone-tracker-confirm class="<%= sla_primary_button_classes %>"><%= l(:button_sla_clone_tracker) %></button>
+        </div>
       </div>
     </div>
 

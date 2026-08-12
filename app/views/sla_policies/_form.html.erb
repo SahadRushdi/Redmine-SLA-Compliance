@@ -27,7 +27,6 @@
     <%= hidden_field_tag 'clone_source_id', params[:clone_from].presence, id: 'sla-clone-source-id' %>
 
     <%= render layout: 'sla_policies/lock', locals: { project: project, locked: locked } do %>
-      <%= render 'sla_policies/clone', project: project, policy: policy %>
       <%= render 'sla_policies/definitions', project: project, policy: policy %>
 
       <%# Step 4.8 — forward-only save by default; optional historical recalculation. It shares a %>

@@ -374,6 +374,26 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select '.sla-plugin', text: /#{Regexp.escape(source_project.name)}/
   end
 
+  test "the clone-from-project card renders in General below SLA Tracking, not in SLA Targets" do
+    source_project = Project.find(2)
+    source_project.enable_module!(:sla_compliance)
+    member = Member.find_or_initialize_by(user_id: 2, project_id: source_project.id)
+    member.role_ids = (member.role_ids + [@role.id]).uniq
+    member.save!
+    SlaPolicy.create!(project_id: source_project.id, enabled: true)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'general' }
+
+    assert_response :success
+    assert_select '[data-sla-panel="general"] #sla-clone-source', 1
+    assert_select '[data-sla-panel="general"] #sla-clone-load', 1
+    assert_select '#sla-clone-confirm-modal[role="dialog"][aria-modal="true"]', 1 do
+      assert_select '[data-sla-clone-confirm]', text: I18n.t(:button_sla_load_policy), count: 1
+      assert_select '[data-sla-clone-cancel]', text: I18n.t(:button_cancel), count: 1
+    end
+    assert_select '[data-sla-panel="targets"] #sla-clone-source', 0
+  end
+
   test "every configured target type gets its own column, header and inline editor per priority" do
     tracker_id = @project.trackers.sorted.first.id
     SlaPolicy.create!(project_id: @project.id, enabled: true, selected_tracker_ids: [tracker_id])
@@ -462,6 +482,25 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select "#sla-clone-tracker-source option[value='#{removed_tracker.id}']", 0
   ensure
     policy&.destroy
+  end
+
+  test "tracker clone uses the Clone Tracker button and centered confirmation modal" do
+    trackers = @project.trackers.first(2)
+    policy = SlaPolicy.create!(project_id: @project.id, enabled: true,
+                               selected_tracker_ids: trackers.map(&:id))
+    policy.sla_definitions.create!(tracker_id: trackers.first.id,
+                                   priority_id: IssuePriority.active.first.id,
+                                   response_seconds: 3600)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select '#sla-clone-tracker-button', text: I18n.t(:button_sla_clone_tracker), count: 1
+    assert_select '#sla-clone-tracker-modal[role="dialog"][aria-modal="true"]', 1 do
+      assert_select '.tw-text-center', 1
+      assert_select '[data-sla-clone-tracker-confirm]', text: I18n.t(:button_sla_clone_tracker), count: 1
+      assert_select '[data-sla-clone-tracker-cancel]', text: I18n.t(:button_cancel), count: 1
+    end
   end
 
   # A disabled alert card collapses to just its switch, but its fields stay in the DOM and keep
