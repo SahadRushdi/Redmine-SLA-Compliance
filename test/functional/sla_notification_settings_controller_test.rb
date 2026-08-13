@@ -56,6 +56,39 @@ class SlaNotificationSettingsControllerTest < ActionController::TestCase
     assert_equal [], setting.recipient_user_ids(:at_risk)
   end
 
+  test "autosaving one scalar returns JSON and preserves both recipient channels" do
+    saved = SlaNotificationSetting.create!(project_id: @project.id,
+                                           at_risk_digest_interval_minutes: 60)
+    saved.replace_recipient_user_ids!(:at_risk, [@recipient_ids.first])
+    saved.replace_recipient_user_ids!(:stale, [@recipient_ids.last])
+
+    patch :update, params: {
+      project_id: @project.id,
+      sla_notification_setting: { at_risk_digest_interval_minutes: '120' }
+    }, xhr: true
+
+    assert_response :success
+    assert_equal I18n.t(:notice_successful_update), response.parsed_body['message']
+    assert_equal 120, saved.reload.at_risk_digest_interval_minutes
+    assert_equal [@recipient_ids.first], saved.recipient_user_ids(:at_risk)
+    assert_equal [@recipient_ids.last], saved.recipient_user_ids(:stale)
+  end
+
+  test "autosaving one recipient channel never clears the other channel" do
+    saved = SlaNotificationSetting.create!(project_id: @project.id)
+    saved.replace_recipient_user_ids!(:at_risk, [@recipient_ids.first])
+    saved.replace_recipient_user_ids!(:stale, [@recipient_ids.last])
+
+    patch :update, params: {
+      project_id: @project.id,
+      sla_notification_setting: { at_risk_email_recipient_user_ids: [''] }
+    }, xhr: true
+
+    assert_response :success
+    assert_empty saved.reload.recipient_user_ids(:at_risk)
+    assert_equal [@recipient_ids.last], saved.recipient_user_ids(:stale)
+  end
+
   test "a non-member user id is rejected with a flash error" do
     outsider = User.active.where.not(id: @project.users.select(:id)).first
     put :update, params: {

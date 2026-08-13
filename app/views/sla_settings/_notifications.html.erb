@@ -1,7 +1,7 @@
 <%# Instance-wide fallback configuration. Uses the exact project notification card partial. %>
 <%= form_tag sla_global_notification_setting_path, method: :patch,
-             id: 'sla-global-notification-form' do %>
+             id: 'sla-global-notification-form', data: { sla_notification_autosave: true } do %>
   <%= render 'sla_notification_settings/fields', setting: SlaNotificationSetting.global_for_form,
              project: nil %>
-  <%= render 'sla_policies/save_bar', label: l(:button_sla_save_notifications) %>
+  <p data-sla-notification-status aria-live="polite" class="tw-mt-1 tw-text-right tw-text-xs"></p>
 <% end %>

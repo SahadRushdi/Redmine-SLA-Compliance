@@ -561,6 +561,18 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select 'input[data-sla-reveals="at-risk-email"][type=checkbox]'
   end
 
+  test "notifications autosave every control and render no dedicated save button" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'notifications' }
+
+    assert_response :success
+    assert_select '#sla-notification-form[data-sla-notification-autosave]' do
+      assert_select '[data-sla-notification-field]', 10
+      assert_select '[data-sla-notification-status]', 1
+      assert_select 'button[type=submit]', 0
+      assert_select 'input[type=submit]', 0
+    end
+  end
+
   test "each inactive project channel identifies its effective fallback source" do
     global = SlaNotificationSetting.global_for_form
     global.google_chat_webhook = 'https://chat.example.test/global'

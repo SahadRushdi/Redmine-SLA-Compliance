@@ -14,8 +14,12 @@ class SlaAdminModuleTest < ActionController::TestCase
     assert_select '[data-sla-admin-section="general"]', 1
     assert_select '[data-sla-admin-section="notifications"]', 1
     assert_select '.sla-section-link-desc', 0
-    assert_select '#sla-global-notification-form', 1
+    assert_select '#sla-global-notification-form[data-sla-notification-autosave]', 1
     assert_select '#sla-global-notification-form', 1 do
+      assert_select '[data-sla-notification-field]', 10
+      assert_select '[data-sla-notification-status]', 1
+      assert_select 'button[type=submit]', 0
+      assert_select 'input[type=submit]', 0
       assert_select 'h3', text: 'Google Chat Integration'
       assert_select 'h3', text: 'At-Risk Email Alerts'
       assert_select 'h3', text: 'Stale-Ticket Email Digest'

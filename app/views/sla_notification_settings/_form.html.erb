@@ -1,11 +1,12 @@
 <%# Project notification form. Card markup is shared with the admin surface through _fields. %>
 <% setting = sla_notification_setting_for_form(project) %>
-<%= form_tag project_sla_notification_setting_path(project), method: :put, id: 'sla-notification-form' do %>
+<%= form_tag project_sla_notification_setting_path(project), method: :put,
+             id: 'sla-notification-form', data: { sla_notification_autosave: true } do %>
   <%= hidden_field_tag 'tab', 'sla_policy' %>
   <%= render layout: 'sla_policies/lock',
              locals: { project: project, locked: sla_tracking_off?(project) } do %>
     <%= render 'sla_notification_settings/fields', setting: setting, project: project,
                fallbacks: sla_notification_fallbacks(project) %>
-    <%= render 'sla_policies/save_bar', label: l(:button_sla_save_notifications) %>
+    <p data-sla-notification-status aria-live="polite" class="tw-mt-1 tw-text-right tw-text-xs"></p>
   <% end %>
 <% end %>

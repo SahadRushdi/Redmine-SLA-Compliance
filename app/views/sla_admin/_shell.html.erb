@@ -9,6 +9,8 @@
 <%= render 'sla_compliance/assets' %>
 <% content_for :header_tags do %>
   <%= javascript_include_tag 'sla_admin.js', plugin: 'redmine_sla_compliance' %>
+  <%# Notification fields share the same delegated autosave implementation as Project Settings. %>
+  <%= javascript_include_tag 'sla_policy_form.js', plugin: 'redmine_sla_compliance' %>
 <% end %>
 
 <%# sla-admin-module is what neutralises Redmine's own `.box tabular settings` chrome when this %>

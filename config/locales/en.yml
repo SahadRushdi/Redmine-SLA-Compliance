@@ -226,7 +226,6 @@ en:
   button_sla_save_targets: "Save SLA Targets"
   button_sla_save_and_recalculate: "Save and Recalculate"
   button_sla_recalculate: "Recalculate"
-  button_sla_save_notifications: "Save Notification Settings"
 
   # --- Inheritance notice + Revert (B3) ------------------------------------------------------
   text_sla_inherited_notice: "These settings are inherited from %{project} and apply to this project already. Change anything and save, and this project keeps its own copy from then on — %{project}'s later changes will no longer reach it."

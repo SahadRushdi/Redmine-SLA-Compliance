@@ -31,8 +31,11 @@ class SlaNotificationSettingsController < ApplicationController
     setting.errors.add(:base, l(:error_sla_invalid_notification_recipients)) if invalid_ids.any?
 
     if setting.errors.empty? && save_with_recipients(setting, recipient_ids.transform_values { |ids| ids.map(&:to_i) & valid_ids })
+      return render json: { message: l(:notice_successful_update) } if request.xhr? || request.format.json?
       flash[:notice] = l(:notice_successful_update)
     else
+      error = setting.errors.full_messages.join(', ')
+      return render json: { error: error }, status: :unprocessable_entity if request.xhr? || request.format.json?
       flash[:error] = setting.errors.full_messages.join(', ')
     end
     redirect_to redirect_path
@@ -50,10 +53,11 @@ class SlaNotificationSettingsController < ApplicationController
 
   def extracted_params
     permitted = setting_params
-    ids = {
-      at_risk: Array(permitted.delete('at_risk_email_recipient_user_ids')).reject(&:blank?),
-      stale: Array(permitted.delete('stale_email_recipient_user_ids')).reject(&:blank?)
-    }
+    ids = {}
+    { at_risk: 'at_risk_email_recipient_user_ids',
+      stale: 'stale_email_recipient_user_ids' }.each do |channel, key|
+      ids[channel] = Array(permitted.delete(key)).reject(&:blank?) if permitted.key?(key)
+    end
     [permitted, ids]
   end
 

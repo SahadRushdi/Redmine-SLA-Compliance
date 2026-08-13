@@ -664,6 +664,41 @@
     field.classList.toggle('hidden', !(checked && checked.value === 'digest'));
   }
 
+  function notificationStatus(form, message, failed) {
+    var status = form.querySelector('[data-sla-notification-status]');
+    if (!status) { return; }
+    status.textContent = message;
+    status.className = 'tw-mt-1 tw-text-right tw-text-xs ' +
+      (failed ? 'tw-text-red-600' : 'tw-text-green-600');
+  }
+
+  // Persist exactly one notification control at a time. All elements sharing the changed
+  // control's name are serialized together: Rails checkbox hidden+visible pairs, radio groups,
+  // and multi-select hidden+selected values therefore retain their native parameter semantics.
+  // No sibling field is posted, so overlapping responses cannot revert a newer edit elsewhere.
+  function saveNotification(input) {
+    var form = input.closest('[data-sla-notification-autosave]');
+    if (!form || !input.name) { return; }
+
+    var sameName = Array.prototype.filter.call(form.elements, function (element) {
+      return element.name === input.name;
+    });
+    var methodOverride = form.querySelector('input[name="_method"]');
+
+    notificationStatus(form, 'Saving…', false);
+    jQuery.ajax({
+      url: form.action,
+      method: methodOverride ? methodOverride.value.toUpperCase() : form.method.toUpperCase(),
+      dataType: 'json',
+      headers: csrfHeaders(),
+      data: jQuery(sameName).serialize()
+    }).done(function (response) {
+      notificationStatus(form, response.message || 'Saved', false);
+    }).fail(function (xhr) {
+      notificationStatus(form, (xhr.responseJSON || {}).error || 'Unable to save', true);
+    });
+  }
+
   function openCloneConfirmation() {
     var source = byId('sla-clone-source');
     var modal = byId('sla-clone-confirm-modal');
@@ -735,6 +770,9 @@
       });
 
     jQuery(document).on('change', '[data-sla-reveals]', syncReveals);
+    jQuery(document).on('change', '[data-sla-notification-field]', function () {
+      saveNotification(this);
+    });
     jQuery(document).on('change',
       'input[name="sla_notification_setting[at_risk_email_frequency]"]', toggleDigestInterval);
 
@@ -811,7 +849,8 @@
   }
 
   function init() {
-    if (!byId('sla-policy-settings') && !byId('sla-notification-form')) {
+    if (!byId('sla-policy-settings') &&
+        !document.querySelector('[data-sla-notification-autosave]')) {
       return;
     }
     // Re-assert the open section after an AJAX re-render replaced the nav and panels. The DOM —
