@@ -92,6 +92,16 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_select '#main-menu a.sla-compliance.selected'
   end
 
+  test "project dashboard title uses a hyphen before the project name" do
+    grant_sla_access!
+
+    get :index, params: { project_id: @project.identifier }
+
+    assert_response :success
+    assert_select 'h1', text: "SLA Compliance - #{@project.name}"
+    assert_select 'title', text: /SLA Compliance - #{@project.name}/
+  end
+
   test "the cross-project dashboard selects the top-level SLA entry, not the project tab" do
     grant_sla_access!
     SlaPolicy.create!(project_id: @project.id, enabled: true)

@@ -1,4 +1,4 @@
-<% html_title(@project ? "#{l(:label_sla_compliance)} — #{@project.name}" : l(:label_sla_dashboard_all)) %>
+<% html_title(@project ? "#{l(:label_sla_compliance)} - #{@project.name}" : l(:label_sla_dashboard_all)) %>
 <%= render 'sla_compliance/assets' %>
 <% content_for :header_tags do %>
   <%= javascript_include_tag 'sla_dashboard_tabs.js', plugin: 'redmine_sla_compliance' %>
