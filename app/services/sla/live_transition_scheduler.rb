@@ -19,6 +19,7 @@ module Sla
       notify_at_risk if @outcome.newly_at_risk?
       schedule(:at_risk, @outcome.record.at_risk_at)
       schedule(:breach, @outcome.record.breach_at)
+      schedule_stale
     end
 
     private
@@ -51,6 +52,33 @@ module Sla
       return unless log
 
       AtRiskNotifier.new.enqueue_at_risk(@issue, @outcome.record, setting: setting, log: log)
+    end
+
+    def schedule_stale
+      unless stale_candidate?
+        @outcome.record.update_column(:stale_at, nil) if @outcome.record.respond_to?(:stale_at) && @outcome.record.stale_at
+        return
+      end
+
+      setting = NotificationSettingsResolver.new(@issue.project).resolve(:stale_email).setting
+      at = setting ? @issue.updated_on + setting.stale_threshold_days.days : nil
+      @outcome.record.update_column(:stale_at, at) if @outcome.record.stale_at != at
+      return unless at
+
+      at <= @now ? notify_stale(setting) : schedule(:stale, at)
+    end
+
+    def stale_candidate?
+      row = @outcome.record
+      return false unless row.respond_to?(:primary_state)
+
+      row.primary_state == 'no_sla' && row.no_sla_reason == 'not_tracked' && row.resolved_at.nil?
+    end
+
+    def notify_stale(setting)
+      log = SlaNotificationLog.claim!(issue_id: @issue.id, notification_type: 'stale',
+                                      cycle_key: @issue.updated_on.to_i.to_s)
+      StaleNotifier.new.enqueue_stale(@issue, setting: setting, log: log) if log
     end
   end
 end

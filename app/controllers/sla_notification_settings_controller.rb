@@ -44,8 +44,7 @@ class SlaNotificationSettingsController < ApplicationController
   def setting_params
     permitted = params.require(:sla_notification_setting)
                       .permit(:google_chat_webhook, :at_risk_email_enabled,
-                              :at_risk_email_frequency, :at_risk_digest_interval_minutes,
-                              :stale_email_enabled, :stale_email_frequency, :stale_threshold_days,
+                              :stale_email_enabled, :stale_threshold_days,
                               at_risk_email_recipient_user_ids: [],
                               stale_email_recipient_user_ids: []).to_h
     permitted

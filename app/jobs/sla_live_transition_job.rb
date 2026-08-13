@@ -10,7 +10,8 @@ class SlaLiveTransitionJob < ActiveJob::Base
     row = SlaResult.find_by(issue_id: issue_id)
     return if issue.nil? || row.nil?
     return unless row.calculated_at&.to_i == calculation_token.to_i
-    projected_at = transition == 'at_risk' ? row.at_risk_at : row.breach_at
+    projected_at = { 'at_risk' => row.at_risk_at, 'breach' => row.breach_at,
+                     'stale' => row.stale_at }[transition]
     return unless projected_at&.to_i == transition_token.to_i
 
     outcome = Sla::ResultStore.recalculate(issue, now: Time.current)

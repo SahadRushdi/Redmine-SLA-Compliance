@@ -5,10 +5,10 @@ Redmine, presented as a filterable dashboard, with Google Chat + email notificat
 time-aware dashboard state.
 
 The plugin recomputes cached SLA projections whenever a ticket changes and schedules targeted
-background transitions for projected `at_risk_at` / `breach_at` timestamps. A recurring maintenance
-sweep drives digest batching and stale-ticket discovery; the dashboard does not automatically
-refresh. SLA timelines are reconstructed from Redmine's journal
-history, never from the issue's current state.
+background transitions for projected `at_risk_at`, `breach_at`, and `stale_at` timestamps. At-risk
+and stale email alerts are immediate and do not depend on a cron sweep; the dashboard evaluates
+the indexed projections against the current time on every request. SLA timelines are reconstructed
+from Redmine's journal history, never from the issue's current state.
 
 See `SLA_Compliance_Plugin_Implementation_Plan.md` for the full spec and phased plan.
 
@@ -20,11 +20,13 @@ See `SLA_Compliance_Plugin_Implementation_Plan.md` for the full spec and phased 
 | Ruby | 3.1.x |
 | Rails | 6.1.x |
 
-- **Background jobs:** ActiveJob using Redmine's configured adapter (default `:async`).
+- **Background jobs:** ActiveJob with a durable production adapter and running worker. The default
+  in-process `:async` adapter is suitable only for development because scheduled jobs are lost on
+  restart.
 - **Live calculations:** event-driven cache writes plus targeted background state transitions.
-- **Digest scheduler:** run `redmine_sla_compliance:sweep` at least every 15 minutes using cron or
-  the instance scheduler. Use a durable ActiveJob adapter in production so queued email survives
-  process restarts.
+- **Post-upgrade/recovery:** run `redmine_sla_compliance:reconcile_live` once after deployment and
+  after material queue downtime. The legacy `sweep` task remains an explicit maintenance tool,
+  not a scheduler requirement.
 
 ## Install
 

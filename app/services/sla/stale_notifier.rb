@@ -1,24 +1,23 @@
 # frozen_string_literal: true
 
 module Sla
-  # The sweep detects a project's stale-digest window coming due and hands the qualifying tickets
-  # here to be queued. Phase 8 (Email Notifications) replaces this body with the real digest
-  # mailer; keeping it a small injectable object lets the sweep's scheduling behavior be fully
-  # tested without any mail infrastructure yet — mirrors `AtRiskNotifier`.
+  # Immediate stale-ticket delivery. Normal callers are targeted stale_at jobs; the plural method
+  # remains only as a compatibility facade for the explicit maintenance sweep.
   class StaleNotifier
-    # @param project [Project]
-    # @param issues  [Array<Issue>] open, no_sla/not_tracked issues stale past the project's
-    #   configured threshold
-    def enqueue_stale_digest(project, logs, setting:)
-      queued = logs.select(&:queue!)
-      return false if queued.empty?
+    def enqueue_stale(issue, setting:, log:)
+      return false unless log.queue!
 
-      SlaEmailDeliveryJob.perform_later('stale_digest', project.id, queued.map(&:id), setting.id)
+      SlaEmailDeliveryJob.perform_later('stale_alert', issue.project_id, [log.id], setting.id)
       true
     rescue StandardError => e
-      Array(queued || logs).each { |log| log.failed!(e) }
-      Rails.logger.error("[SLA] stale email enqueue failed for project ##{project.id}: #{e.class}: #{e.message}")
+      log.failed!(e)
+      Rails.logger.error("[SLA] stale email enqueue failed for issue ##{issue.id}: #{e.class}: #{e.message}")
       false
+    end
+
+    # @param project [Project]
+    def enqueue_stale_digest(project, logs, setting:)
+      logs.count { |entry| enqueue_stale(entry.issue, setting: setting, log: entry) }
     end
   end
 end

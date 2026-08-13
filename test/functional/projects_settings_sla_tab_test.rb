@@ -566,7 +566,7 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
 
     assert_response :success
     assert_select '#sla-notification-form[data-sla-notification-autosave]' do
-      assert_select '[data-sla-notification-field]', 10
+    assert_select '[data-sla-notification-field]', 6
       assert_select '[data-sla-notification-status]', 1
       assert_select 'button[type=submit]', 0
       assert_select 'input[type=submit]', 0

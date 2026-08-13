@@ -9,7 +9,7 @@ class SlaEmailDeliveryJob < ApplicationJob
     logs = SlaNotificationLog.where(id: Array(log_ids), delivery_state: 'queued').order(:id).to_a
     return if project.nil? || setting.nil? || logs.empty?
 
-    channel = kind == 'stale_digest' ? :stale : :at_risk
+    channel = kind.start_with?('stale') ? :stale : :at_risk
     recipients = Sla::EmailRecipientResolver.for(setting, channel: channel, project: project).to_a
     raise StandardError, 'no eligible project recipients' if recipients.empty?
 
@@ -31,6 +31,8 @@ class SlaEmailDeliveryJob < ApplicationJob
       SlaMailer.at_risk_digest(user, project, logs)
     when 'stale_digest'
       SlaMailer.stale_digest(user, project, logs)
+    when 'stale_alert'
+      SlaMailer.stale_alert(user, Issue.find(logs.first.issue_id), logs.first)
     else
       raise ArgumentError, "unknown SLA email kind #{kind.inspect}"
     end

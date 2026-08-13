@@ -64,4 +64,16 @@ class SlaEmailDeliveryJobTest < ActiveSupport::TestCase
     assert_includes body, I18n.t(:field_assigned_to)
     assert_equal 'sent', @log.reload.delivery_state
   end
+
+  test 'delivers one immediate stale-ticket alert' do
+    @setting.update!(stale_email_enabled: true)
+    @setting.replace_recipient_user_ids!(:stale, [@user.id])
+    @log.update_columns(notification_type: 'stale', target: '')
+
+    SlaEmailDeliveryJob.new.perform('stale_alert', @project.id, [@log.id], @setting.id)
+
+    assert_equal 1, ActionMailer::Base.deliveries.size
+    assert_equal 'sent', @log.reload.delivery_state
+    assert_includes ActionMailer::Base.deliveries.first.subject, "##{@issue.id}"
+  end
 end

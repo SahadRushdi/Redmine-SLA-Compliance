@@ -37,11 +37,11 @@ class SlaNotificationSettingsControllerTest < ActionController::TestCase
     saved = setting
     assert saved.at_risk_email_enabled?
     assert_equal @recipient_ids.sort, saved.recipient_user_ids(:at_risk).sort
-    assert_equal 'digest', saved.at_risk_email_frequency
-    assert_equal 120, saved.at_risk_digest_interval_minutes
+    assert_equal 'realtime', saved.at_risk_email_frequency
+    assert_equal 60, saved.at_risk_digest_interval_minutes
     assert saved.stale_email_enabled?
     assert_equal [@recipient_ids.first], saved.recipient_user_ids(:stale)
-    assert_equal 'monthly', saved.stale_email_frequency
+    assert_equal 'weekly', saved.stale_email_frequency
     assert_equal 10, saved.stale_threshold_days
     assert_includes saved.google_chat_webhook, 'chat.googleapis.com'
   end
@@ -56,7 +56,7 @@ class SlaNotificationSettingsControllerTest < ActionController::TestCase
     assert_equal [], setting.recipient_user_ids(:at_risk)
   end
 
-  test "autosaving one scalar returns JSON and preserves both recipient channels" do
+  test "legacy frequency parameters are ignored and preserve both recipient channels" do
     saved = SlaNotificationSetting.create!(project_id: @project.id,
                                            at_risk_digest_interval_minutes: 60)
     saved.replace_recipient_user_ids!(:at_risk, [@recipient_ids.first])
@@ -69,7 +69,7 @@ class SlaNotificationSettingsControllerTest < ActionController::TestCase
 
     assert_response :success
     assert_equal I18n.t(:notice_successful_update), response.parsed_body['message']
-    assert_equal 120, saved.reload.at_risk_digest_interval_minutes
+    assert_equal 60, saved.reload.at_risk_digest_interval_minutes
     assert_equal [@recipient_ids.first], saved.recipient_user_ids(:at_risk)
     assert_equal [@recipient_ids.last], saved.recipient_user_ids(:stale)
   end
@@ -131,7 +131,7 @@ class SlaNotificationSettingsControllerTest < ActionController::TestCase
                            sla_notification_setting: { stale_email_frequency: 'daily' } }
 
     assert_redirected_to settings_project_path(@project, tab: 'sla_policy')
-    assert_equal 'daily', setting.stale_email_frequency
+    assert_equal 'weekly', setting.stale_email_frequency
   ensure
     Setting.plugin_redmine_sla_compliance = {}
   end

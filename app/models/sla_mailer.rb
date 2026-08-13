@@ -23,6 +23,13 @@ class SlaMailer < Mailer
     mail to: user, subject: l(:mail_subject_sla_stale_digest, project: project.name)
   end
 
+  def stale_alert(user, issue, log)
+    prepare_sla(user, issue.project)
+    @issue, @log = issue, log
+    @issue_url = Rails.application.routes.url_helpers.issue_url(issue, ::Mailer.default_url_options)
+    mail to: user, subject: l(:mail_subject_sla_stale_alert, project: issue.project.name, issue: "##{issue.id}")
+  end
+
   private
 
   def prepare_sla(user, project)

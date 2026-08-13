@@ -3,12 +3,18 @@
 require_relative '../../test_helper'
 
 class Sla::LiveTransitionSchedulerTest < ActiveSupport::TestCase
-  IssueStub = Struct.new(:id, :project)
+  IssueStub = Struct.new(:id, :project, :updated_on)
   ResultStub = Struct.new(:at_risk_at, :breach_at, :calculated_at)
   ClassificationStub = Struct.new(:at_risk_target, :at_risk_since, :cycle_started_at)
   OutcomeStub = Struct.new(:record, :result, :newly_at_risk_value) do
     def newly_at_risk?
       newly_at_risk_value
+    end
+  end
+  StaleRow = Struct.new(:primary_state, :no_sla_reason, :resolved_at, :stale_at, :calculated_at,
+                        :at_risk_at, :breach_at) do
+    def update_column(name, value)
+      public_send("#{name}=", value)
     end
   end
 
@@ -65,5 +71,26 @@ class Sla::LiveTransitionSchedulerTest < ActiveSupport::TestCase
                        .with(issue, row, setting: setting, log: log)
 
     Sla::LiveTransitionScheduler.call(issue, outcome, now: now)
+  end
+
+  test 'projects and schedules a stale transition without a sweep' do
+    now = Time.zone.local(2026, 8, 10, 10, 0)
+    updated_on = now - 1.day
+    project = Object.new
+    issue = IssueStub.new(42, project, updated_on)
+    row = StaleRow.new('no_sla', 'not_tracked', nil, nil, now)
+    outcome = OutcomeStub.new(row, nil, false)
+    setting = SlaNotificationSetting.new(stale_threshold_days: 3)
+    resolver = mock('notification-resolver')
+    resolver.expects(:resolve).with(:stale_email)
+            .returns(Sla::NotificationSettingsResolver::Resolution.new(setting: setting))
+    Sla::NotificationSettingsResolver.expects(:new).with(project).returns(resolver)
+    proxy = mock('configured-job')
+    projected = updated_on + 3.days
+    SlaLiveTransitionJob.expects(:set).with(wait_until: projected).returns(proxy)
+    proxy.expects(:perform_later).with(42, now.to_i, 'stale', projected.to_i)
+
+    Sla::LiveTransitionScheduler.call(issue, outcome, now: now)
+    assert_equal projected, row.stale_at
   end
 end

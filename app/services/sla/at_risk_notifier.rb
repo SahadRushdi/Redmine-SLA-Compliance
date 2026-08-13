@@ -12,7 +12,6 @@ module Sla
     # @param issue  [Issue]
     # @param result [SlaResult] the freshly cached result (carries breach_at)
     def enqueue_at_risk(issue, result, setting:, log:)
-      return true if setting.at_risk_email_frequency == 'digest'
       return false unless log.queue!
 
       SlaEmailDeliveryJob.perform_later('at_risk_realtime', issue.project_id, [log.id], setting.id)

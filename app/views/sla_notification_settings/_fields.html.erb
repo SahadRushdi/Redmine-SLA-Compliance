@@ -20,7 +20,7 @@
                                      reveals: 'at-risk-email'),
                      body_reveal: 'at-risk-email',
                      body_hidden: !setting.at_risk_email_enabled? } do %>
-  <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-4">
+  <div>
       <div>
         <label for="sla-at-risk-recipients" class="<%= sla_label_classes %>"><%= l(:field_at_risk_email_recipients) %></label>
         <% recipients = setting.persisted? ? setting.recipient_user_ids(:at_risk) : [] %>
@@ -29,26 +29,6 @@
               sla_notification_recipient_options(project, recipients), multiple: true,
               id: 'sla-at-risk-recipients',
               data: { sla_user_recipients: true, sla_notification_field: true } %>
-      </div>
-      <div>
-        <span class="<%= sla_label_classes %>"><%= l(:field_at_risk_email_frequency) %></span>
-        <div class="tw-grid tw-grid-cols-2 tw-gap-3">
-          <% SlaNotificationSetting::AT_RISK_FREQUENCIES.each do |frequency| %>
-            <label class="sla-option-card">
-              <%= radio_button_tag 'sla_notification_setting[at_risk_email_frequency]', frequency,
-                    setting.at_risk_email_frequency == frequency, class: sla_radio_classes,
-                    data: { sla_notification_field: true } %>
-              <%= l("label_sla_frequency_#{frequency}") %>
-            </label>
-          <% end %>
-        </div>
-        <div id="sla-digest-interval-field" class="tw-mt-4 md:tw-w-56 <%= 'hidden' unless setting.at_risk_email_frequency == 'digest' %>">
-          <label for="sla_notification_digest_interval" class="<%= sla_label_classes %>"><%= l(:field_at_risk_digest_interval_minutes) %></label>
-          <%= number_field_tag 'sla_notification_setting[at_risk_digest_interval_minutes]',
-                setting.at_risk_digest_interval_minutes, min: 1,
-                id: 'sla_notification_digest_interval', class: sla_input_classes,
-                data: { sla_notification_field: true } %>
-        </div>
       </div>
   </div>
 <% end %>
@@ -76,14 +56,6 @@
               data: { sla_user_recipients: true, sla_notification_field: true } %>
       </div>
       <div>
-        <div class="tw-mb-4">
-          <label for="sla_notification_stale_frequency" class="<%= sla_label_classes %>"><%= l(:field_stale_email_frequency) %></label>
-          <%= select_tag 'sla_notification_setting[stale_email_frequency]',
-                options_for_select(SlaNotificationSetting::STALE_FREQUENCIES.map { |frequency| [l("label_sla_frequency_#{frequency}"), frequency] },
-                                   setting.stale_email_frequency),
-                id: 'sla_notification_stale_frequency', class: sla_input_classes,
-                data: { sla_select: true, sla_notification_field: true } %>
-        </div>
         <div>
           <label for="sla_notification_stale_threshold_days" class="<%= sla_label_classes %>"><%= l(:field_stale_threshold_days) %></label>
           <%= number_field_tag 'sla_notification_setting[stale_threshold_days]',

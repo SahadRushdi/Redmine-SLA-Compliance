@@ -17,11 +17,12 @@ class SlaNotificationSetting < ActiveRecord::Base
   #
   # `last_stale_digest_at` is deliberately absent. It is retained only as legacy upgrade state;
   # active schedule claims live in SlaNotificationDigestState and are always per target project.
+  # Legacy frequency columns remain copyable for rollback compatibility, but runtime delivery is
+  # immediate and the public forms/controllers no longer expose or accept them.
   COPY_ATTRIBUTES = %w[google_chat_webhook
                        at_risk_email_enabled at_risk_email_frequency
                        at_risk_digest_interval_minutes
-                       stale_email_enabled stale_email_frequency
-                       stale_threshold_days].freeze
+                       stale_email_enabled stale_email_frequency stale_threshold_days].freeze
 
   belongs_to :project, optional: true
   has_many :notification_recipients, class_name: 'SlaNotificationRecipient',

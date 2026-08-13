@@ -118,24 +118,13 @@ module Sla
       (@now - last_activity) >= threshold_days.days
     end
 
-    # Claim this project's stale-digest window and queue whichever candidates are still stale at
-    # claim time. Called on every sweep tick while stale email is enabled — cheap no-op (0 rows
-    # updated) until the project's configured frequency interval has actually elapsed, at which
-    # point the target project's independent schedule gate advances. This
-    # runs even with an empty candidate list so a project with zero stale tickets this period
-    # still does not get re-checked repeatedly inside one manual run.
+    # Legacy maintenance fallback. Normal delivery comes from a targeted stale_at job. Keying the
+    # claim on updated_on makes this path converge with that job: one alert per inactivity episode,
+    # even if an operator runs the maintenance sweep repeatedly.
     def queue_stale_digest(project, stale_candidates, setting)
-      state = SlaNotificationDigestState.claim_stale_window!(
-        project.id, setting.stale_digest_interval, now: @now
-      )
-      return 0 unless state
-
-      # The window's own claimed instant is the cycle_key: a still-stale ticket gets a fresh key
-      # every window (rather than being claimed once, ever), so it keeps reappearing in
-      # subsequent digests for as long as it stays stale — the whole point of a recurring digest.
-      window_key = state.last_stale_digest_at.to_i.to_s
       claimed = stale_candidates.filter_map do |issue|
-        SlaNotificationLog.claim!(issue_id: issue.id, notification_type: 'stale', cycle_key: window_key)
+        SlaNotificationLog.claim!(issue_id: issue.id, notification_type: 'stale',
+                                  cycle_key: issue.updated_on.to_i.to_s)
       end
       @stale_notifier.enqueue_stale_digest(project, claimed, setting: setting) if claimed.any?
       claimed.size

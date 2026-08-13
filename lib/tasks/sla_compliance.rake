@@ -7,6 +7,13 @@
 # Safe to run repeatedly. Schedule at least every 15 minutes; normal time transitions also use
 # one-off ActiveJob executions projected from each issue's cached deadlines.
 namespace :redmine_sla_compliance do
+  desc 'Rebuild live SLA projections, schedule missing transitions, and drain legacy digest claims'
+  task reconcile_live: :environment do
+    summary = Sla::LiveReconciler.new.run
+    puts "[SLA] live reconciliation complete: #{summary.recalculated} recalculated, " \
+         "#{summary.legacy_queued} legacy alerts queued."
+  end
+
   desc 'Re-evaluate open tickets and queue due at-risk/stale email digests (idempotent)'
   task sweep: :environment do
     summary = Sla::Sweep.new.run
