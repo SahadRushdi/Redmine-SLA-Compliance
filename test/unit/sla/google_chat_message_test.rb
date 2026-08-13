@@ -2,7 +2,6 @@
 
 require_relative '../../test_helper'
 
-# Step 7.1 — the Google Chat message body. Pure formatting: no HTTP, no job, no DB writes.
 class Sla::GoogleChatMessageTest < ActiveSupport::TestCase
   fixtures :projects, :users, :email_addresses, :issues, :issue_statuses, :trackers,
            :enumerations, :issue_categories, :versions, :roles, :members, :member_roles
@@ -20,84 +19,52 @@ class Sla::GoogleChatMessageTest < ActiveSupport::TestCase
     Setting.protocol = @original_protocol
   end
 
-  def text_for(issue)
-    ::I18n.with_locale(:en) { Sla::GoogleChatMessage.new(issue).text }
+  def message_for(issue = @issue)
+    ::I18n.with_locale(:en) { Sla::GoogleChatMessage.new(issue) }
   end
 
-  # The label of a field row, as it appears in the rendered table.
-  def row_value(text, label)
-    line = text.lines.find { |l| l.start_with?("#{label}:") }
-    assert_not_nil line, "expected a #{label} row in:\n#{text}"
-    line.split(':', 2).last.strip
-  end
+  test 'payload is one compact text message in the requested order' do
+    payload = message_for.payload
+    expected = [
+      "New issue in *#{@issue.project.name}*",
+      "#{@issue.subject} <https://redmine.example.com/issues/#{@issue.id}|##{@issue.id} ↗>",
+      "Created By: #{@issue.author.name}",
+      "Assignee: #{@issue.assigned_to&.name || Sla::GoogleChatMessage::BLANK}",
+      "Status: #{@issue.status.name}",
+      "Priority: #{@issue.priority.name}"
+    ]
 
-  test "payload is a text message" do
-    payload = ::I18n.with_locale(:en) { Sla::GoogleChatMessage.new(@issue).payload }
     assert_equal [:text], payload.keys
-    assert_kind_of String, payload[:text]
+    assert_equal expected, payload[:text].lines(chomp: true)
   end
 
-  test "every configured field is rendered, in order" do
-    text = text_for(@issue)
-    labels = Sla::GoogleChatMessage::FIELDS.map { |key, _| ::I18n.with_locale(:en) { ::I18n.t(key) } }
-
-    positions = labels.map do |label|
-      index = text.index("#{label}:")
-      assert_not_nil index, "expected a #{label} row in:\n#{text}"
-      index
-    end
-    assert_equal positions.sort, positions, 'rows must render in FIELDS order'
+  test 'issue id and external-link icon are the custom hyperlink label' do
+    assert_includes message_for.text,
+                    "<https://redmine.example.com/issues/#{@issue.id}|##{@issue.id} ↗>"
   end
 
-  test "the header carries the project name and the body carries the reference" do
-    text = text_for(@issue)
-    assert_includes text, @issue.project.name
-    assert_equal "##{@issue.id}", row_value(text, 'Reference')
-    assert_equal @issue.subject, row_value(text, 'Title')
-    assert_equal @issue.tracker.name, row_value(text, 'Type')
-    assert_equal @issue.status.name, row_value(text, 'Status')
-    assert_equal @issue.priority.name, row_value(text, 'Priority')
-    assert_equal @issue.author.name, row_value(text, 'Submitted By')
-  end
-
-  test "the field table sits inside a code fence so the columns stay aligned" do
-    text = text_for(@issue)
-    assert_equal 2, text.scan(Sla::GoogleChatMessage::FENCE).size, 'expected exactly one fenced block'
-
-    fenced = text.split(Sla::GoogleChatMessage::FENCE)[1]
-    value_columns = fenced.lines.reject { |l| l.strip.empty? }.map { |l| l.index(/\S/, l.index(':') + 1) }
-    assert_equal 1, value_columns.uniq.size, "values must start at one column:\n#{fenced}"
-  end
-
-  test "unset fields render a dash and the row is still present" do
+  test 'missing values render a dash while the issue link remains available' do
+    @issue.subject = nil
+    @issue.author = nil
     @issue.assigned_to = nil
-    @issue.category = nil
-    @issue.fixed_version = nil
-    @issue.start_date = nil
-    @issue.due_date = nil
+    @issue.status = nil
+    @issue.priority = nil
+    @issue.stubs(:project).returns(nil)
 
-    text = text_for(@issue)
-    ['Assigned To', 'Category', 'Target Version', 'Start Date', 'Due Date'].each do |label|
-      assert_equal Sla::GoogleChatMessage::BLANK, row_value(text, label),
-                   "#{label} must render a dash when unset"
-    end
+    lines = message_for.text.lines(chomp: true)
+    assert_equal 'New issue in *—*', lines[0]
+    assert_equal "— <https://redmine.example.com/issues/#{@issue.id}|##{@issue.id} ↗>", lines[1]
+    assert_equal ['Created By: —', 'Assignee: —', 'Status: —', 'Priority: —'], lines.drop(2)
   end
 
-  test "dates render in long form" do
-    @issue.due_date = Date.new(2026, 7, 15)
-    assert_equal 'July 15, 2026', row_value(text_for(@issue), 'Due Date')
-  end
+  test 'user-controlled text cannot inject chat formatting links or extra lines' do
+    @issue.subject = "*urgent* <https://bad.example|click>\nnext line"
+    @issue.project.name = '`Project`'
 
-  test "a subject containing backticks cannot break out of the code fence" do
-    @issue.subject = "broken ``` fence\nattempt"
-
-    text = text_for(@issue)
-    assert_equal 2, text.scan(Sla::GoogleChatMessage::FENCE).size
-    assert_equal 'broken  fence attempt', row_value(text, 'Title')
-  end
-
-  test "the link points at the issue on the configured host" do
-    text = text_for(@issue)
-    assert_includes text, "https://redmine.example.com/issues/#{@issue.id}"
+    text = message_for.text
+    assert_equal 6, text.lines.size
+    assert_includes text, 'New issue in *Project*'
+    assert_includes text, 'urgent https://bad.exampleclick next line'
+    refute_includes text, 'https://bad.example|click'
   end
 end
