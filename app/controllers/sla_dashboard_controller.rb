@@ -280,13 +280,14 @@ class SlaDashboardController < ApplicationController
   def detail_csv_row(sla_result)
     issue = sla_result.issue
     state = sla_result.effective_primary_state
+    deviation = sla_result.effective_deviation_seconds
     result_label = sla_card_label(state.to_sym)
     result_label = "#{result_label} (#{l(:label_sla_card_at_risk)})" if sla_result.effective_at_risk?
 
     [issue.id, issue.project.name, issue.tracker.name, issue.subject, issue.status.name,
      issue.assigned_to&.name, format_sla_duration(sla_result.response_seconds),
      format_sla_duration(sla_result.resolution_seconds), result_label,
-     sla_result.deviation_seconds.present? ? format_sla_duration(sla_result.deviation_seconds) : nil]
+     deviation.present? ? format_sla_duration(deviation) : nil]
   end
 
   def detail_csv_filename

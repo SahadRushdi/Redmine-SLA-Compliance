@@ -136,6 +136,7 @@
             <% @detail_results.each do |sla_result| %>
               <% issue = sla_result.issue %>
               <% effective_state = sla_result.effective_primary_state %>
+              <% effective_deviation = sla_result.effective_deviation_seconds %>
               <% result_label = sla_card_label(effective_state.to_sym) %>
               <% result_label = "#{result_label} #{l(:label_sla_card_at_risk)}" if sla_result.effective_at_risk? %>
               <%# Searchable text for the client-side instant search above - every field a user would %>
@@ -176,13 +177,9 @@
                     </span>
                   <% end %>
                 </td>
-                <%# Gated on the raw column, not effective_primary_state: a live-reclassified breach %>
-                <%# (stale persisted "met" + a passed breach_at) correctly shows the Breached badge %>
-                <%# above but has no computed deviation yet - the engine hasn't run for it since it %>
-                <%# breached, and this dashboard never computes SLA state live (Global Rule 4). %>
-                <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap <%= 'tw-text-red-600 tw-font-medium' if sla_result.deviation_seconds.present? %>"
-                    data-sla-sort-value="<%= sla_result.deviation_seconds %>">
-                  <%= sla_result.deviation_seconds.present? ? "+#{format_sla_duration(sla_result.deviation_seconds)}" : '—' %>
+                <td class="tw-py-2.5 tw-pr-4 tw-whitespace-nowrap <%= 'tw-text-red-600 tw-font-medium' if effective_deviation.present? %>"
+                    data-sla-sort-value="<%= effective_deviation %>">
+                  <%= effective_deviation.present? ? "+#{format_sla_duration(effective_deviation)}" : '—' %>
                 </td>
               </tr>
             <% end %>

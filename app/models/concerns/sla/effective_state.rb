@@ -41,6 +41,17 @@ module Sla
       (at_risk? || (at_risk_at.present? && at_risk_at <= now)) && effective_primary_state(now) == 'met'
     end
 
+    # Persisted deviation is the engine's exact maximum overage at calculated_at. For an open
+    # interval that is still overdue, deviation_at lets readers advance that value with the clock.
+    # A stale met row uses breach_at until its targeted transition job persists deviation_at.
+    def effective_deviation_seconds(now = Time.current)
+      return nil unless effective_primary_state(now) == 'breached'
+
+      live_from = deviation_at.presence || (primary_state == 'met' ? breach_at : nil)
+      live_value = live_from && [(now - live_from).floor, 0].max
+      [deviation_seconds, live_value].compact.max
+    end
+
     private
 
     def live_breached?(now)

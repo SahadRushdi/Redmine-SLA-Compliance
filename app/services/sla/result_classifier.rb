@@ -41,7 +41,7 @@ module Sla
     # and suppress every later one for the life of the cycle. `at_risk_since` is the clock start for
     # the three one-shot targets (identical to the old key) and the current gap's start for
     # Update Frequency. Both nil when the ticket is not at risk.
-    Result = Struct.new(:primary_state, :no_sla_reason, :at_risk, :at_risk_at, :breach_at,
+    Result = Struct.new(:primary_state, :no_sla_reason, :at_risk, :at_risk_at, :breach_at, :deviation_at,
                         :at_risk_target, :at_risk_since,
                         :response_seconds, :workaround_seconds, :resolution_seconds,
                         :update_frequency_seconds, :deviation_seconds, :cycle_started_at,
@@ -87,6 +87,7 @@ module Sla
         at_risk:            at_risk,
         at_risk_at:         at_risk_at,
         breach_at:          breach_at,
+        deviation_at:       breached ? growing_deviation_at(milestones) : nil,
         at_risk_target:     at_risk_kind&.to_s,
         at_risk_since:      at_risk_kind && risk_since(milestones, at_risk_kind),
         response_seconds:   elapsed_for(milestones, :response),
@@ -211,6 +212,22 @@ module Sla
 
     def max_overage(milestones)
       milestones.select { |m| m[:breached] }.map { |m| m[:elapsed] - m[:target] }.max
+    end
+
+    # Deadline of the currently-running overdue interval. Historical Update Frequency gaps remain
+    # in deviation_seconds but do not keep growing after a fresh update; only the current gap is
+    # projected here. For one-shot milestones the running interval starts at clock_start.
+    def growing_deviation_at(milestones)
+      return nil unless open?
+
+      milestones.filter_map do |milestone|
+        next if milestone[:best_effort] || !milestone[:pending]
+
+        current_elapsed = milestone[:risk_elapsed] || milestone[:elapsed]
+        next unless current_elapsed > milestone[:target]
+
+        calculator.add(milestone[:risk_since] || clock_start, milestone[:target])
+      end.min
     end
 
     def response_at

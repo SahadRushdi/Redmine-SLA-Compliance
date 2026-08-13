@@ -452,8 +452,20 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
     assert_equal 'breached', r.primary_state
     assert_equal 5 * 3600, r.update_frequency_seconds, 'the largest quiet gap so far'
     assert_equal 3600, r.deviation_seconds, 'one hour past the cadence'
+    assert_equal at(4), r.deviation_at, 'the current silence keeps growing from its target deadline'
     refute r.at_risk, 'a breached ticket is past at-risk, exactly as for the other targets'
     assert_nil r.breach_at
+  end
+
+  test "a recovered historical cadence breach keeps its deviation but does not keep growing" do
+    d = Definition.new(update_frequency_seconds: FOUR_HOURS)
+    tl = timeline(comments: [[at(5), false]]) # breached by 1h, then activity resets the live gap
+
+    r = classify(tl, definition: d, now: at(6))
+
+    assert_equal 'breached', r.primary_state
+    assert_equal 3600, r.deviation_seconds
+    assert_nil r.deviation_at, 'the current one-hour gap is not overdue'
   end
 
   test "qualifying updates spaced under the target -> met" do

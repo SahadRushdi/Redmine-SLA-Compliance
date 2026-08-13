@@ -112,6 +112,7 @@ class Sla::ResultStoreTest < ActiveSupport::TestCase
 
     assert_equal 'breached', row.primary_state
     assert_equal 3600, row.deviation_seconds
+    assert_equal at(1).to_i, row.deviation_at.to_i
     refute row.at_risk
     assert_nil row.breach_at
   end

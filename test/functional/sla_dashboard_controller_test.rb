@@ -574,7 +574,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_select '#sla-detail-table-body tr[data-sla-row]', 5
   end
 
-  test "deviation column is blank for every non-breach row and populated for the persisted breach row" do
+  test "deviation column updates live for both persisted and live-reclassified breaches" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
     grant_sla_access!
     issues = seed_reconciled_dataset
@@ -583,8 +583,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
     assert_select "#sla-detail-row-#{issues[:breached].id} td:last-child", text: /1h/
     assert_select "#sla-detail-row-#{issues[:met].id} td:last-child", text: '—'
-    # live_breached shows the Breached badge (see next test) but has no computed deviation yet.
-    assert_select "#sla-detail-row-#{issues[:live_breached].id} td:last-child", text: '—'
+    assert_select "#sla-detail-row-#{issues[:live_breached].id} td:last-child", text: /1h/
   end
 
   test "the at-risk flag renders alongside the Met badge on an at-risk row, never replacing it" do
