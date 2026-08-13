@@ -9,11 +9,16 @@ module Sla
     # @param project [Project]
     # @param issues  [Array<Issue>] open, no_sla/not_tracked issues stale past the project's
     #   configured threshold
-    def enqueue_stale_digest(project, issues, setting:)
-      Rails.logger.info(
-        "[SLA] stale-ticket digest queued for project ##{project.id} " \
-        "(#{issues.size} ticket(s), setting=#{setting.scope_key})"
-      )
+    def enqueue_stale_digest(project, logs, setting:)
+      queued = logs.select(&:queue!)
+      return false if queued.empty?
+
+      SlaEmailDeliveryJob.perform_later('stale_digest', project.id, queued.map(&:id), setting.id)
+      true
+    rescue StandardError => e
+      Array(queued || logs).each { |log| log.failed!(e) }
+      Rails.logger.error("[SLA] stale email enqueue failed for project ##{project.id}: #{e.class}: #{e.message}")
+      false
     end
   end
 end

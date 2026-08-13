@@ -1,0 +1,6 @@
+<%= l(:mail_heading_sla_at_risk_digest, project: @project.name) %>
+
+<% @logs.each do |log|; issue = @issues[log.issue_id]; next unless issue %>
+* #<%= issue.id %>: <%= issue.subject %> | <%= l("label_sla_target_#{log.target}") %> | <%= issue.status %> | <%= issue.assigned_to || '—' %> | <%= format_time(@results[issue.id]&.breach_at) %>
+  <%= issue_url(issue, ::Mailer.default_url_options) %>
+<% end %>

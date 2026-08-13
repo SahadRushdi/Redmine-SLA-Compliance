@@ -4,6 +4,11 @@
 # ProjectsController#settings (no plugin controller runs on that GET), so everything the form
 # needs is derived here. All lists come live from Redmine configuration — never constants.
 module SlaPoliciesHelper
+  def sla_notification_recipient_options(project, selected_ids)
+    users = (project ? Sla::ProjectRecipientUsers.for(project) : User.active.joins(:email_address))
+            .distinct.order(:lastname, :firstname, :id)
+    options_for_select(users.map { |user| ["#{user.name} — #{user.mail}", user.id] }, selected_ids)
+  end
   # --- Sectioned settings shell -------------------------------------------------------------
   # The tab is split into sidebar-navigable sections instead of one long scrolling form. Section
   # keys are the single source of truth shared by the nav, the panels, each section form's hidden

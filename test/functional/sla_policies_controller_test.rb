@@ -962,15 +962,16 @@ class SlaPoliciesControllerTest < ActionController::TestCase
   test "cloning copies the source project's notification settings" do
     source = build_full_clone_source
     @role.add_permission!(:manage_sla_notifications)
-    SlaNotificationSetting.create!(project_id: source.project_id,
+    source_setting = SlaNotificationSetting.create!(project_id: source.project_id,
                                    google_chat_webhook: 'https://chat.example.com/hook',
                                    at_risk_email_enabled: true,
-                                   at_risk_email_recipients: ['ops@example.com'],
                                    at_risk_email_frequency: 'digest',
                                    at_risk_digest_interval_minutes: 30,
                                    stale_email_enabled: true,
                                    stale_email_frequency: 'daily', stale_threshold_days: 4,
                                    last_stale_digest_at: Time.zone.now)
+    recipient = Project.find(source.project_id).users.joins(:email_address).first
+    source_setting.replace_recipient_user_ids!(:at_risk, [recipient.id])
 
     put :update, params: targets_params(clone_source_id: '2')
 
@@ -978,7 +979,7 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_not_nil copied, 'the clone must carry the notification setup across'
     assert_equal 'https://chat.example.com/hook', copied.google_chat_webhook
     assert copied.at_risk_email_enabled?
-    assert_equal ['ops@example.com'], copied.at_risk_email_recipients
+    assert_equal [recipient.id], copied.recipient_user_ids(:at_risk)
     assert_equal 'digest', copied.at_risk_email_frequency
     assert_equal 30, copied.at_risk_digest_interval_minutes
     assert copied.stale_email_enabled?

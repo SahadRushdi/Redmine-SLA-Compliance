@@ -24,4 +24,12 @@ class SlaNotificationDigestStateTest < ActiveSupport::TestCase
     assert SlaNotificationDigestState.claim_stale_window!(3, 1.week, now: now)
     assert SlaNotificationDigestState.claim_stale_window!(4, 1.week, now: now)
   end
+
+  test 'at-risk digest has an independent configurable interval' do
+    now = Time.zone.local(2026, 8, 13, 10, 0)
+
+    assert SlaNotificationDigestState.claim_at_risk_window!(1, 60.minutes, now: now)
+    assert_nil SlaNotificationDigestState.claim_at_risk_window!(1, 60.minutes, now: now + 59.minutes)
+    assert SlaNotificationDigestState.claim_at_risk_window!(1, 60.minutes, now: now + 60.minutes)
+  end
 end

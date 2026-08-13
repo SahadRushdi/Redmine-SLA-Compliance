@@ -11,12 +11,14 @@ class SlaNotificationLog < ActiveRecord::Base
   TARGETS = %w[response workaround resolution update_frequency].freeze
   NO_TARGET = ''
   NO_CYCLE = ''
+  DELIVERY_STATES = %w[pending queued sent failed].freeze
 
   belongs_to :issue, optional: true
 
   validates :issue_id, presence: true
   validates :notification_type, inclusion: { in: TYPES }
   validates :target, inclusion: { in: TARGETS }, allow_blank: true
+  validates :delivery_state, inclusion: { in: DELIVERY_STATES }
 
   # Has this ticket+type+target(+cycle) already been sent?
   def self.already_sent?(issue_id:, notification_type:, target: NO_TARGET, cycle_key: NO_CYCLE)
@@ -37,9 +39,23 @@ class SlaNotificationLog < ActiveRecord::Base
   # instead of being silently suppressed forever after its first appearance).
   def self.claim!(issue_id:, notification_type:, target: NO_TARGET, cycle_key: NO_CYCLE)
     create!(issue_id: issue_id, notification_type: notification_type, target: target,
-            cycle_key: cycle_key.to_s, sent_at: nil)
-    true
+            cycle_key: cycle_key.to_s, sent_at: nil, delivery_state: 'pending')
   rescue ActiveRecord::RecordNotUnique
-    false
+    nil
+  end
+
+
+  def queue!
+    self.class.where(id: id, delivery_state: 'pending').update_all(delivery_state: 'queued') == 1
+  end
+
+  def sent!
+    update_columns(delivery_state: 'sent', sent_at: Time.current, failure_message: nil,
+                   updated_at: Time.current)
+  end
+
+  def failed!(error)
+    update_columns(delivery_state: 'failed', failure_message: "#{error.class}: #{error.message}"[0, 255],
+                   updated_at: Time.current)
   end
 end

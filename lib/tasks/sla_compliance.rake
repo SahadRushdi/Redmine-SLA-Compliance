@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
-# Optional manual maintenance entry point for the at-risk & stale evaluator.
+# Recurring maintenance entry point for digest batching and the stale evaluator.
 # Usage:
 #   bundle exec rake redmine_sla_compliance:sweep RAILS_ENV=production
 #
-# Safe to run repeatedly. This is not scheduled by the plugin; normal time transitions use one-off
-# ActiveJob executions projected from each issue's cached deadlines.
+# Safe to run repeatedly. Schedule at least every 15 minutes; normal time transitions also use
+# one-off ActiveJob executions projected from each issue's cached deadlines.
 namespace :redmine_sla_compliance do
-  desc 'Re-evaluate open SLA-tracked tickets and queue at-risk notifications (idempotent)'
+  desc 'Re-evaluate open tickets and queue due at-risk/stale email digests (idempotent)'
   task sweep: :environment do
     summary = Sla::Sweep.new.run
     puts "[SLA] sweep complete: #{summary.swept} swept, " \

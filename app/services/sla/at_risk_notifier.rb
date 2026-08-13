@@ -11,11 +11,16 @@ module Sla
   class AtRiskNotifier
     # @param issue  [Issue]
     # @param result [SlaResult] the freshly cached result (carries breach_at)
-    def enqueue_at_risk(issue, result, setting:)
-      Rails.logger.info(
-        "[SLA] at-risk notification queued for issue ##{issue.id} " \
-        "(breach_at=#{result.breach_at}, setting=#{setting.scope_key})"
-      )
+    def enqueue_at_risk(issue, result, setting:, log:)
+      return true if setting.at_risk_email_frequency == 'digest'
+      return false unless log.queue!
+
+      SlaEmailDeliveryJob.perform_later('at_risk_realtime', issue.project_id, [log.id], setting.id)
+      true
+    rescue StandardError => e
+      log.failed!(e)
+      Rails.logger.error("[SLA] at-risk email enqueue failed for issue ##{issue.id}: #{e.class}: #{e.message}")
+      false
     end
   end
 end

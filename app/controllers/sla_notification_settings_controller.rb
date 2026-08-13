@@ -24,8 +24,13 @@ class SlaNotificationSettingsController < ApplicationController
   private
 
   def save_setting(setting, redirect_path)
-    setting.assign_attributes(setting_params)
-    if setting.save
+    attributes, recipient_ids = extracted_params
+    setting.assign_attributes(attributes)
+    valid_ids = permitted_recipient_ids(recipient_ids.values.flatten)
+    invalid_ids = recipient_ids.values.flatten.map(&:to_i).uniq - valid_ids
+    setting.errors.add(:base, l(:error_sla_invalid_notification_recipients)) if invalid_ids.any?
+
+    if setting.errors.empty? && save_with_recipients(setting, recipient_ids.transform_values { |ids| ids.map(&:to_i) & valid_ids })
       flash[:notice] = l(:notice_successful_update)
     else
       flash[:error] = setting.errors.full_messages.join(', ')
@@ -38,10 +43,32 @@ class SlaNotificationSettingsController < ApplicationController
                       .permit(:google_chat_webhook, :at_risk_email_enabled,
                               :at_risk_email_frequency, :at_risk_digest_interval_minutes,
                               :stale_email_enabled, :stale_email_frequency, :stale_threshold_days,
-                              at_risk_email_recipients: [], stale_email_recipients: []).to_h
-    %w[at_risk_email_recipients stale_email_recipients].each do |key|
-      permitted[key] = Array(permitted[key]).map(&:strip).reject(&:empty?) if permitted.key?(key)
-    end
+                              at_risk_email_recipient_user_ids: [],
+                              stale_email_recipient_user_ids: []).to_h
     permitted
+  end
+
+  def extracted_params
+    permitted = setting_params
+    ids = {
+      at_risk: Array(permitted.delete('at_risk_email_recipient_user_ids')).reject(&:blank?),
+      stale: Array(permitted.delete('stale_email_recipient_user_ids')).reject(&:blank?)
+    }
+    [permitted, ids]
+  end
+
+  def permitted_recipient_ids(requested)
+    scope = @project ? Sla::ProjectRecipientUsers.for(@project) : User.active.joins(:email_address)
+    scope.where(id: requested.map(&:to_i)).distinct.pluck(:id)
+  end
+
+  def save_with_recipients(setting, recipient_ids)
+    SlaNotificationSetting.transaction do
+      setting.save!
+      recipient_ids.each { |channel, ids| setting.replace_recipient_user_ids!(channel, ids) }
+    end
+    true
+  rescue ActiveRecord::RecordInvalid
+    false
   end
 end

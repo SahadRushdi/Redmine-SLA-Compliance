@@ -59,9 +59,10 @@ class Sla::LiveTransitionSchedulerTest < ActiveSupport::TestCase
     resolver.expects(:resolve).with(:at_risk_email)
             .returns(Sla::NotificationSettingsResolver::Resolution.new(setting: setting))
     Sla::NotificationSettingsResolver.expects(:new).with(project).returns(resolver)
-    SlaNotificationLog.expects(:claim!).returns(true)
+    log = mock('notification-log')
+    SlaNotificationLog.expects(:claim!).returns(log)
     Sla::AtRiskNotifier.any_instance.expects(:enqueue_at_risk)
-                       .with(issue, row, setting: setting)
+                       .with(issue, row, setting: setting, log: log)
 
     Sla::LiveTransitionScheduler.call(issue, outcome, now: now)
   end

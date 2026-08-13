@@ -1,0 +1,6 @@
+<%= l(:mail_heading_sla_stale_digest, project: @project.name) %>
+
+<% @logs.each do |log|; issue = @issues[log.issue_id]; next unless issue %>
+* #<%= issue.id %>: <%= issue.subject %> | <%= issue.status %> | <%= format_time(issue.created_on) %> | <%= format_time(issue.updated_on) %> | <%= issue.assigned_to || '—' %> | <%= issue.project %>
+  <%= issue_url(issue, ::Mailer.default_url_options) %>
+<% end %>

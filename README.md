@@ -5,9 +5,9 @@ Redmine, presented as a filterable dashboard, with Google Chat + email notificat
 time-aware dashboard state.
 
 The plugin recomputes cached SLA projections whenever a ticket changes and schedules targeted
-background transitions for projected `at_risk_at` / `breach_at` timestamps. There is no recurring
-server sweep and the dashboard does not automatically refresh; users refresh it when they need a
-new view of the current cached state. SLA timelines are reconstructed from Redmine's journal
+background transitions for projected `at_risk_at` / `breach_at` timestamps. A recurring maintenance
+sweep drives digest batching and stale-ticket discovery; the dashboard does not automatically
+refresh. SLA timelines are reconstructed from Redmine's journal
 history, never from the issue's current state.
 
 See `SLA_Compliance_Plugin_Implementation_Plan.md` for the full spec and phased plan.
@@ -22,6 +22,9 @@ See `SLA_Compliance_Plugin_Implementation_Plan.md` for the full spec and phased 
 
 - **Background jobs:** ActiveJob using Redmine's configured adapter (default `:async`).
 - **Live calculations:** event-driven cache writes plus targeted background state transitions.
+- **Digest scheduler:** run `redmine_sla_compliance:sweep` at least every 15 minutes using cron or
+  the instance scheduler. Use a durable ActiveJob adapter in production so queued email survives
+  process restarts.
 
 ## Install
 
@@ -56,7 +59,5 @@ npm run watch     # rebuild on change during development
 
 ## Status
 
-Phase 0 (setup & scoped UI foundation) is in place: loadable plugin, project module + the
-`view_sla_dashboard` / `edit_sla_policy` / `manage_sla_notifications` permissions, and the scoped
-Tailwind/Flowbite build with a Flowbite test page. Data model, engine, dashboard, and
-notifications follow in later phases.
+Phases 0–8 are implemented, including cached SLA evaluation, live transitions, dashboards,
+Google Chat notifications, at-risk email alerts/digests, and stale-ticket digests.

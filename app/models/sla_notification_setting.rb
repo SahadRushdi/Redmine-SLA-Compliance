@@ -18,12 +18,14 @@ class SlaNotificationSetting < ActiveRecord::Base
   # `last_stale_digest_at` is deliberately absent. It is retained only as legacy upgrade state;
   # active schedule claims live in SlaNotificationDigestState and are always per target project.
   COPY_ATTRIBUTES = %w[google_chat_webhook
-                       at_risk_email_enabled at_risk_email_recipients at_risk_email_frequency
+                       at_risk_email_enabled at_risk_email_frequency
                        at_risk_digest_interval_minutes
-                       stale_email_enabled stale_email_recipients stale_email_frequency
+                       stale_email_enabled stale_email_frequency
                        stale_threshold_days].freeze
 
   belongs_to :project, optional: true
+  has_many :notification_recipients, class_name: 'SlaNotificationRecipient',
+             dependent: :delete_all, inverse_of: :sla_notification_setting
 
   serialize :at_risk_email_recipients, JSON
   serialize :stale_email_recipients, JSON
@@ -43,7 +45,6 @@ class SlaNotificationSetting < ActiveRecord::Base
   # a log line every time somebody creates an issue. https only — Google Chat webhooks are always
   # https, and posting issue details over plain http would be a downgrade nobody asked for.
   validates :google_chat_webhook, format: { with: %r{\Ahttps://\S+\z} }, allow_blank: true
-  validate :recipients_are_valid_emails
 
   def self.global
     find_by(scope_key: GLOBAL_SCOPE_KEY)
@@ -82,7 +83,12 @@ class SlaNotificationSetting < ActiveRecord::Base
   def self.copy_to!(project, source)
     setting = find_or_initialize_by(project_id: project.id)
     setting.assign_attributes(source.attributes.slice(*COPY_ATTRIBUTES))
-    setting.save!
+    transaction do
+      setting.save!
+      SlaNotificationRecipient::CHANNELS.each do |channel|
+        setting.replace_recipient_user_ids!(channel, source.recipient_user_ids(channel))
+      end
+    end
     setting
   end
 
@@ -94,21 +100,27 @@ class SlaNotificationSetting < ActiveRecord::Base
     FREQUENCY_INTERVALS.fetch(stale_email_frequency, 1.week)
   end
 
+  def at_risk_digest_interval
+    (at_risk_digest_interval_minutes.presence || 60).to_i.minutes
+  end
+
+  def recipient_user_ids(channel)
+    notification_recipients.where(channel: channel.to_s).pluck(:user_id)
+  end
+
+  def replace_recipient_user_ids!(channel, user_ids)
+    transaction do
+      notification_recipients.where(channel: channel.to_s).delete_all
+      Array(user_ids).map(&:to_i).select(&:positive?).uniq.each do |user_id|
+        notification_recipients.create!(channel: channel.to_s, user_id: user_id)
+      end
+    end
+  end
+
   private
 
   def assign_scope_key
     self.scope_key = "project:#{project_id}" if project_id.present?
   end
 
-  EMAIL_RE = URI::MailTo::EMAIL_REGEXP
-
-  def recipients_are_valid_emails
-    { at_risk_email_recipients: at_risk_email_recipients,
-      stale_email_recipients: stale_email_recipients }.each do |attr, list|
-      next if list.blank?
-      unless list.is_a?(Array) && list.all? { |e| e.to_s.match?(EMAIL_RE) }
-        errors.add(attr, :invalid)
-      end
-    end
-  end
 end

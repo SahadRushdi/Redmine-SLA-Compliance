@@ -1,0 +1,9 @@
+<h1><%= l(:mail_heading_sla_stale_digest, project: @project.name) %></h1>
+<table>
+  <thead><tr><th><%= l(:field_sla_chat_title) %></th><th><%= l(:field_status) %></th><th><%= l(:field_created_on) %></th><th><%= l(:field_updated_on) %></th><th><%= l(:field_assigned_to) %></th><th><%= l(:field_project) %></th></tr></thead>
+  <tbody>
+  <% @logs.each do |log|; issue = @issues[log.issue_id]; next unless issue %>
+    <tr><td><%= link_to "##{issue.id}: #{issue.subject}", issue_url(issue, ::Mailer.default_url_options) %></td><td><%= issue.status %></td><td><%= format_time(issue.created_on) %></td><td><%= format_time(issue.updated_on) %></td><td><%= issue.assigned_to || '—' %></td><td><%= issue.project %></td></tr>
+  <% end %>
+  </tbody>
+</table>

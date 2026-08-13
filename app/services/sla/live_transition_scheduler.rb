@@ -45,11 +45,12 @@ module Sla
       result = @outcome.result
       target = result&.at_risk_target.presence || SlaNotificationLog::NO_TARGET
       episode = result&.at_risk_since || result&.cycle_started_at
-      return unless SlaNotificationLog.claim!(issue_id: @issue.id, notification_type: 'at_risk',
-                                               target: target,
-                                               cycle_key: episode&.to_i&.to_s || SlaNotificationLog::NO_CYCLE)
+      log = SlaNotificationLog.claim!(issue_id: @issue.id, notification_type: 'at_risk',
+                                      target: target,
+                                      cycle_key: episode&.to_i&.to_s || SlaNotificationLog::NO_CYCLE)
+      return unless log
 
-      AtRiskNotifier.new.enqueue_at_risk(@issue, @outcome.record, setting: setting)
+      AtRiskNotifier.new.enqueue_at_risk(@issue, @outcome.record, setting: setting, log: log)
     end
   end
 end

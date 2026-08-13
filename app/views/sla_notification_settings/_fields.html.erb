@@ -21,11 +21,11 @@
   <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-4">
       <div>
         <label for="sla-at-risk-recipients" class="<%= sla_label_classes %>"><%= l(:field_at_risk_email_recipients) %></label>
-        <% recipients = setting.at_risk_email_recipients.to_a %>
-        <%= hidden_field_tag 'sla_notification_setting[at_risk_email_recipients][]', '', id: nil %>
-        <%= select_tag 'sla_notification_setting[at_risk_email_recipients][]',
-              options_for_select(recipients.map { |email| [email, email] }, recipients),
-              multiple: true, id: 'sla-at-risk-recipients', data: { sla_emails: true } %>
+        <% recipients = setting.persisted? ? setting.recipient_user_ids(:at_risk) : [] %>
+        <%= hidden_field_tag 'sla_notification_setting[at_risk_email_recipient_user_ids][]', '', id: nil %>
+        <%= select_tag 'sla_notification_setting[at_risk_email_recipient_user_ids][]',
+              sla_notification_recipient_options(project, recipients), multiple: true,
+              id: 'sla-at-risk-recipients', data: { sla_user_recipients: true } %>
       </div>
       <div>
         <span class="<%= sla_label_classes %>"><%= l(:field_at_risk_email_frequency) %></span>
@@ -62,11 +62,11 @@
   <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-4">
       <div>
         <label for="sla-stale-recipients" class="<%= sla_label_classes %>"><%= l(:field_stale_email_recipients) %></label>
-        <% recipients = setting.stale_email_recipients.to_a %>
-        <%= hidden_field_tag 'sla_notification_setting[stale_email_recipients][]', '', id: nil %>
-        <%= select_tag 'sla_notification_setting[stale_email_recipients][]',
-              options_for_select(recipients.map { |email| [email, email] }, recipients),
-              multiple: true, id: 'sla-stale-recipients', data: { sla_emails: true } %>
+        <% recipients = setting.persisted? ? setting.recipient_user_ids(:stale) : [] %>
+        <%= hidden_field_tag 'sla_notification_setting[stale_email_recipient_user_ids][]', '', id: nil %>
+        <%= select_tag 'sla_notification_setting[stale_email_recipient_user_ids][]',
+              sla_notification_recipient_options(project, recipients), multiple: true,
+              id: 'sla-stale-recipients', data: { sla_user_recipients: true } %>
       </div>
       <div>
         <div class="tw-mb-4">

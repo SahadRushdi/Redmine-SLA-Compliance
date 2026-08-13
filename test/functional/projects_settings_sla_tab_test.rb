@@ -70,8 +70,9 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     saved.sla_definitions.create!(tracker_id: @project.trackers.first.id,
                                   priority_id: IssuePriority.active.first.id,
                                   response_seconds: 14_400)
-    SlaNotificationSetting.create!(project_id: @project.id,
-                                   at_risk_email_recipients: ['ops@example.com'])
+    notification = SlaNotificationSetting.create!(project_id: @project.id)
+    recipient = @project.users.joins(:email_address).first
+    notification.replace_recipient_user_ids!(:at_risk, [recipient.id])
 
     get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
     assert_response :success
@@ -83,7 +84,7 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
       assert_select "select[name='status_mappings[created][]'] option[selected][value='#{status_id}']"
       assert_select "#sla-definitions-rows-#{@project.trackers.first.id} " \
                     '[data-sla-target-cell][data-seconds="14400"]'
-      assert_select "option[selected][value='ops@example.com']"
+      assert_select "option[selected][value='#{recipient.id}']", text: /#{Regexp.escape(recipient.mail)}/
     end
   end
 
@@ -536,15 +537,16 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
   # posting — otherwise turning an alert off and on again would silently drop the recipients the
   # project had already saved.
   test "a disabled alert card hides its detail fields without dropping them from the form" do
-    SlaNotificationSetting.create!(project_id: @project.id, at_risk_email_enabled: false,
-                                   at_risk_email_recipients: ['ops@example.com'])
+    notification = SlaNotificationSetting.create!(project_id: @project.id, at_risk_email_enabled: false)
+    recipient = @project.users.joins(:email_address).first
+    notification.replace_recipient_user_ids!(:at_risk, [recipient.id])
 
     get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'notifications' }
     assert_response :success
 
     assert_select '[data-sla-reveal="at-risk-email"].hidden'
     assert_select '#sla-notification-form select#sla-at-risk-recipients' do
-      assert_select "option[selected][value='ops@example.com']"
+      assert_select "option[selected][value='#{recipient.id}']", text: /#{Regexp.escape(recipient.mail)}/
     end
   end
 

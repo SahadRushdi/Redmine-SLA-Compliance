@@ -64,12 +64,12 @@
   // Shared by the project and admin notification forms. `decorate` lets the project page add its
   // drop-up positioning while the admin page uses the common focus guard directly.
   function initEmailChips(decorate) {
-    document.querySelectorAll('select[data-sla-emails]').forEach(function (el) {
+    document.querySelectorAll('select[data-sla-emails], select[data-sla-user-recipients]').forEach(function (el) {
       if (el.tomselect || !window.TomSelect) { return; }
 
       var instance = new TomSelect(el, {
         plugins: ['remove_button'],
-        create: true,
+        create: el.hasAttribute('data-sla-emails'),
         persist: false,
         createFilter: function (input) { return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(input); }
       });

@@ -11,12 +11,11 @@ class SlaNotificationDigestState < ActiveRecord::Base
 
   class << self
     def claim_stale_window!(project_id, interval, now: Time.current)
-      state = find_or_create_state!(project_id)
-      cutoff = now - interval
-      claimed = where(id: state.id)
-                .where('last_stale_digest_at IS NULL OR last_stale_digest_at <= ?', cutoff)
-                .update_all(last_stale_digest_at: now, updated_at: now)
-      claimed == 1 ? state.tap { |record| record.last_stale_digest_at = now } : nil
+      claim_window!(project_id, :last_stale_digest_at, interval, now: now)
+    end
+
+    def claim_at_risk_window!(project_id, interval, now: Time.current)
+      claim_window!(project_id, :last_at_risk_digest_at, interval, now: now)
     end
 
     private
@@ -25,6 +24,16 @@ class SlaNotificationDigestState < ActiveRecord::Base
       find_or_create_by!(project_id: project_id)
     rescue ActiveRecord::RecordNotUnique
       retry
+    end
+
+
+    def claim_window!(project_id, column, interval, now:)
+      state = find_or_create_state!(project_id)
+      cutoff = now - interval
+      claimed = where(id: state.id)
+                .where("#{column} IS NULL OR #{column} <= ?", cutoff)
+                .update_all(column => now, updated_at: now)
+      claimed == 1 ? state.tap { |record| record.public_send("#{column}=", now) } : nil
     end
   end
 end

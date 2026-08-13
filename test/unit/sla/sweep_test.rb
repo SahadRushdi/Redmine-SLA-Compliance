@@ -26,7 +26,7 @@ class Sla::SweepTest < ActiveSupport::TestCase
       @calls = []
     end
 
-    def enqueue_at_risk(issue, _result, setting:)
+    def enqueue_at_risk(issue, _result, setting:, log:)
       @calls << issue.id
     end
   end
@@ -38,8 +38,8 @@ class Sla::SweepTest < ActiveSupport::TestCase
       @calls = []
     end
 
-    def enqueue_stale_digest(project, issues, setting:)
-      @calls << [project.id, issues.map(&:id)]
+    def enqueue_stale_digest(project, logs, setting:)
+      @calls << [project.id, logs.map(&:issue_id)]
     end
   end
 
@@ -236,6 +236,21 @@ class Sla::SweepTest < ActiveSupport::TestCase
     assert_equal [issue.id], first.calls
     assert_empty second.calls
     assert_equal 1, at_risk_logs(issue)
+  end
+
+  test "digest mode batches a threshold crossing once and repeated sweeps do not duplicate it" do
+    setting = SlaNotificationSetting.find_by!(project_id: @project.id)
+    setting.update!(at_risk_email_frequency: 'digest', at_risk_digest_interval_minutes: 60)
+    issue = make_issue
+    SlaEmailDeliveryJob.expects(:perform_later)
+                       .with('at_risk_digest', @project.id, is_a(Array), setting.id).once
+
+    sweep(now: at(50.0 / 60))
+    sweep(now: at(50.0 / 60) + 1.minute)
+
+    logs = SlaNotificationLog.where(issue_id: issue.id, notification_type: 'at_risk')
+    assert_equal 1, logs.count
+    assert_equal 'queued', logs.first.delivery_state
   end
 
   # --- negative cases -----------------------------------------------------------------------

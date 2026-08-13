@@ -4,7 +4,7 @@
   <%= hidden_field_tag 'tab', 'sla_policy' %>
   <%= render layout: 'sla_policies/lock',
              locals: { project: project, locked: sla_tracking_off?(project) } do %>
-    <%= render 'sla_notification_settings/fields', setting: setting,
+    <%= render 'sla_notification_settings/fields', setting: setting, project: project,
                fallbacks: sla_notification_fallbacks(project) %>
     <%= render 'sla_policies/save_bar', label: l(:button_sla_save_notifications) %>
   <% end %>

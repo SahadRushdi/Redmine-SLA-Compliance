@@ -65,6 +65,7 @@ module Sla
         end
 
         stale_queued += queue_stale_digest(project, stale_candidates, stale_setting) if track_stale
+        queue_at_risk_digest(project, at_risk_setting) if at_risk_setting&.at_risk_email_frequency == 'digest'
       end
 
       Summary.new(swept: swept, newly_at_risk: newly, queued: queued, stale_queued: stale_queued)
@@ -93,12 +94,13 @@ module Sla
       target  = result&.at_risk_target.presence || SlaNotificationLog::NO_TARGET
       episode = result&.at_risk_since || result&.cycle_started_at
 
-      return false unless SlaNotificationLog.claim!(
+      log = SlaNotificationLog.claim!(
         issue_id: issue.id, notification_type: 'at_risk', target: target,
         cycle_key: episode&.to_i&.to_s || SlaNotificationLog::NO_CYCLE
       )
+      return false unless log
 
-      @notifier.enqueue_at_risk(issue, outcome.record, setting: setting)
+      @notifier.enqueue_at_risk(issue, outcome.record, setting: setting, log: log)
       true
     end
 
@@ -111,7 +113,9 @@ module Sla
 
     def stale?(issue, threshold_days)
       timeline = TimelineBuilder.new(issue).build
-      StaleTicketDetector.new(timeline, now: @now).stale?(threshold_days.days.to_i)
+      last_activity = [StaleTicketDetector.new(timeline, now: @now).last_activity_at,
+                       issue.updated_on].compact.select { |time| time <= @now }.max
+      (@now - last_activity) >= threshold_days.days
     end
 
     # Claim this project's stale-digest window and queue whichever candidates are still stale at
@@ -130,11 +134,28 @@ module Sla
       # every window (rather than being claimed once, ever), so it keeps reappearing in
       # subsequent digests for as long as it stays stale — the whole point of a recurring digest.
       window_key = state.last_stale_digest_at.to_i.to_s
-      claimed = stale_candidates.select do |issue|
+      claimed = stale_candidates.filter_map do |issue|
         SlaNotificationLog.claim!(issue_id: issue.id, notification_type: 'stale', cycle_key: window_key)
       end
       @stale_notifier.enqueue_stale_digest(project, claimed, setting: setting) if claimed.any?
       claimed.size
+    end
+
+    def queue_at_risk_digest(project, setting)
+      return unless SlaNotificationDigestState.claim_at_risk_window!(
+        project.id, setting.at_risk_digest_interval, now: @now
+      )
+
+      logs = SlaNotificationLog.joins(:issue)
+                               .where(notification_type: 'at_risk', delivery_state: 'pending',
+                                      issues: { project_id: project.id }).order(:id).to_a
+      queued = logs.select(&:queue!)
+      return if queued.empty?
+
+      SlaEmailDeliveryJob.perform_later('at_risk_digest', project.id, queued.map(&:id), setting.id)
+    rescue StandardError => e
+      Array(queued).each { |log| log.failed!(e) }
+      Rails.logger.error("[SLA] at-risk digest enqueue failed for project ##{project.id}: #{e.class}: #{e.message}")
     end
 
     # Active projects where the SLA module is enabled — mirrors the event-driven hook's gate so the
