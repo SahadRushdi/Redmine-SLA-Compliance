@@ -118,7 +118,7 @@ en:
   # --- SLA access roles (Phase 5, Step 5.1) ------------------------------------------------
   # On the General section. Replaced the per-user "SLA viewers" / "SLA managers" allow-lists and
   # the Access control section they lived in (2026-08-06).
-  field_sla_access_roles: "SLA access roles"
+  field_sla_access_roles: "Access Roles"
   text_sla_access_roles_hint: "Members with these roles see the dashboard and policy"
   label_sla_access_roles_placeholder: "Select roles"
 
@@ -200,6 +200,8 @@ en:
   field_sla_duration_value: "Duration value"
   field_sla_duration_unit: "Duration unit"
   text_sla_target_saved: "Saved"
+  text_sla_measurement_saved: "Saved"
+  error_sla_measurement_invalid: "Select a valid Measurement Rules setting."
   error_sla_target_invalid: "Enter a positive whole-number duration and select a valid unit, or choose Best Effort."
   error_sla_target_whole_number: "Enter a whole number. Decimal values are not allowed."
   text_sla_no_trackers: "This project has no trackers enabled."
@@ -224,7 +226,6 @@ en:
   button_sla_save_targets: "Save SLA Targets"
   button_sla_save_and_recalculate: "Save and Recalculate"
   button_sla_recalculate: "Recalculate"
-  button_sla_save_measurement: "Save Measurement Rules"
   button_sla_save_notifications: "Save Notification Settings"
 
   # --- Inheritance notice + Revert (B3) ------------------------------------------------------

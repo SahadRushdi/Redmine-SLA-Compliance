@@ -58,6 +58,40 @@ class SlaPoliciesController < ApplicationController
     render json: { error: e.record.errors.full_messages.join(', ') }, status: :unprocessable_entity
   end
 
+  # PATCH /projects/:project_id/sla_policy/measurement
+  # Persists one Measurement Rules control at a time. Scalar and status-role allow-lists keep an
+  # autosave from rewriting sibling controls that were not part of the request.
+  def update_measurement
+    @sla_policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
+    attribute = params[:attribute].to_s
+    role = params[:role].to_s
+    valid_attribute = %w[first_response_rule at_risk_threshold stale_threshold_days].include?(attribute)
+    valid_role = SECTION_STATUS_ROLES.fetch('measurement').include?(role)
+    return render json: { error: l(:error_sla_measurement_invalid) }, status: :unprocessable_entity unless
+      valid_attribute || valid_role
+
+    ActiveRecord::Base.transaction do
+      source = forking_from_inherited? ? inherited_seed_source : nil
+      seed_scalars_from!(source) if source
+      @sla_policy.coverage_hours = '24x7'
+      @sla_policy.inherits_config = false
+      @sla_policy.save!
+      copy_configuration_from!(source) if source
+
+      if valid_role
+        replace_status_role!(role, params[:status_ids])
+      else
+        value = params[:value]
+        value = nil if attribute == 'stale_threshold_days' && value.blank?
+        @sla_policy.update!(attribute => value)
+      end
+    end
+
+    render json: { message: l(:text_sla_measurement_saved) }
+  rescue ActiveRecord::RecordInvalid => e
+    render json: { error: e.record.errors.full_messages.join(', ') }, status: :unprocessable_entity
+  end
+
   # GET /projects/:project_id/sla_policy/edit (js only):
   #   ?tracker_id=N  -> re-render the definition rows for that tracker (from saved data)
   #   ?clone_from=ID -> re-render the whole form prefilled from the source project's policy
@@ -585,6 +619,15 @@ class SlaPoliciesController < ApplicationController
       (wanted - scope.pluck(:status_id)).each do |status_id|
         @sla_policy.sla_status_mappings.create!(role: role, status_id: status_id)
       end
+    end
+  end
+
+  def replace_status_role!(role, raw_status_ids)
+    wanted = Array(raw_status_ids).map(&:to_i).uniq & project_status_ids
+    scope = @sla_policy.sla_status_mappings.where(role: role)
+    scope.where.not(status_id: wanted).delete_all
+    (wanted - scope.pluck(:status_id)).each do |status_id|
+      @sla_policy.sla_status_mappings.create!(role: role, status_id: status_id)
     end
   end
 

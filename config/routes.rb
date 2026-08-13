@@ -8,6 +8,7 @@ Rails.application.routes.draw do
     resource :sla_policy, only: [:edit, :update, :destroy], controller: 'sla_policies' do
       patch :target, action: :update_target
       patch :tracking, action: :update_tracking
+      patch :measurement, action: :update_measurement
       patch :add_tracker
       delete :remove_tracker
       patch :clone_tracker, action: :clone_tracker

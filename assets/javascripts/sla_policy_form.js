@@ -619,6 +619,42 @@
     });
   }
 
+  function measurementStatus(message, failed) {
+    var status = document.querySelector('[data-sla-measurement-status]');
+    if (!status) { return; }
+    status.textContent = message;
+    status.className = 'tw-mt-1 tw-text-right tw-text-xs ' +
+      (failed ? 'tw-text-red-600' : 'tw-text-green-600');
+  }
+
+  function saveMeasurement(input) {
+    var container = byId('sla-measurement-form');
+    if (!container) { return; }
+    var role = input.getAttribute('data-sla-measurement-role');
+    var attribute = input.getAttribute('data-sla-measurement-attribute');
+    if (!role && !attribute) { return; }
+
+    var data = role ? {
+      role: role,
+      status_ids: Array.prototype.map.call(input.selectedOptions, function (option) {
+        return option.value;
+      })
+    } : { attribute: attribute, value: input.value };
+
+    measurementStatus('Saving…', false);
+    jQuery.ajax({
+      url: container.getAttribute('data-measurement-url'),
+      method: 'PATCH',
+      dataType: 'json',
+      headers: csrfHeaders(),
+      data: data
+    }).done(function (response) {
+      measurementStatus(response.message || 'Saved', false);
+    }).fail(function (xhr) {
+      measurementStatus((xhr.responseJSON || {}).error || 'Unable to save', true);
+    });
+  }
+
   function toggleDigestInterval() {
     var field = byId('sla-digest-interval-field');
     if (!field) { return; }
@@ -691,6 +727,11 @@
       'input[name="sla_policy[enabled]"], input[name="sla_policy[enablement]"]', function () {
         syncLocks();
         saveTracking(this);
+      });
+
+    jQuery(document).on('change',
+      '[data-sla-measurement-role], [data-sla-measurement-attribute]', function () {
+        saveMeasurement(this);
       });
 
     jQuery(document).on('change', '[data-sla-reveals]', syncReveals);

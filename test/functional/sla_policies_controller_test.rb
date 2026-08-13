@@ -103,6 +103,40 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert saved.inherits_config?
   end
 
+  test "measurement autosave persists one scalar without changing sibling settings" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true, first_response_rule: 'either',
+                      at_risk_threshold: 80, stale_threshold_days: 2)
+
+    patch :update_measurement,
+          params: { project_id: @project.id, attribute: 'at_risk_threshold', value: '70' }, xhr: true
+
+    assert_response :success
+    assert_equal 70, policy.reload.at_risk_threshold
+    assert_equal 2, policy.stale_threshold_days
+    assert_equal 'either', policy.first_response_rule
+  end
+
+  test "measurement autosave replaces only the selected status role" do
+    saved = SlaPolicy.create!(project_id: @project.id, enabled: true)
+    saved.sla_status_mappings.create!(role: 'resolved', status_id: @status_ids.last)
+
+    patch :update_measurement,
+          params: { project_id: @project.id, role: 'created',
+                    status_ids: @status_ids.first(2).map(&:to_s) }, xhr: true
+
+    assert_response :success
+    assert_equal @status_ids.first(2).sort, policy.status_ids_for(:created).sort
+    assert_equal [@status_ids.last], policy.status_ids_for(:resolved)
+  end
+
+  test "measurement autosave rejects unknown fields" do
+    patch :update_measurement,
+          params: { project_id: @project.id, attribute: 'enabled', value: '1' }, xhr: true
+
+    assert_response :unprocessable_entity
+    assert_nil policy
+  end
+
   # --- Step 5.1: the SLA access roles ----------------------------------------------------------
   # rhill (user 4) holds no role and no membership, so nothing but the grant below can let them
   # through. The role itself ticks NO permissions — being named in the plugin settings is the

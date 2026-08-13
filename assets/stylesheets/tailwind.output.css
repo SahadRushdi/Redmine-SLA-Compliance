@@ -2489,6 +2489,9 @@
 .sla-plugin .tw-text-center {
   text-align: center;
 }
+.sla-plugin .tw-text-right {
+  text-align: right;
+}
 .sla-plugin .tw-align-top {
   vertical-align: top;
 }
@@ -2927,6 +2930,9 @@
   }
   .sla-plugin .lg\:tw-grid-cols-12 {
     grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+  .sla-plugin .lg\:tw-grid-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .sla-plugin .lg\:tw-grid-cols-5 {
     grid-template-columns: repeat(5, minmax(0, 1fr));

@@ -5,16 +5,19 @@
 <%= render layout: 'sla_policies/card',
            locals: { title: l(:label_sla_milestones_card) } do %>
   <% statuses = project.rolled_up_statuses %>
+  <div class="tw-grid tw-grid-cols-1 lg:tw-grid-cols-3 tw-gap-4">
   <% { created: :field_sla_created_statuses,
        work_started: :field_sla_work_started_statuses,
-       resolved: :field_sla_resolved_statuses }.each_with_index do |(role, label_key), index| %>
-    <div class="<%= 'tw-mt-4' unless index.zero? %>">
+       resolved: :field_sla_resolved_statuses }.each do |role, label_key| %>
+    <div class="tw-min-w-0">
       <label for="sla-status-<%= role %>" class="<%= sla_label_classes %>"><%= l(label_key) %></label>
       <%= select_tag "status_mappings[#{role}][]",
             options_from_collection_for_select(statuses, :id, :name, sla_status_ids(policy, role)),
-            multiple: true, id: "sla-status-#{role}", data: { sla_chips: true } %>
+            multiple: true, id: "sla-status-#{role}",
+            data: { sla_chips: true, sla_measurement_role: role } %>
     </div>
   <% end %>
+  </div>
 <% end %>
 
 <%# Each rule is a selectable tile rather than a bare radio, so the whole card is the click target. %>
@@ -26,7 +29,8 @@
     <% SlaPolicy::FIRST_RESPONSE_RULES.each do |rule| %>
       <label class="sla-option-card">
         <%= radio_button_tag 'sla_policy[first_response_rule]', rule,
-              policy.first_response_rule == rule, class: sla_radio_classes %>
+              policy.first_response_rule == rule, class: sla_radio_classes,
+              data: { sla_measurement_attribute: 'first_response_rule' } %>
         <%= l("label_first_response_#{rule}") %>
       </label>
     <% end %>
@@ -35,13 +39,14 @@
 
 <%# The card heading is this field's visible label; the input also carries an aria-label. %>
 <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-5">
-  <%= render layout: 'sla_policies/card',
+  <%= render layout: 'sla_policies/setting_card',
              locals: { title: l(:label_sla_at_risk_card) } do %>
     <div class="tw-flex tw-items-center tw-gap-2">
       <div class="tw-w-32">
         <%= number_field_tag 'sla_policy[at_risk_threshold]', policy.at_risk_threshold,
               min: 1, max: 100, id: 'sla_policy_at_risk_threshold', class: sla_input_classes,
-              'aria-label': l(:field_at_risk_threshold) %>
+              'aria-label': l(:field_at_risk_threshold),
+              data: { sla_measurement_attribute: 'at_risk_threshold' } %>
       </div>
       <span class="tw-text-sm tw-text-gray-500">%</span>
     </div>
@@ -53,7 +58,7 @@
 <%# %>
 <%# EMPTY IS A REAL STATE here, not a missing value: it means "inherit", and it is how the user %>
 <%# removes an override. The placeholder shows what would apply if the field is left empty. %>
-  <%= render layout: 'sla_policies/card',
+  <%= render layout: 'sla_policies/setting_card',
              locals: { title: l(:label_sla_stale_card) } do %>
     <% inherited = sla_inherited_stale_threshold(project) %>
     <%# Same single-control treatment as the at-risk card above: heading once, aria-label on the %>
@@ -64,9 +69,11 @@
               min: SlaPolicy::STALE_THRESHOLD_DAYS.min, max: SlaPolicy::STALE_THRESHOLD_DAYS.max,
               id: 'sla_policy_stale_threshold_days', class: sla_input_classes,
               'aria-label': l(:field_sla_stale_threshold_days_project),
-              placeholder: sla_stale_threshold_placeholder(inherited) %>
+              placeholder: sla_stale_threshold_placeholder(inherited),
+              data: { sla_measurement_attribute: 'stale_threshold_days' } %>
       </div>
       <span class="tw-text-sm tw-text-gray-500"><%= l(:label_sla_days_suffix) %></span>
     </div>
   <% end %>
 </div>
+<p data-sla-measurement-status aria-live="polite" class="tw-mt-1 tw-text-right tw-text-xs"></p>

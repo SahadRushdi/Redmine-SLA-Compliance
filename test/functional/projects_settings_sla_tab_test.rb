@@ -124,6 +124,19 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select "[data-sla-panel='general'].hidden"
   end
 
+  test "Measurement Rules uses horizontal milestone controls and has no save button" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'measurement' }
+    assert_response :success
+
+    assert_select '#sla-measurement-form[data-measurement-url]' do
+      assert_select '.lg\\:tw-grid-cols-3 [data-sla-measurement-role]', 3
+      assert_select '[data-sla-measurement-attribute="first_response_rule"]', 3
+      assert_select '[data-sla-measurement-attribute="at_risk_threshold"]', 1
+      assert_select '[data-sla-measurement-attribute="stale_threshold_days"]', 1
+      assert_select 'button[type=submit]', 0
+    end
+  end
+
   test "an unknown section falls back to the first permitted one" do
     get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'nope' }
     assert_response :success

@@ -67,12 +67,10 @@
 <% end %>
 
 <%= render layout: 'sla_policies/panel', locals: { key: 'measurement', current: current } do %>
-  <%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-measurement-form' do %>
-    <%= hidden_field_tag 'tab', 'sla_policy' %>
-    <%= hidden_field_tag 'section', 'measurement' %>
+  <div id="sla-measurement-form"
+       data-measurement-url="<%= measurement_project_sla_policy_path(project) %>">
     <%= render layout: 'sla_policies/lock', locals: { project: project, locked: locked } do %>
       <%= render 'sla_policies/measurement', project: project, policy: policy %>
-      <%= render 'sla_policies/save_bar', label: l(:button_sla_save_measurement) %>
     <% end %>
-  <% end %>
+  </div>
 <% end %>
