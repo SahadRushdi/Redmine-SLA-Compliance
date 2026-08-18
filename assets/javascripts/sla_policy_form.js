@@ -6,7 +6,7 @@
   'use strict';
 
   var state = { bound: false, section: '', tracker: '', recalculationTimer: null,
-                reloadAfterRecalculation: false };
+                reloadAfterRecalculation: false, revertTrigger: null };
 
   function byId(id) { return document.getElementById(id); }
 
@@ -558,16 +558,12 @@
   // decides anything the server doesn't re-decide on save — it only stops the UI from lying between
   // the flip and the save.
 
-  // What the General section's on/off control currently READS, by whichever of its two forms is on
-  // screen: the tri-state radios for an inheriting project, otherwise the plain switch.
+  // What the General section's on/off control currently reads. Inheriting projects use the same
+  // visual switch as self-defining projects, but post a lightweight enablement decision instead
+  // of changing any inherited configuration.
   function trackingOn() {
-    var picked = document.querySelector('input[name="sla_policy[enablement]"]:checked');
-    if (picked) {
-      if (picked.value !== 'inherit') { return picked.value === 'enabled'; }
-      // "Inherit" resolves against the ancestor's decision, which only the server knows.
-      var form = byId('sla-enablement-form');
-      return !!form && form.getAttribute('data-inherited-on') === 'true';
-    }
+    var inheritedToggle = document.querySelector('[data-sla-inherited-enablement]');
+    if (inheritedToggle) { return inheritedToggle.checked; }
 
     var toggle = document.querySelector('input[type="checkbox"][name="sla_policy[enabled]"]');
     // No control on the page at all (a notifications-only manager): trust what the server rendered.
@@ -603,7 +599,8 @@
     if (!container) { return; }
 
     input.disabled = true;
-    var data = input.name === 'sla_policy[enablement]' ? { enablement: input.value } :
+    var inherited = input.hasAttribute('data-sla-inherited-enablement');
+    var data = inherited ? { enablement: input.checked ? 'enabled' : 'disabled' } :
       { enabled: input.checked ? '1' : '0' };
     jQuery.ajax({
       url: container.getAttribute('data-tracking-url'),
@@ -614,9 +611,37 @@
     }).done(function () {
       window.location.reload();
     }).fail(function (xhr) {
+      input.checked = input.getAttribute('data-sla-saved-checked') === 'true';
       input.disabled = false;
+      syncLocks();
       window.alert((xhr.responseJSON || {}).error || 'Unable to save SLA Tracking');
     });
+  }
+
+  function snapshotTrackingToggle() {
+    var input = document.querySelector(
+      'input[type="checkbox"][name="sla_policy[enabled]"], [data-sla-inherited-enablement]'
+    );
+    if (input) { input.setAttribute('data-sla-saved-checked', input.checked ? 'true' : 'false'); }
+  }
+
+  function openRevertPolicyModal() {
+    var modal = byId('sla-revert-policy-modal');
+    if (!modal) { return; }
+    state.revertTrigger = this;
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    var cancel = modal.querySelector('button[data-sla-revert-cancel]');
+    if (cancel) { cancel.focus(); }
+  }
+
+  function closeRevertPolicyModal() {
+    var modal = byId('sla-revert-policy-modal');
+    if (!modal || modal.classList.contains('hidden')) { return; }
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+    if (state.revertTrigger) { state.revertTrigger.focus(); }
+    state.revertTrigger = null;
   }
 
   function measurementStatus(message, failed) {
@@ -764,6 +789,9 @@
         saveTracking(this);
       });
 
+    jQuery(document).on('click', '[data-sla-revert-open]', openRevertPolicyModal);
+    jQuery(document).on('click', '[data-sla-revert-cancel]', closeRevertPolicyModal);
+
     jQuery(document).on('change',
       '[data-sla-measurement-role], [data-sla-measurement-attribute]', function () {
         saveMeasurement(this);
@@ -798,6 +826,7 @@
         closeRemoveTrackerModal();
         closeCloneConfirmation();
         closeCloneTrackerModal();
+        closeRevertPolicyModal();
       }
     });
     jQuery(document).on('click', '#sla-clone-tracker-button', openCloneTrackerModal);
@@ -864,6 +893,7 @@
     renderTrackerTabs(byId('sla-definitions-trackers'));
     syncTrackerManagerVisibility();
     // After the Tom Select instances exist, so a section rendered locked disables them too.
+    snapshotTrackingToggle();
     syncLocks();
     syncReveals();
     toggleDigestInterval();

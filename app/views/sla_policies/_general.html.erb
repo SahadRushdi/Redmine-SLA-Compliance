@@ -4,11 +4,10 @@
 <%# policy, current (active section key), inherited_source. %>
 <%= render layout: 'sla_policies/panel', locals: { key: 'general', current: current } do %>
 
-  <%# While the configuration is inherited, the on/off decision gets the TRI-STATE control rather %>
-  <%# than the plain switch, and lives in its own form (section=enablement) — choosing Enabled or %>
-  <%# Disabled there writes only that decision and keeps following the ancestor's configuration, %>
-  <%# whereas anything saved through the form below forks it. Exactly one on/off control is on the %>
-  <%# page either way; forms cannot nest, so this sits beside, not inside, the General form. %>
+  <%# While the configuration is inherited, this switch writes only a lightweight local on/off %>
+  <%# decision and keeps following the ancestor's configuration. Anything saved through the %>
+  <%# sections below forks that configuration. Exactly one on/off control is on the page either %>
+  <%# way; forms cannot nest, so this sits beside, not inside, the General form. %>
   <% if inherited_source.present? %>
     <%= render 'sla_policies/enablement', project: project, source_project: inherited_source.first,
                state: sla_enablement_state(project),
@@ -45,13 +44,35 @@
     <% if ancestor_project.present? %>
       <%= render layout: 'sla_policies/setting_card',
                  locals: { title: l(:button_sla_revert_to_inherited) } do %>
-        <%# form_class strips button_to's default `button_to` class, which Purplemine2 styles; the %>
-        <%# button carries the plugin's own primary classes instead. %>
-        <%= button_to l(:button_sla_revert), project_sla_policy_path(project),
-              method: :delete, form_class: '',
-              data: { confirm: l(:text_sla_revert_confirm, project: ancestor_project.name) },
-              class: sla_primary_button_classes %>
+        <button type="button" data-sla-revert-open class="<%= sla_danger_button_classes %>">
+          <%= l(:button_sla_revert_to_inherited) %>
+        </button>
       <% end %>
+
+      <div id="sla-revert-policy-modal"
+           class="hidden tw-fixed tw-inset-0 tw-z-50 tw-flex tw-items-center tw-justify-center tw-p-4"
+           role="dialog" aria-modal="true" aria-labelledby="sla-revert-policy-title"
+           aria-describedby="sla-revert-policy-description" aria-hidden="true">
+        <div class="tw-absolute tw-inset-0 tw-bg-gray-900/50" data-sla-revert-cancel></div>
+        <div class="tw-relative tw-w-full tw-max-w-md tw-rounded-xl tw-bg-white tw-p-6
+                    tw-text-center tw-shadow-xl">
+          <h3 id="sla-revert-policy-title"
+              class="tw-m-0 tw-text-base tw-font-semibold tw-text-gray-900">
+            <%= l(:label_sla_revert_confirm) %>
+          </h3>
+          <p id="sla-revert-policy-description"
+             class="tw-mt-3 tw-mb-5 tw-text-sm tw-text-gray-600">
+            <%= l(:text_sla_revert_confirm, project: h(ancestor_project.name)) %>
+          </p>
+          <div class="tw-flex tw-justify-center tw-gap-3">
+            <button type="button" data-sla-revert-cancel class="<%= sla_secondary_button_classes %>">
+              <%= l(:button_cancel) %>
+            </button>
+            <%= button_to l(:button_sla_revert), project_sla_policy_path(project),
+                  method: :delete, form_class: '', class: sla_danger_button_classes %>
+          </div>
+        </div>
+      </div>
     <% end %>
   <% end %>
 <% end %>

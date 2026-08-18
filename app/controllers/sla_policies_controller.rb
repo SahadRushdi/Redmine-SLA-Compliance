@@ -17,8 +17,10 @@ class SlaPoliciesController < ApplicationController
   # status_mappings and silently wipe every milestone status configured under Measurement Rules.
   POLICY_SECTIONS = %w[general measurement targets].freeze
 
-  # The tri-state SLA on/off control offered to a project that inherits its configuration. It is
-  # NOT one of POLICY_SECTIONS: those all write policy fields through #policy_params, whereas this
+  # The SLA on/off toggle offered to a project that inherits its configuration. Its backend keeps
+  # three semantic states (inherit/enabled/disabled), even though the screen presents a switch and
+  # a separate Revert action. It is NOT one of POLICY_SECTIONS: those all write policy fields
+  # through #policy_params, whereas this
   # one writes nothing but `enabled` (+ the `inherits_config` marker) and can also DELETE the row.
   # Keeping it out of that list is what stops a forged `section=enablement` submit from reaching
   # the field-writing path at all.
@@ -148,7 +150,7 @@ class SlaPoliciesController < ApplicationController
         # replaces it, which is exactly the question the Clone card's dropdown reopens on.
         @sla_policy.cloned_from_project_id = clone_source.project_id if clone_source
         # Saving any policy section writes configuration onto this row, which by definition makes
-        # it self-defining — the case that matters is a project that first used the tri-state
+        # it self-defining — the case that matters is a project that first used the inherited toggle
         # control (leaving a lightweight row) and then edited a field here.
         @sla_policy.inherits_config = false
         @sla_policy.save!
@@ -483,7 +485,7 @@ class SlaPoliciesController < ApplicationController
   #
   # `enabled` on an EXISTING row is the one attribute that needs a decision, and it differs by
   # reason: a FORK must leave it alone, because a lightweight row's on/off is the project's own
-  # (set through the tri-state control) and an ancestor's must not overwrite it — whereas a CLONE
+  # (set through the inherited toggle) and an ancestor's must not overwrite it — whereas a CLONE
   # copies it, because it is part of the policy the user chose and the General panel showed them
   # its state, switch included, before they saved.
   def seed_scalars_from!(source, clone: false)

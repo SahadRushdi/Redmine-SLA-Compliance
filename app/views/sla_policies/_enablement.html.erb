@@ -1,43 +1,19 @@
-<%# Tri-state SLA on/off for a project that inherits its configuration (Global Rule 5). %>
-<%# %>
-<%# This is deliberately NOT the same thing as "Override for this project" below it: choosing %>
-<%# Enabled/Disabled here writes a LIGHTWEIGHT policy row (SlaPolicy#inherits_config?) that carries %>
-<%# only the on/off decision, so coverage, targets and status mappings keep following the ancestor. %>
-<%# Override forks the whole configuration and stops tracking the parent entirely. %>
-<%# %>
-<%# Its own <form> posting section=enablement, which SlaPoliciesController#update routes to %>
-<%# #update_enablement — a path that writes no policy fields at all. Locals: project, %>
-<%# source_project, state (:inherit/:enabled/:disabled), inherited_on (boolean). %>
-<%# data-inherited-on tells sla_policy_form.js what the "Inherit" option currently RESOLVES to, so %>
-<%# picking it can lock or unlock the other sections immediately — the JS cannot walk the project %>
-<%# tree, and the same boolean is already on screen as "currently on/off" beside that radio. %>
-<div id="sla-enablement-form" data-inherited-on="<%= inherited_on %>"
-     data-tracking-url="<%= tracking_project_sla_policy_path(project) %>">
+<%# SLA on/off for a project that inherits its configuration (Global Rule 5). Changing this %>
+<%# switch writes only a LIGHTWEIGHT policy row (SlaPolicy#inherits_config?), so coverage, targets %>
+<%# and status mappings keep following the named ancestor. The separate Revert action removes %>
+<%# that local decision and returns to following the ancestor's on/off state as well. %>
+<%# Locals: project, source_project, state (:inherit/:enabled/:disabled), inherited_on (boolean). %>
+<% enabled = state == :inherit ? inherited_on : state == :enabled %>
 
-  <%= render layout: 'sla_policies/card',
+<div id="sla-enablement-form" data-tracking-url="<%= tracking_project_sla_policy_path(project) %>">
+  <%= render layout: 'sla_policies/setting_card',
              locals: { title: l(:label_sla_enablement_card) } do %>
-    <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-3 tw-gap-3">
-      <label class="sla-option-card">
-        <%= radio_button_tag 'sla_policy[enablement]', 'inherit', state == :inherit,
-              class: sla_radio_classes %>
-        <span>
-          <%= l(:label_sla_enablement_inherit, project: source_project.name) %>
-          <span class="tw-text-gray-500">
-            — <%= inherited_on ? l(:label_sla_enablement_currently_on) : l(:label_sla_enablement_currently_off) %>
-          </span>
-        </span>
-      </label>
-      <label class="sla-option-card">
-        <%= radio_button_tag 'sla_policy[enablement]', 'enabled', state == :enabled,
-              class: sla_radio_classes %>
-        <%= l(:label_sla_enablement_enabled) %>
-      </label>
-      <label class="sla-option-card">
-        <%= radio_button_tag 'sla_policy[enablement]', 'disabled', state == :disabled,
-              class: sla_radio_classes %>
-        <%= l(:label_sla_enablement_disabled) %>
-      </label>
+    <div class="tw-flex tw-items-center tw-gap-4">
+      <span class="tw-text-sm tw-text-gray-500">
+        <%= l(:label_sla_enablement_inherited_from, project: h(source_project.name)) %>
+      </span>
+      <%= render 'sla_compliance/toggle', name: 'sla_policy[enablement]', checked: enabled,
+                 data: { sla_inherited_enablement: true } %>
     </div>
   <% end %>
-
 </div>

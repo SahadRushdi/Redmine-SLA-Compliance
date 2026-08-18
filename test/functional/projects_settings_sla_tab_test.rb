@@ -245,7 +245,7 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select '[data-sla-locked-notice] a', 0
   end
 
-  # An inheriting project's on/off decision lives in the TRI-STATE control, not the plain switch,
+  # An inheriting project's on/off decision lives in the inherited toggle, not the plain switch,
   # so the lock has to resolve that instead — including :inherit, which means asking the ancestor.
 
   test "an inheriting project locks on its own Disabled decision" do
@@ -268,7 +268,7 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     get :settings, params: { id: child.identifier, tab: 'sla_policy' }
     assert_response :success
 
-    assert_select "input[name='sla_policy[enablement]'][value='inherit'][checked]"
+    assert_select "input[type='checkbox'][name='sla_policy[enablement]'][data-sla-inherited-enablement][checked]", 1
     assert_select 'fieldset[data-sla-lock][disabled]', 0, 'the ancestor has tracking on'
   end
 
@@ -645,9 +645,9 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select 'button#sla-override-load', 0, 'the form itself is the override now'
   end
 
-  # --- Tri-state SLA on/off above the inherited (pre-filled) sections --------------------------
+  # --- Toggle SLA on/off above the inherited (pre-filled) sections -----------------------------
 
-  test "the inherited policy offers the tri-state control, defaulted to Inherit" do
+  test "the inherited policy offers one toggle reflecting the inherited state" do
     child = Project.find(5)
     grant_child_access(child)
     SlaPolicy.create!(project_id: @project.id, enabled: true)
@@ -656,9 +656,9 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_response :success
 
     assert_select '#sla-enablement-form' do
-      assert_select "input[name='sla_policy[enablement]'][value='inherit'][checked]"
-      assert_select "input[name='sla_policy[enablement]'][value='enabled']:not([checked])"
-      assert_select "input[name='sla_policy[enablement]'][value='disabled']:not([checked])"
+      assert_select "input[type='checkbox'][name='sla_policy[enablement]'][data-sla-inherited-enablement][checked]", 1
+      assert_select "input[type='radio'][name='sla_policy[enablement]']", 0
+      assert_select 'span', text: I18n.t(:label_sla_enablement_inherited_from, project: @project.name)
       assert_select '[data-tracking-url]', 1
     end
   end
@@ -673,14 +673,26 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_response :success
 
     # A lightweight row owns no configuration, so the form still shows the ancestor's — but the
-    # tri-state, not the plain switch, owns the on/off decision, and it must show THIS project's.
+    # inherited toggle, not the plain policy switch, owns the on/off decision and shows THIS project's.
     assert_select '#sla-policy-form'
-    assert_select "input[name='sla_policy[enablement]'][value='disabled'][checked]"
+    assert_select "input[type='checkbox'][name='sla_policy[enablement]'][data-sla-inherited-enablement]:not([checked])", 1
+    assert_select "input[type='radio'][name='sla_policy[enablement]']", 0
     assert_select "input[type=checkbox][name='sla_policy[enabled]']", 0,
                   'the plain SLA-tracking switch would be a second, conflicting on/off control'
   end
 
-  test "the tri-state control is not offered to a project that defines its own policy" do
+  test "an inherited toggle is off when the ancestor is off" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: @project.id, enabled: false)
+
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select "input[type='checkbox'][name='sla_policy[enablement]'][data-sla-inherited-enablement]:not([checked])", 1
+  end
+
+  test "the inherited toggle is not offered to a project that defines its own policy" do
     child = Project.find(5)
     grant_child_access(child)
     SlaPolicy.create!(project_id: @project.id, enabled: true)
@@ -755,6 +767,16 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
 
     get :settings, params: { id: child.identifier, tab: 'sla_policy' }
     assert_select revert_delete_form_selector(child)
+    assert_select 'button[data-sla-revert-open].tw-bg-red-600',
+                  text: I18n.t(:button_sla_revert_to_inherited), count: 1
+    assert_select '#sla-revert-policy-modal[role="dialog"][aria-modal="true"][aria-hidden="true"]', 1 do
+      assert_select '#sla-revert-policy-title', text: I18n.t(:label_sla_revert_confirm)
+      assert_select '#sla-revert-policy-description',
+                    text: I18n.t(:text_sla_revert_confirm, project: @project.name)
+      assert_select 'button[data-sla-revert-cancel]', text: I18n.t(:button_cancel), count: 1
+      assert_select 'form .tw-bg-red-600', count: 1
+    end
+    assert_select '[data-sla-revert-open][data-confirm]', 0
   end
 
   test "Revert to inherited policy is NOT offered when no ancestor has a policy" do

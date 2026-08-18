@@ -57,7 +57,7 @@ class SlaPolicy < ActiveRecord::Base
   # True for a LIGHTWEIGHT row: one that carries only the enabled DECISION for its project and
   # inherits every configuration field (coverage, calendar, first-response rule, at-risk threshold,
   # definitions and status mappings) from the nearest self-defining ancestor. Written
-  # by the tri-state control on the settings tab; see migration 005.
+  # by the inherited enablement toggle on the settings tab; see migration 005.
   def inherits_config?
     !!inherits_config
   end
@@ -65,7 +65,7 @@ class SlaPolicy < ActiveRecord::Base
   # --- Step 1.2: effective-policy resolution -------------------------------------------------
   # Returns the effective SlaPolicy for +project+, walking up the project tree. A policy row
   # carries two separable things — an enabled DECISION and a CONFIGURATION — and inheritance
-  # resolves them independently (Global Rule 5's tri-state):
+  # resolves them independently (Global Rule 5's three semantic states):
   #
   #   * the nearest project (self, then ancestors) with a row makes the enabled decision;
   #   * disabled  -> nil (an explicit "SLA off" that stops inheritance, as it always has);
@@ -134,7 +134,7 @@ class SlaPolicy < ActiveRecord::Base
   end
 
   # This project's OWN enablement decision, ignoring the tree: :inherit (no row of its own, so the
-  # ancestor's decision applies), :enabled or :disabled. Drives the tri-state control's selection.
+  # ancestor's decision applies), :enabled or :disabled. Drives the inherited toggle's state.
   def self.enablement_for(project)
     policy = find_by(project_id: project&.id)
     return :inherit if policy.nil?

@@ -232,17 +232,14 @@ en:
   button_sla_view_source_policy: "View source project's policy"
   button_sla_revert_to_inherited: "Revert to inherited policy"
   button_sla_revert: "Revert"
-  text_sla_revert_confirm: "This removes this project's own SLA policy. It will go back to inheriting from %{project}. Continue?"
+  label_sla_revert_confirm: "Revert to inherited policy?"
+  text_sla_revert_confirm: "This removes this project's SLA policy and restores the policy inherited from %{project}."
   notice_sla_reverted_to_inherited: "Reverted to the inherited SLA policy."
   text_sla_no_policy_anywhere_hint: "No SLA policy is configured for this project or any parent project yet. Fill in the form below to create one."
 
-  # --- Tri-state SLA on/off for an inheriting subproject -------------------------------------
+  # --- SLA on/off for an inheriting subproject ------------------------------------------------
   label_sla_enablement_card: "SLA for This Project"
-  label_sla_enablement_inherit: "Inherit from %{project}"
-  label_sla_enablement_enabled: "Enabled"
-  label_sla_enablement_disabled: "Disabled"
-  label_sla_enablement_currently_on: "currently on"
-  label_sla_enablement_currently_off: "currently off"
+  label_sla_enablement_inherited_from: "Inherited from %{project}"
   label_sla_recalculate_historical: "Recalculate historical tickets"
   label_sla_recalculation_progress: "Historical ticket recalculation progress"
   notice_sla_recalculation_queued: "Historical recalculation has been queued."

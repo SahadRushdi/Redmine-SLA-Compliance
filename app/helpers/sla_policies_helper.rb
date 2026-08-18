@@ -30,7 +30,7 @@ module SlaPoliciesHelper
 
   # B3 — [source_project, source_policy] when this project's CONFIGURATION comes from an ANCESTOR,
   # else nil. The tab renders the same editable sections either way (see #sla_policy_for_form); this
-  # only decides whether the inheritance notice and the tri-state on/off control appear above them.
+  # only decides whether the inheritance notice and inherited enablement toggle appear above them.
   # `clone_from` present means a clone source was just loaded and the form now shows THAT, so the
   # inheritance notice would be describing something no longer on screen.
   #
@@ -46,9 +46,9 @@ module SlaPoliciesHelper
     [source_project, source_policy]
   end
 
-  # Tri-state SLA on/off, shown in the General section while the configuration is inherited:
-  # :inherit / :enabled / :disabled for this project, plus whether SLA actually ends up on — so
-  # "Inherit" can say WHICH state it inherits.
+  # Three semantic SLA states used by the General toggle while configuration is inherited:
+  # :inherit / :enabled / :disabled for this project. The view resolves :inherit against the
+  # ancestor so the switch always represents the effective state.
   def sla_enablement_state(project)
     SlaPolicy.enablement_for(project)
   end
@@ -104,8 +104,8 @@ module SlaPoliciesHelper
   # default) while effective_for is also nil, but a clone prefill or a failed validation puts an
   # unsaved policy on screen that no resolver walking the database would ever return.
   def sla_tracking_on?(project)
-    # An inheriting project shows the TRI-STATE radios instead of the switch, so "on" there means
-    # resolving :inherit against the ancestor's decision — the same thing those radios spell out.
+    # The inherited toggle represents the effective state, so :inherit resolves against the
+    # ancestor's decision while explicit lightweight rows use their own enabled flag.
     if sla_inherited_policy_source(project).present?
       state = sla_enablement_state(project)
       state == :inherit ? sla_inherited_enablement_on?(project) : state == :enabled
@@ -351,6 +351,13 @@ module SlaPoliciesHelper
   def sla_primary_button_classes
     'tw-inline-flex tw-items-center tw-gap-2 tw-text-white tw-bg-primary-600 ' \
       'hover:tw-bg-primary-700 tw-border-0 tw-font-medium ' \
+      'tw-rounded-lg tw-text-sm tw-px-5 tw-py-2.5 tw-cursor-pointer'
+  end
+
+  # Destructive action button used for irreversible project-local configuration removal.
+  def sla_danger_button_classes
+    'tw-inline-flex tw-items-center tw-gap-2 tw-text-white tw-bg-red-600 ' \
+      'hover:tw-bg-red-700 tw-border-0 tw-font-medium ' \
       'tw-rounded-lg tw-text-sm tw-px-5 tw-py-2.5 tw-cursor-pointer'
   end
 
