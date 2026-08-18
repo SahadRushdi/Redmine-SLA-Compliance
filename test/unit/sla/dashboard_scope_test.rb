@@ -3,8 +3,8 @@
 require_relative '../../test_helper'
 
 # Step 6.1 — Sla::DashboardScope: the filtered sla_results relation behind the dashboard's
-# Project/Tracker/Priority filters plus its two time filters (open_only for the current-state
-# population, resolved_range for the SLA Met window). sla_results has no tracker_id/priority_id
+# Project/Tracker/Priority filters plus open_only for the current-state population. sla_results has
+# no tracker_id/priority_id
 # columns of its own, so those filters have to prove they actually reach through the `issues` join.
 class Sla::DashboardScopeTest < ActiveSupport::TestCase
   fixtures :projects, :trackers, :projects_trackers, :issue_statuses, :enumerations, :users,
@@ -88,41 +88,6 @@ class Sla::DashboardScopeTest < ActiveSupport::TestCase
     scope = Sla::DashboardScope.call(project_ids: [1])
 
     assert_equal [open_issue.id, resolved_issue.id].sort, scope.pluck(:issue_id).sort
-  end
-
-  test 'resolved_range filters on resolved_at, not created_on' do
-    # Both created outside the window; only the resolution date decides membership.
-    in_window = make_issue(created_on: Date.new(2026, 1, 5).to_time)
-    out_of_window = make_issue(created_on: Date.new(2026, 7, 10).to_time)
-    make_result(in_window, resolved_at: Time.zone.local(2026, 7, 10, 9, 0, 0))
-    make_result(out_of_window, resolved_at: Time.zone.local(2026, 8, 2, 9, 0, 0))
-
-    scope = Sla::DashboardScope.call(project_ids: [1],
-                                     resolved_range: Date.new(2026, 7, 1)..Date.new(2026, 7, 31))
-
-    assert_equal [in_window.id], scope.pluck(:issue_id)
-  end
-
-  # A Date range cast straight onto a datetime column truncates the last day at midnight, which
-  # would silently drop everything resolved during it.
-  test 'resolved_range covers the whole of the last day in the window' do
-    late_on_last_day = make_issue
-    make_result(late_on_last_day, resolved_at: Time.zone.local(2026, 7, 31, 16, 20, 0))
-
-    scope = Sla::DashboardScope.call(project_ids: [1],
-                                     resolved_range: Date.new(2026, 7, 1)..Date.new(2026, 7, 31))
-
-    assert_equal [late_on_last_day.id], scope.pluck(:issue_id)
-  end
-
-  test 'resolved_range excludes rows that were never resolved' do
-    still_open = make_issue
-    make_result(still_open)
-
-    scope = Sla::DashboardScope.call(project_ids: [1],
-                                     resolved_range: Date.new(2026, 7, 1)..Date.new(2026, 7, 31))
-
-    assert_empty scope.pluck(:issue_id)
   end
 
   test 'combines project + tracker + priority + open_only with AND semantics' do

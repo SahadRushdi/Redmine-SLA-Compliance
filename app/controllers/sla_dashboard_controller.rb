@@ -79,13 +79,9 @@ class SlaDashboardController < ApplicationController
     # aggregation over the sla_results cache (Global Rule 4).
     @priority_breakdown = Sla::PriorityBreakdown.call(scope: @scope)
 
-    # SLA Trend tab. The SLA Met card is the one date-scoped figure on the dashboard, and it is
-    # the mirror image of the above: closed-loop compliance over tickets RESOLVED inside the
-    # selected window. Open tickets never appear in it — an open ticket has not yet met anything.
-    window_scope = Sla::DashboardScope.call(project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
-                                            priority_ids: @filters[:priority_ids],
-                                            resolved_range: @filters[:date_range])
-    @window_counts = Sla::ResultSummary.call(scope: window_scope)
+    # The SLA Met card on the Trend tab deliberately reuses @counts, exactly like the donut. It is
+    # a second view of the current open evaluated population, not a date-window cohort; otherwise
+    # the two dashboard tabs can display contradictory compliance percentages for the same filters.
 
     # Trend chart needs Created and Resolved filtered independently against date_range (see
     # Sla::TrendSeries) rather than a created_on-filtered scope, so it's built from its own

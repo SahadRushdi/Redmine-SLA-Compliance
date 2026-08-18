@@ -9,31 +9,25 @@ module Sla
   # detail table) need this exact same filtered relation; composing it once here avoids duplicating
   # the join/filter logic across every dashboard consumer.
   #
-  # Time filtering is deliberately NOT a single generic "date range". The dashboard asks two
-  # different time questions of the cache and they are not interchangeable:
-  #   * `open_only`      — the current-state population (Open Tickets tab): every ticket not yet
-  #                        resolved, at ALL times. The selected date range must not reach it.
-  #   * `resolved_range` — the SLA Met card: tickets RESOLVED inside the selected window.
-  # The Created-vs-Resolved trend asks a third (created_on and resolved_at filtered independently),
-  # which is why Sla::TrendSeries takes an unfiltered scope and applies its own ranges.
+  # `open_only` defines the current dashboard population: every ticket not yet resolved, at all
+  # times. The selected date range must not reach it. Created-vs-Resolved is the only historical
+  # dashboard surface, so Sla::TrendSeries takes an unfiltered scope and applies independent ranges
+  # to issues.created_on and sla_results.resolved_at itself.
   #
   # Deliberately does not scope by permission or resolve which projects/trackers/priorities are
   # valid — the caller (SlaDashboardController#resolve_filters) is responsible for clamping
   # user-submitted ids against what's actually permitted/configured before calling this.
   class DashboardScope
-    def self.call(project_ids:, tracker_ids: [], priority_ids: [], open_only: false,
-                  resolved_range: nil)
+    def self.call(project_ids:, tracker_ids: [], priority_ids: [], open_only: false)
       new(project_ids: project_ids, tracker_ids: tracker_ids, priority_ids: priority_ids,
-          open_only: open_only, resolved_range: resolved_range).call
+          open_only: open_only).call
     end
 
-    def initialize(project_ids:, tracker_ids: [], priority_ids: [], open_only: false,
-                   resolved_range: nil)
+    def initialize(project_ids:, tracker_ids: [], priority_ids: [], open_only: false)
       @project_ids = project_ids
       @tracker_ids = tracker_ids
       @priority_ids = priority_ids
       @open_only = open_only
-      @resolved_range = resolved_range
     end
 
     def call
@@ -44,17 +38,7 @@ module Sla
       # Open = not resolved, per the engine's own `resolved`-role statuses rather than Redmine's
       # is_closed flag (Sla::ResultClassifier#closed_at persists the instant into `resolved_at`).
       scope = scope.where(sla_results: { resolved_at: nil }) if @open_only
-      scope = scope.where(sla_results: { resolved_at: resolved_timestamp_range }) if @resolved_range
       scope
-    end
-
-    private
-
-    # The selected Date..Date widened to cover the whole of both end days, so a ticket resolved at
-    # 16:20 on the window's last day still counts — casting a Date range straight onto a datetime
-    # column would truncate that day at midnight. Mirrors Sla::TrendSeries#timestamp_range.
-    def resolved_timestamp_range
-      @resolved_range.first.beginning_of_day..@resolved_range.last.end_of_day
     end
   end
 end

@@ -47,8 +47,8 @@
       <%= render 'sla_dashboard/charts' %>
     </div>
 
-    <%# Tab 2 — SLA Trend (date-scoped): date-range controls + the SLA Met card and the %>
-    <%# Created vs Resolved chart. Hidden until selected (client-side, sla_dashboard_tabs.js). %>
+    <%# Tab 2 — SLA Trend: current-open SLA Met card plus date-scoped Created vs Resolved chart. %>
+    <%# Hidden until selected (client-side, sla_dashboard_tabs.js). %>
     <div data-sla-tab-panel="trend" class="hidden">
       <%= render 'sla_dashboard/trend_panel' %>
     </div>

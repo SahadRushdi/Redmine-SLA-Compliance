@@ -3,11 +3,11 @@
 <%# subtree, so each carries form="sla-filter-form" (HTML5 form association) to still submit as %>
 <%# part of that one filter form — the same pattern the granularity pills already use. %>
 <%# The date controls lead this tab from the LEFT edge, directly under the tabs, because they are %>
-<%# the tab's primary control — not a trailing accessory to a sentence. The sentence that used to %>
+<%# the chart's primary control — not a trailing accessory to a sentence. The sentence that used to %>
 <%# run alongside them ("Tickets within the selected window — the only view this date range %>
 <%# affects.") is gone: only this tab renders these buttons, so their presence already says which %>
-<%# view they scope. What is left beside them is the one fact the buttons don't state — the actual %>
-<%# resolved-date window they resolve to — as subdued text, with the full explanation on hover. %>
+<%# chart they scope. What is left beside them is the one fact the buttons don't state — the actual %>
+<%# date window they resolve to — as subdued text, with the full explanation on hover. %>
 <div class="tw-flex tw-items-center tw-flex-wrap tw-gap-x-3 tw-gap-y-2 tw-mb-6">
   <div class="tw-flex tw-flex-wrap tw-items-center tw-gap-2" role="group" aria-label="<%= l(:label_sla_filter_date_range) %>">
     <% sla_date_presets.each do |preset| %>
