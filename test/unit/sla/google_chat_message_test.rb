@@ -26,16 +26,34 @@ class Sla::GoogleChatMessageTest < ActiveSupport::TestCase
   test 'payload is one compact text message in the requested order' do
     payload = message_for.payload
     expected = [
-      "New issue in *#{@issue.project.name}*",
-      "#{@issue.subject} <https://redmine.example.com/issues/#{@issue.id}|##{@issue.id} ↗>",
-      "Created By: #{@issue.author.name}",
+      "🚨 New *#{@issue.tracker.name}* in *#{@issue.project.name}*",
+      '',
+      "*#{@issue.subject}* <https://redmine.example.com/issues/#{@issue.id}|##{@issue.id} ↗>",
+      '',
       "Assignee: #{@issue.assigned_to&.name || Sla::GoogleChatMessage::BLANK}",
       "Status: #{@issue.status.name}",
-      "Priority: #{@issue.priority.name}"
+      "Priority: #{@issue.priority.name}",
+      "Created by: #{@issue.author.name}"
     ]
 
     assert_equal [:text], payload.keys
     assert_equal expected, payload[:text].lines(chomp: true)
+  end
+
+  test 'the tracker appears in the existing text body without a separate card' do
+    tracker = Tracker.find(2)
+    @issue.tracker = tracker
+    payload = message_for.payload
+
+    assert_equal [:text], payload.keys
+    assert payload[:text].start_with?("🚨 New *#{tracker.name}* in *#{@issue.project.name}*")
+  end
+
+  test 'a missing tracker uses a generic issue label in the body' do
+    @issue.stubs(:tracker).returns(nil)
+
+    payload = message_for.payload
+    assert payload[:text].start_with?("🚨 New *Issue* in *#{@issue.project.name}*")
   end
 
   test 'issue id and external-link icon are the custom hyperlink label' do
@@ -52,9 +70,11 @@ class Sla::GoogleChatMessageTest < ActiveSupport::TestCase
     @issue.stubs(:project).returns(nil)
 
     lines = message_for.text.lines(chomp: true)
-    assert_equal 'New issue in *—*', lines[0]
-    assert_equal "— <https://redmine.example.com/issues/#{@issue.id}|##{@issue.id} ↗>", lines[1]
-    assert_equal ['Created By: —', 'Assignee: —', 'Status: —', 'Priority: —'], lines.drop(2)
+    assert_equal "🚨 New *#{@issue.tracker.name}* in *—*", lines[0]
+    assert_equal '', lines[1]
+    assert_equal "*—* <https://redmine.example.com/issues/#{@issue.id}|##{@issue.id} ↗>", lines[2]
+    assert_equal '', lines[3]
+    assert_equal ['Assignee: —', 'Status: —', 'Priority: —', 'Created by: —'], lines.drop(4)
   end
 
   test 'user-controlled text cannot inject chat formatting links or extra lines' do
@@ -62,9 +82,9 @@ class Sla::GoogleChatMessageTest < ActiveSupport::TestCase
     @issue.project.name = '`Project`'
 
     text = message_for.text
-    assert_equal 6, text.lines.size
-    assert_includes text, 'New issue in *Project*'
-    assert_includes text, 'urgent https://bad.exampleclick next line'
+    assert_equal 8, text.lines.size
+    assert_includes text, "🚨 New *#{@issue.tracker.name}* in *Project*"
+    assert_includes text, '*urgent https://bad.exampleclick next line*'
     refute_includes text, 'https://bad.example|click'
   end
 end

@@ -292,7 +292,8 @@ en:
 
   # --- Google Chat notification (7.1) -------------------------------------------------------
   label_sla_chat_header: "📋 *Issue Notification — %{project}*"
-  text_sla_chat_new_issue: "New issue in %{project}"
+  text_sla_chat_new_issue: "New %{tracker} in %{project}"
+  label_sla_chat_generic_tracker: "Issue"
   text_sla_chat_intro: "A new issue has been submitted and requires your attention."
   text_sla_chat_outro: "Please review and take appropriate action."
   field_sla_chat_reference: "Reference"
@@ -303,7 +304,7 @@ en:
   field_sla_chat_priority: "Priority"
   field_sla_chat_category: "Category"
   field_sla_chat_version: "Target Version"
-  field_sla_chat_author: "Created By"
+  field_sla_chat_author: "Created by"
   field_sla_chat_assignee: "Assignee"
   field_sla_chat_start_date: "Start Date"
   field_sla_chat_due_date: "Due Date"

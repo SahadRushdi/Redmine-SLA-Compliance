@@ -17,16 +17,28 @@ module Sla
 
     def text
       [
-        ::I18n.t('text_sla_chat_new_issue', project: bold(format_value(@issue.project&.name))),
-        "#{format_value(@issue.subject)} #{issue_link}",
-        field_line('field_sla_chat_author', @issue.author&.name),
+        new_issue_text_line,
+        '',
+        "#{bold(format_value(@issue.subject))} #{issue_link}",
+        '',
         field_line('field_sla_chat_assignee', @issue.assigned_to&.name),
         field_line('field_sla_chat_status', @issue.status&.name),
-        field_line('field_sla_chat_priority', @issue.priority&.name)
+        field_line('field_sla_chat_priority', @issue.priority&.name),
+        field_line('field_sla_chat_author', @issue.author&.name)
       ].join("\n")
     end
 
     private
+
+    def tracker_name
+      tracker = format_value(@issue.tracker&.name)
+      tracker == BLANK ? ::I18n.t('label_sla_chat_generic_tracker') : tracker
+    end
+
+    def new_issue_text_line
+      "🚨 #{::I18n.t('text_sla_chat_new_issue', tracker: bold(tracker_name),
+                                                   project: bold(format_value(@issue.project&.name)))}"
+    end
 
     def field_line(key, value)
       "#{::I18n.t(key)}: #{format_value(value)}"

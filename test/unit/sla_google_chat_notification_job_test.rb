@@ -87,6 +87,7 @@ class SlaGoogleChatNotificationJobTest < ActiveSupport::TestCase
     url, payload = client.calls.first
     assert_equal WEBHOOK, url
     assert_includes payload[:text], "##{issue.id}"
+    assert payload[:text].start_with?("🚨 New *#{issue.tracker.name}* in *#{issue.project.name}*")
   end
 
   test "does not post for an issue on a tracker with no SLA definition" do
