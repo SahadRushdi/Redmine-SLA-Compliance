@@ -203,7 +203,7 @@ class SlaDashboardController < ApplicationController
 
   # --- Step 6.4: detail table -----------------------------------------------------------------
 
-  DETAIL_STATES = %w[all met breached at_risk no_sla].freeze
+  DETAIL_STATES = %w[all met breached at_risk].freeze
 
   # State tabs, sorting and pagination are ALL handled client-side (sla_dashboard_detail_table.js)
   # over the rows rendered here — no page reload for any of them. Only the main filters still
@@ -237,7 +237,6 @@ class SlaDashboardController < ApplicationController
     when 'met'      then scope.where(Sla::EffectiveState::EFFECTIVE_MET, now: now)
     when 'breached' then scope.where(Sla::EffectiveState::EFFECTIVE_BREACHED, now: now)
     when 'at_risk'  then scope.where(Sla::EffectiveState::EFFECTIVE_AT_RISK, now: now, at_risk_true: true)
-    when 'no_sla'   then scope.where(Sla::EffectiveState::EFFECTIVE_NO_SLA)
     else scope
     end
   end

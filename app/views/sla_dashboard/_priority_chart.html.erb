@@ -1,8 +1,8 @@
 <%# Horizontal stacked bar, one row per priority present in the filtered scope, ordered by %>
-<%# Redmine's own IssuePriority position (never hardcoded). Uses the exact same 4-color state %>
+<%# Redmine's own IssuePriority position (never hardcoded). Uses the exact same 3-color state %>
 <%# palette as the donut and the shared legend above - one visual language across both charts. %>
 <%#
-  Dataset order is the STACKING order of each bar (met → at risk → breached → no SLA, left to
+  Dataset order is the STACKING order of each bar (met → at risk → breached, left to
   right) and is deliberately fixed: it is layout, and a stack that reshuffles per project would
   make two boards impossible to compare at a glance. The LEGEND below is sorted by count instead
   — see there.
@@ -13,9 +13,7 @@
      { key: :at_risk,  label: l(:label_sla_chart_met_at_risk),
        data: @priority_breakdown.map(&:at_risk) },
      { key: :breached, label: sla_card_label(:breached),
-       data: @priority_breakdown.map(&:breached) },
-     { key: :no_sla,   label: sla_card_label(:no_sla),
-       data: @priority_breakdown.map(&:no_sla) }
+       data: @priority_breakdown.map(&:breached) }
    ] %>
 <% priority_payload = {
      labels: @priority_breakdown.map(&:priority_name),
@@ -38,7 +36,7 @@
     <% end %>
   </div>
 
-  <%# Same 4-color state mapping as the donut's legend - dot + label only (no counts) since the %>
+  <%# Same 3-color state mapping as the donut's legend - dot + label only (no counts) since the %>
   <%# per-segment value labels already drawn on the bars themselves (sla_dashboard_charts.js) %>
   <%# carry the numbers, avoiding a second place the same counts would need to stay in sync. %>
   <%#

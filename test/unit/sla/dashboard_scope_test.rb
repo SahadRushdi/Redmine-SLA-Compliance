@@ -17,9 +17,20 @@ class Sla::DashboardScopeTest < ActiveSupport::TestCase
     issue
   end
 
-  def make_result(issue, project_id: nil, resolved_at: nil)
+  def make_result(issue, project_id: nil, resolved_at: nil, primary_state: 'met')
     SlaResult.create!(issue_id: issue.id, project_id: project_id || issue.project_id,
-                      primary_state: 'met', resolved_at: resolved_at)
+                      primary_state: primary_state, resolved_at: resolved_at)
+  end
+
+  test 'excludes No-SLA rows from the dashboard population' do
+    evaluated_issue = make_issue
+    no_sla_issue = make_issue
+    make_result(evaluated_issue, primary_state: 'met')
+    make_result(no_sla_issue, primary_state: 'no_sla')
+
+    scope = Sla::DashboardScope.call(project_ids: [1])
+
+    assert_equal [evaluated_issue.id], scope.pluck(:issue_id)
   end
 
   test 'scopes to the given project_ids only' do

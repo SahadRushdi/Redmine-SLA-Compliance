@@ -18,8 +18,8 @@ class Sla::TrendSeriesTest < ActiveSupport::TestCase
     issue
   end
 
-  def make_result(issue, resolved_at: nil)
-    SlaResult.create!(issue_id: issue.id, project_id: issue.project_id, primary_state: 'met',
+  def make_result(issue, resolved_at: nil, primary_state: 'met')
+    SlaResult.create!(issue_id: issue.id, project_id: issue.project_id, primary_state: primary_state,
                       resolved_at: resolved_at)
   end
 
@@ -74,6 +74,18 @@ class Sla::TrendSeriesTest < ActiveSupport::TestCase
     points = Sla::TrendSeries.call(scope: scope, date_range: date_range, granularity: 'daily')
 
     assert_equal [1], points.map(&:created)
+    assert_equal [0], points.map(&:resolved)
+  end
+
+  test "No-SLA rows are excluded from both Created and Resolved trend calculations" do
+    date_range = Date.new(2026, 7, 1)..Date.new(2026, 7, 1)
+    no_sla_issue = make_issue(created_on: Time.zone.local(2026, 7, 1, 9))
+    make_result(no_sla_issue, primary_state: 'no_sla',
+                resolved_at: Time.zone.local(2026, 7, 1, 12))
+
+    points = Sla::TrendSeries.call(scope: scope, date_range: date_range, granularity: 'daily')
+
+    assert_equal [0], points.map(&:created)
     assert_equal [0], points.map(&:resolved)
   end
 

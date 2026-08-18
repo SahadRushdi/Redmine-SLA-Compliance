@@ -1,13 +1,13 @@
 <%# Step 6.2 — summary cards. All numbers come from Sla::ResultSummary via @counts, computed once %>
 <%# in the controller from the sla_results cache — nothing here recomputes SLA state. %>
-<%# Reconciliation: total == met + breached + no_sla; at_risk is a subset of met, shown alongside %>
-<%# it, never added into the total; no_sla == not_configured + not_tracked. %>
+<%# Dashboard population contains evaluated tickets only. Reconciliation: total == met + breached; %>
+<%# at_risk is a subset of met, shown alongside it and never added into the total. %>
 <%# Card values carry stable ids (also useful for functional tests, since assigns() isn't %>
 <%# available in this Rails version without rails-controller-testing). %>
 <%# Every card is the shared _summary_card partial — icon tile, short label, one big number, one %>
 <%# short caption. Nothing else: no boxed explanatory banner under the number, and no (i) tooltip %>
 <%# either. Each caption is the whole supporting text the card gets. %>
-<div class="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 lg:tw-grid-cols-5 tw-gap-4 tw-mb-6">
+<div class="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 lg:tw-grid-cols-4 tw-gap-4 tw-mb-6">
   <%= render 'sla_dashboard/summary_card',
         state: :total, label: sla_card_label(:total), value: @counts.total,
         value_id: 'sla-card-total-value',
@@ -45,14 +45,4 @@
         state: :at_risk, label: sla_card_label(:at_risk), value: @counts.at_risk,
         value_id: 'sla-card-at-risk-value',
         caption: l(:label_sla_card_at_risk_caption) %>
-
-  <%= render 'sla_dashboard/summary_card',
-        state: :no_sla, label: sla_card_label(:no_sla), value: @counts.no_sla,
-        value_id: 'sla-card-no-sla-value',
-        caption: safe_join([
-          "#{l(:label_sla_card_not_configured)}: ",
-          content_tag(:span, @counts.not_configured, id: 'sla-card-not-configured-value'),
-          " · #{l(:label_sla_card_not_tracked)}: ",
-          content_tag(:span, @counts.not_tracked, id: 'sla-card-not-tracked-value')
-        ]) %>
 </div>

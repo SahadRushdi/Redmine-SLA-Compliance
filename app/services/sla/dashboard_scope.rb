@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 module Sla
-  # The filtered `sla_results` relation for the dashboard (Step 6.1). `sla_results` itself has no
+  # The filtered, evaluated `sla_results` relation for the dashboard (Step 6.1). No-SLA rows stay
+  # in the cache for engine/notification purposes but are deliberately absent from every dashboard
+  # consumer (cards, charts, trends, detail rows and CSV). `sla_results` itself has no
   # tracker_id/priority_id columns (see the `sla_` migration), so those filters join `issues`.
   # Built as its own service — not inline controller ActiveRecord — because Steps 6.3/6.4 (charts,
   # detail table) need this exact same filtered relation; composing it once here avoids duplicating
@@ -35,7 +37,8 @@ module Sla
     end
 
     def call
-      scope = SlaResult.joins(:issue).where(project_id: @project_ids)
+      scope = SlaResult.joins(:issue)
+                       .where(project_id: @project_ids, primary_state: %w[met breached])
       scope = scope.where(issues: { tracker_id: @tracker_ids }) if @tracker_ids.present?
       scope = scope.where(issues: { priority_id: @priority_ids }) if @priority_ids.present?
       # Open = not resolved, per the engine's own `resolved`-role statuses rather than Redmine's
