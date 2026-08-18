@@ -406,11 +406,46 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select '[data-sla-panel="general"] #sla-clone-load', 1
     assert_select '[data-sla-panel="general"] label[for="sla-clone-source"]', 0
     assert_select '[data-sla-panel="general"] #sla-clone-source[aria-label=?]', I18n.t(:field_sla_clone_source)
+    assert_select '[data-sla-panel="general"] #sla-clone-source.sla-clone-project-select', 1
     assert_select '#sla-clone-confirm-modal[role="dialog"][aria-modal="true"]', 1 do
       assert_select '[data-sla-clone-confirm]', text: I18n.t(:button_sla_load_policy), count: 1
       assert_select '[data-sla-clone-cancel]', text: I18n.t(:button_cancel), count: 1
     end
     assert_select '[data-sla-panel="targets"] #sla-clone-source', 0
+  end
+
+  test "data-driven policy dropdowns are ordered alphabetically" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select "select[name='status_mappings[created][]']" do |selects|
+      names = selects.first.css('option').map { |option| option.text.strip }
+      assert_equal names.sort_by { |name| [name.downcase, name] }, names
+    end
+
+    assert_select '#sla-at-risk-recipients' do |selects|
+      names = selects.first.css('option').map { |option| option.text.strip }
+      assert_equal names.sort_by { |name| [name.downcase, name] }, names
+    end
+  end
+
+  test "clone project options are ordered alphabetically regardless of project tree order" do
+    %w[Zulu Alpha].each do |prefix|
+      source = Project.create!(name: "#{prefix} Clone Source",
+                               identifier: "#{prefix.downcase}-clone-source")
+      source.enable_module!(:sla_compliance)
+      Member.create!(project: source, principal: User.find(2), roles: [@role])
+      SlaPolicy.create!(project: source, enabled: true)
+    end
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    names = css_select('#sla-clone-source option').map { |option| option.text.strip }
+    names.shift # prompt stays deliberately first
+    assert_equal names.sort_by { |name| [name.downcase, name] }, names
   end
 
   test "every configured target type gets its own column, header and inline editor per priority" do

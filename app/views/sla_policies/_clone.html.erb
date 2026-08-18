@@ -12,7 +12,8 @@
                 options_from_collection_for_select(sources, :id, :name, cloned_from&.id),
                 prompt: l(:label_sla_clone_source_blank), id: 'sla-clone-source',
                 aria: { label: l(:field_sla_clone_source) },
-                class: sla_input_classes, data: { sla_select: true } %>
+                class: "#{sla_input_classes} sla-clone-project-select",
+                data: { sla_select: true } %>
         </div>
         <button type="button" id="sla-clone-load" class="<%= sla_secondary_button_classes %>">
           <%= sla_copy_icon %><span><%= l(:button_sla_clone_load) %></span>

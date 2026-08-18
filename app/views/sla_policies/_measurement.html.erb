@@ -4,7 +4,7 @@
 
 <%= render layout: 'sla_policies/card',
            locals: { title: l(:label_sla_milestones_card) } do %>
-  <% statuses = project.rolled_up_statuses %>
+  <% statuses = sla_alphabetical(project.rolled_up_statuses) %>
   <div class="tw-grid tw-grid-cols-1 lg:tw-grid-cols-3 tw-gap-4">
   <% { created: :field_sla_created_statuses,
        work_started: :field_sla_work_started_statuses,

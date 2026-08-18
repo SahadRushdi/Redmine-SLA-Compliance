@@ -56,6 +56,13 @@ class SlaPluginSettingsPageTest < ActionController::TestCase
     end
   end
 
+  test "the role picker is ordered alphabetically" do
+    get_settings_page
+
+    names = css_select("#{PICKER} option").map { |option| option.text.strip }
+    assert_equal names.sort_by { |name| [name.downcase, name] }, names
+  end
+
   test "the picker is a Tom Select chip control, not a bare multi-select" do
     # Without this attribute the control still renders, but as an unstyled native multi-select
     # with no chips and no search — a silent degradation nothing else here would catch.

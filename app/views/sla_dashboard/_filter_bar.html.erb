@@ -48,7 +48,8 @@
         <div class="tw-min-w-[12rem]"
              <% if @locked_project %>title="<%= l(:text_sla_filter_locked_project_hint) %>"<% end %>>
           <%= select_tag 'project_ids[]',
-                options_for_select(@permitted_projects.map { |p| [p.name, p.id] }, @filters[:project_ids]),
+                options_for_select(sla_alphabetical(@permitted_projects).map { |p| [p.name, p.id] },
+                                   @filters[:project_ids]),
                 id: 'sla-filter-projects', multiple: true, disabled: @locked_project,
                 class: sla_input_classes, placeholder: l(:label_sla_filter_all_projects),
                 'aria-label': l(:label_sla_filter_project),
@@ -60,7 +61,8 @@
         <%# its option list is the union of the selected trackers' configured priorities. %>
         <div class="tw-min-w-[12rem]">
           <%= select_tag 'tracker_ids[]',
-                options_for_select(@available_trackers.map { |t| [t.name, t.id] }, @filters[:tracker_ids]),
+                options_for_select(sla_alphabetical(@available_trackers).map { |t| [t.name, t.id] },
+                                   @filters[:tracker_ids]),
                 id: 'sla-filter-tracker', multiple: true, class: sla_input_classes,
                 placeholder: l(:label_sla_filter_all_trackers), 'aria-label': l(:label_sla_filter_tracker),
                 data: { 'sla-chips': true, 'sla-auto-apply-debounced': true } %>
@@ -68,7 +70,8 @@
 
         <div class="tw-min-w-[12rem]">
           <%= select_tag 'priority_ids[]',
-                options_for_select(@available_priorities.map { |p| [p.name, p.id] }, @filters[:priority_ids]),
+                options_for_select(sla_alphabetical(@available_priorities).map { |p| [p.name, p.id] },
+                                   @filters[:priority_ids]),
                 id: 'sla-filter-priorities', multiple: true, disabled: @filters[:tracker_ids].blank?,
                 class: sla_input_classes, placeholder: l(:label_sla_filter_all_priorities),
                 'aria-label': l(:label_sla_filter_priority),

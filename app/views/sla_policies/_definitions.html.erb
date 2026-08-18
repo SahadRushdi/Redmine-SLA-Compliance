@@ -1,5 +1,5 @@
 <%# Tracker membership is autosaved from this tab row; target cells retain their own autosave. %>
-<% trackers = project.trackers.sorted.to_a %>
+<% trackers = sla_alphabetical(project.trackers) %>
 <% selected = sla_selected_trackers(project, policy) %>
 <% selected_ids = selected.map(&:id) %>
 <% available = trackers.reject { |tracker| selected_ids.include?(tracker.id) } %>

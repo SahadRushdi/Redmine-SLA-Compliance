@@ -154,6 +154,25 @@
     if (window.slaTomSelect) { window.slaTomSelect.guard(instance); }
 
     instance.on('dropdown_open', function (dropdown) {
+      // Keep the unbounded clone-project list out of the document flow. It overlays the viewport,
+      // so opening it does not increase the General tab's scroll height.
+      if (instance.wrapper.classList.contains('sla-clone-project-select')) {
+        instance.wrapper.classList.remove('sla-ts-drop-up');
+        var cloneControlRect = instance.control.getBoundingClientRect();
+        var cloneDropdownHeight = dropdown.offsetHeight;
+        var cloneRoomBelow = window.innerHeight - cloneControlRect.bottom - 8;
+        var cloneTop = cloneControlRect.bottom + 4;
+        if (cloneDropdownHeight > cloneRoomBelow && cloneControlRect.top > cloneRoomBelow) {
+          cloneTop = Math.max(8, cloneControlRect.top - cloneDropdownHeight - 4);
+        }
+        dropdown.style.position = 'fixed';
+        dropdown.style.left = cloneControlRect.left + 'px';
+        dropdown.style.top = cloneTop + 'px';
+        dropdown.style.bottom = 'auto';
+        dropdown.style.right = 'auto';
+        dropdown.style.width = cloneControlRect.width + 'px';
+        return;
+      }
       var rect = instance.control.getBoundingClientRect();
       var needed = dropdown.offsetHeight;
       var roomBelow = window.innerHeight - rect.bottom;

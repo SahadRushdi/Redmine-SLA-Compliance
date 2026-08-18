@@ -30,7 +30,7 @@
     <%# offerable here — granting one would hand SLA access to everyone who can open the project, %>
     <%# member or not, which is precisely what this list is not for. %>
     <%= select_tag 'settings[sla_access_role_ids][]',
-          options_from_collection_for_select(Role.givable, :id, :name,
+          options_from_collection_for_select(sla_alphabetical(Role.givable), :id, :name,
                                              Sla::PluginSettings.access_role_ids),
           multiple: true, id: 'settings_sla_access_role_ids', class: sla_input_classes,
           'aria-label': l(:field_sla_access_roles),

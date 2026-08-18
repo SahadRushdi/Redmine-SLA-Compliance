@@ -4,10 +4,21 @@
 # ProjectsController#settings (no plugin controller runs on that GET), so everything the form
 # needs is derived here. All lists come live from Redmine configuration — never constants.
 module SlaPoliciesHelper
+  # Portable, case-insensitive ordering for the small Redmine collections rendered in dropdowns.
+  # Sorting in Ruby avoids database-specific LOWER/collation behavior and uses the exact label the
+  # user sees. The original name and id make ties deterministic.
+  def sla_alphabetical(records)
+    records.to_a.sort_by do |record|
+      name = record.name.to_s
+      [name.downcase, name, record.id.to_i]
+    end
+  end
+
   def sla_notification_recipient_options(project, selected_ids)
     users = (project ? Sla::ProjectRecipientUsers.for(project) : User.active.joins(:email_address))
-            .distinct.order(:lastname, :firstname, :id)
-    options_for_select(users.map { |user| ["#{user.name} — #{user.mail}", user.id] }, selected_ids)
+            .distinct
+    options_for_select(sla_alphabetical(users).map { |user| ["#{user.name} — #{user.mail}", user.id] },
+                       selected_ids)
   end
   # --- Sectioned settings shell -------------------------------------------------------------
   # The tab is split into sidebar-navigable sections instead of one long scrolling form. Section
@@ -245,7 +256,7 @@ module SlaPoliciesHelper
   # it and leaves its stored targets alone (see SlaPoliciesController#replace_tracker_definitions!).
   # Clearing a tracker's targets is done by setting its rows to "not tracked", not by hiding it.
   def sla_selected_trackers(project, policy)
-    trackers = project.trackers.sorted.to_a
+    trackers = sla_alphabetical(project.trackers)
     requested = sla_requested_tracker_ids
     return trackers.select { |tracker| requested.include?(tracker.id) } if requested.any?
 
@@ -284,10 +295,10 @@ module SlaPoliciesHelper
   # Source candidates for "Clone from another project": projects the user could edit the
   # policy of, that actually have one — minus the current project.
   def sla_clone_source_projects(project)
-    Project.active.allowed_to(:edit_sla_policy)
-           .where(id: SlaPolicy.select(:project_id))
-           .where.not(id: project.id)
-           .sorted
+    sources = Project.active.allowed_to(:edit_sla_policy)
+                     .where(id: SlaPolicy.select(:project_id))
+                     .where.not(id: project.id)
+    sla_alphabetical(sources)
   end
 
   # The project this policy was last cloned from (migration 009), or nil. It preselects the Clone
