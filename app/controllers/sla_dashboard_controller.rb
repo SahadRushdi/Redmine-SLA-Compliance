@@ -79,15 +79,20 @@ class SlaDashboardController < ApplicationController
     # aggregation over the sla_results cache (Global Rule 4).
     @priority_breakdown = Sla::PriorityBreakdown.call(scope: @scope)
 
-    # The SLA Met card on the Trend tab deliberately reuses @counts, exactly like the donut. It is
-    # a second view of the current open evaluated population, not a date-window cohort; otherwise
-    # the two dashboard tabs can display contradictory compliance percentages for the same filters.
-
-    # Trend chart needs Created and Resolved filtered independently against date_range (see
-    # Sla::TrendSeries) rather than a created_on-filtered scope, so it's built from its own
-    # project/tracker/priority-only scope with no date_range applied.
+    # The Trend tab is period-scoped. Its SLA Met denominator is the evaluated cohort whose current
+    # SLA cycle began during the selected period, using the engine-cached cycle_started_at derived
+    # from each project's configured Created statuses. Resolved tickets remain in this cohort, so
+    # this is a period compliance measure rather than the remaining open backlog after breaches.
     trend_scope = Sla::DashboardScope.call(project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
                                             priority_ids: @filters[:priority_ids])
+    trend_period_scope = Sla::DashboardScope.call(
+      project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
+      priority_ids: @filters[:priority_ids], cycle_started_range: @filters[:date_range]
+    )
+    @trend_counts = Sla::ResultSummary.call(scope: trend_period_scope)
+
+    # Created and Resolved use independent milestone timestamps so an older cycle resolved during
+    # this period still appears on the Resolved line without entering the Created-period cohort.
     @trend_series = Sla::TrendSeries.call(scope: trend_scope, date_range: @filters[:date_range],
                                           granularity: @filters[:granularity])
 

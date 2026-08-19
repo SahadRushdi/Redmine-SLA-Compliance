@@ -10,24 +10,28 @@ module Sla
   # the join/filter logic across every dashboard consumer.
   #
   # `open_only` defines the current dashboard population: every ticket not yet resolved, at all
-  # times. The selected date range must not reach it. Created-vs-Resolved is the only historical
-  # dashboard surface, so Sla::TrendSeries takes an unfiltered scope and applies independent ranges
-  # to issues.created_on and sla_results.resolved_at itself.
+  # times. `cycle_started_range` defines the SLA Trend population: tickets whose current SLA cycle
+  # began in the selected period. The engine derives that timestamp from the project's configured
+  # `created`-role statuses (initial creation or the latest reopen), so the Trend card does not fall
+  # back to Redmine's raw issue creation timestamp.
   #
   # Deliberately does not scope by permission or resolve which projects/trackers/priorities are
   # valid — the caller (SlaDashboardController#resolve_filters) is responsible for clamping
   # user-submitted ids against what's actually permitted/configured before calling this.
   class DashboardScope
-    def self.call(project_ids:, tracker_ids: [], priority_ids: [], open_only: false)
+    def self.call(project_ids:, tracker_ids: [], priority_ids: [], open_only: false,
+                  cycle_started_range: nil)
       new(project_ids: project_ids, tracker_ids: tracker_ids, priority_ids: priority_ids,
-          open_only: open_only).call
+          open_only: open_only, cycle_started_range: cycle_started_range).call
     end
 
-    def initialize(project_ids:, tracker_ids: [], priority_ids: [], open_only: false)
+    def initialize(project_ids:, tracker_ids: [], priority_ids: [], open_only: false,
+                   cycle_started_range: nil)
       @project_ids = project_ids
       @tracker_ids = tracker_ids
       @priority_ids = priority_ids
       @open_only = open_only
+      @cycle_started_range = cycle_started_range
     end
 
     def call
@@ -38,7 +42,16 @@ module Sla
       # Open = not resolved, per the engine's own `resolved`-role statuses rather than Redmine's
       # is_closed flag (Sla::ResultClassifier#closed_at persists the instant into `resolved_at`).
       scope = scope.where(sla_results: { resolved_at: nil }) if @open_only
+      if @cycle_started_range
+        scope = scope.where(sla_results: { cycle_started_at: timestamp_range(@cycle_started_range) })
+      end
       scope
+    end
+
+    private
+
+    def timestamp_range(date_range)
+      date_range.first.beginning_of_day..date_range.last.end_of_day
     end
   end
 end

@@ -353,7 +353,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_select '#sla-card-stale-value', text: '0', count: 1
   end
 
-  # --- Open-ticket semantics: "open" = not resolved, and the date range never touches it -------
+  # --- Open-ticket semantics and period-scoped SLA Trend --------------------------------------
 
   test "a resolved ticket is excluded from every open-ticket card" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
@@ -373,42 +373,54 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_equal 3, parse_chart_data('sla-donut-chart')['total']
   end
 
-  test "the date range does not move any open-ticket card" do
+  test "the date range moves Trend SLA Met but does not move any open-ticket card" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
     grant_sla_access!
-    seed_reconciled_dataset
+    issues = seed_reconciled_dataset
+    issues.each_value do |issue|
+      SlaResult.find_by!(issue_id: issue.id)
+               .update!(cycle_started_at: Time.zone.local(2026, 7, 15, 9, 0, 0))
+    end
 
-    %w[this_week last_month last_3_months].each do |preset|
-      get :index, params: { project_id: @project.id, date_preset: preset }
+    [['07/01/2026', '07/31/2026', '2', '4'],
+     ['08/01/2026', '08/31/2026', '0', '0']].each do |from, to, met, total|
+      get :index, params: { project_id: @project.id, date_preset: 'custom', from: from, to: to }
 
       assert_select '#sla-card-total-value', text: '4'
       assert_select '#sla-card-breached-value', text: '2'
       assert_select '#sla-card-at-risk-value', text: '1'
       assert_select '#sla-card-no-sla-value', 0
-      assert_select '#sla-met-window-percentage', text: '50.0'
-      assert_select '#sla-met-window-value', text: '2'
+      assert_select '#sla-met-window-value', text: met
+      assert_select '#sla-met-window-caption', text: "#{met} of #{total} met in target"
     end
   end
 
-  test "the SLA Met card matches the donut's current open-ticket population" do
+  test "the SLA Met card uses only cycles started in the selected period" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
     grant_sla_access!
     issues = seed_reconciled_dataset
-    # Put every ticket outside the chosen chart window. The trend card must still use the same
-    # four current open/evaluated tickets as the donut: two met and two breached.
-    issues.each_value { |issue| issue.update_column(:created_on, Time.zone.local(2026, 6, 1, 9, 0, 0)) }
+    issues.each_value do |issue|
+      SlaResult.find_by!(issue_id: issue.id)
+               .update!(cycle_started_at: Time.zone.local(2026, 6, 1, 9, 0, 0))
+    end
+    SlaResult.find_by!(issue_id: issues[:met].id)
+             .update!(cycle_started_at: Time.zone.local(2026, 7, 1, 9, 0, 0),
+                      resolved_at: Time.zone.local(2026, 7, 2, 9, 0, 0))
+    SlaResult.find_by!(issue_id: issues[:breached].id)
+             .update!(cycle_started_at: Time.zone.local(2026, 7, 3, 9, 0, 0))
 
     get :index, params: { project_id: @project.id, date_preset: 'custom',
                           from: '07/01/2026', to: '07/31/2026' }
 
     assert_select '#sla-met-window-percentage', text: '50.0'
-    assert_select '#sla-met-window-value', text: '2'
-    assert_select '.tw-text-xs', text: '2 of 4 met in target'
-    assert_equal 4, parse_chart_data('sla-donut-chart')['total']
-    assert_equal [0] * 31, parse_chart_data('sla-trend-chart')['datasets'].first['data']
+    assert_select '#sla-met-window-value', text: '1'
+    assert_select '#sla-met-window-caption', text: '1 of 2 met in target'
+    assert_equal 3, parse_chart_data('sla-donut-chart')['total'],
+                 'the resolved period ticket is correctly absent from the current-open donut'
+    assert_equal 2, parse_chart_data('sla-trend-chart')['datasets'].first['data'].sum
   end
 
-  test "the SLA Met card shows zero percent and a zero count when no open tickets are evaluated" do
+  test "the SLA Met card shows zero percent and a zero count when no cycles started in the period" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
     grant_sla_access!
 
@@ -424,9 +436,14 @@ class SlaDashboardControllerTest < ActionController::TestCase
     SlaPolicy.create!(project_id: @project.id, enabled: true)
     grant_sla_access!
     issues = seed_reconciled_dataset
-    issues.each_value { |issue| issue.update_column(:created_on, Time.zone.local(2026, 6, 1, 9, 0, 0)) }
-    issues[:met].update_column(:created_on, Time.zone.local(2026, 7, 1, 9, 0, 0))
-    issues[:at_risk].update_column(:created_on, Time.zone.local(2026, 7, 2, 9, 0, 0))
+    issues.each_value do |issue|
+      SlaResult.find_by!(issue_id: issue.id)
+               .update!(cycle_started_at: Time.zone.local(2026, 6, 1, 9, 0, 0))
+    end
+    SlaResult.find_by!(issue_id: issues[:met].id)
+             .update!(cycle_started_at: Time.zone.local(2026, 7, 1, 9, 0, 0))
+    SlaResult.find_by!(issue_id: issues[:at_risk].id)
+             .update!(cycle_started_at: Time.zone.local(2026, 7, 2, 9, 0, 0))
     SlaResult.find_by!(issue_id: issues[:met].id)
              .update!(resolved_at: Time.zone.local(2026, 7, 2, 15, 0, 0))
 

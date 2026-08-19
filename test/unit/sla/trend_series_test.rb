@@ -18,9 +18,9 @@ class Sla::TrendSeriesTest < ActiveSupport::TestCase
     issue
   end
 
-  def make_result(issue, resolved_at: nil, primary_state: 'met')
+  def make_result(issue, resolved_at: nil, primary_state: 'met', cycle_started_at: issue.created_on)
     SlaResult.create!(issue_id: issue.id, project_id: issue.project_id, primary_state: primary_state,
-                      resolved_at: resolved_at)
+                      resolved_at: resolved_at, cycle_started_at: cycle_started_at)
   end
 
   def scope(project_ids: [1])
@@ -64,6 +64,16 @@ class Sla::TrendSeriesTest < ActiveSupport::TestCase
 
     assert_equal [0, 0, 0, 0, 0], points.map(&:created), 'created outside the window must not appear'
     assert_equal [0, 0, 1, 0, 0], points.map(&:resolved)
+  end
+
+  test "Created uses the configured milestone cycle rather than the raw issue creation timestamp" do
+    date_range = Date.new(2026, 7, 1)..Date.new(2026, 7, 3)
+    reopened_issue = make_issue(created_on: Time.zone.local(2026, 6, 1, 9))
+    make_result(reopened_issue, cycle_started_at: Time.zone.local(2026, 7, 2, 11))
+
+    points = Sla::TrendSeries.call(scope: scope, date_range: date_range, granularity: 'daily')
+
+    assert_equal [0, 1, 0], points.map(&:created)
   end
 
   test "rows with a nil resolved_at are excluded from the Resolved line" do
@@ -125,7 +135,7 @@ class Sla::TrendSeriesTest < ActiveSupport::TestCase
 
   test "an unrecognized granularity falls back to daily rather than raising" do
     date_range = Date.new(2026, 7, 1)..Date.new(2026, 7, 1)
-    make_issue(created_on: Time.zone.local(2026, 7, 1, 9))
+    make_result(make_issue(created_on: Time.zone.local(2026, 7, 1, 9)))
 
     points = Sla::TrendSeries.call(scope: scope, date_range: date_range, granularity: 'yearly')
 

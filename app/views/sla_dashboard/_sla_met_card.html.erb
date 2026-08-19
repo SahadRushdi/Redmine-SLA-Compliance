@@ -1,7 +1,6 @@
-<%# SLA Met card for the SLA Trend tab. It deliberately uses the same @counts current-open %>
-<%# population as the Open Tickets cards and compliance donut, so its percentage and ticket count %>
-<%# always reconcile with those surfaces. At-risk remains a subset of met and No-SLA is excluded %>
-<%# by Sla::DashboardScope. The date controls beside this card affect only Created vs Resolved. %>
+<%# SLA Met card for the selected Trend period. The cohort is based on cycle_started_at, the SLA %>
+<%# engine's cached Created/reopen milestone timestamp, and includes both open and resolved evaluated %>
+<%# tickets. At-risk remains a subset of met and No-SLA is excluded by Sla::DashboardScope. %>
 <%# %>
 <%# Same _summary_card anatomy as the Open Tickets tab's row (icon tile, label, big number, muted %>
 <%# caption) so the two tabs share one card design and one type scale. The surface is overridden to %>
@@ -11,9 +10,10 @@
       state: :met, label: sla_card_label(:met_window),
       surface: 'tw-bg-white tw-border-gray-200',
       value: safe_join([
-        content_tag(:span, sla_percentage(@counts.met, @counts.total), id: 'sla-met-window-percentage'),
+        content_tag(:span, sla_percentage(@trend_counts.met, @trend_counts.total), id: 'sla-met-window-percentage'),
         '%',
-        content_tag(:span, safe_join(['(', content_tag(:span, @counts.met, id: 'sla-met-window-value'), ')']),
+        content_tag(:span, safe_join(['(', content_tag(:span, @trend_counts.met, id: 'sla-met-window-value'), ')']),
                     class: 'tw-text-xl tw-font-semibold tw-opacity-80 tw-ml-1')
       ]),
-      caption: l(:text_sla_met_in_target, met: @counts.met, total: @counts.total) %>
+      caption: l(:text_sla_met_in_target, met: @trend_counts.met, total: @trend_counts.total),
+      caption_id: 'sla-met-window-caption' %>
