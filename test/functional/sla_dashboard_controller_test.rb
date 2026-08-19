@@ -632,6 +632,25 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_select "#sla-detail-row-#{issues[:live_breached].id} td:last-child", text: /1h/
   end
 
+  test "detail table uses scan-friendly duration bands for response resolution and deviation" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    grant_sla_access!
+    issues = seed_reconciled_dataset
+    SlaResult.find_by!(issue_id: issues[:breached].id).update!(
+      response_seconds: 32.minutes,
+      resolution_seconds: 1.day + 5.hours + 32.minutes,
+      deviation_seconds: 9.days + 4.hours
+    )
+
+    get :index, params: { project_id: @project.id }
+
+    assert_select "#sla-detail-row-#{issues[:breached].id}" do
+      assert_select 'td:nth-child(7)', text: '32m'
+      assert_select 'td:nth-child(8)', text: '1d 5h'
+      assert_select 'td:nth-child(10)', text: '+1w 2d'
+    end
+  end
+
   test "the at-risk flag renders alongside the Met badge on an at-risk row, never replacing it" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
     grant_sla_access!
