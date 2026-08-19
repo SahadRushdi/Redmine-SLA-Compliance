@@ -60,9 +60,7 @@
        ].each_with_index.sort_by { |row, i| [-row[:value], i] }.map(&:first) %>
     <div id="sla-chart-legend" class="tw-w-full tw-space-y-2.5">
       <% donut_legend_rows.each do |row| %>
-        <%# sla-legend-item carries the click affordance AND the active pill the JS toggles; the %>
-        <%# -label/-value/-muted hooks let that pill recolour the count and percentage too, which %>
-        <%# carry grey utilities of their own — see partials/_chart_legend.css. %>
+        <%# sla-legend-item carries the click affordance AND the active pill the JS toggles. %>
         <div class="sla-legend-item tw-flex tw-items-center tw-justify-between tw-gap-3 tw-text-sm"
              data-sla-legend-target="sla-donut-chart" data-sla-legend-indices="<%= row[:indices].join(',') %>">
           <span class="sla-legend-label tw-inline-flex tw-items-center tw-gap-2 tw-text-gray-700">
@@ -74,7 +72,6 @@
           </span>
           <span class="tw-whitespace-nowrap">
             <span class="sla-legend-value tw-font-semibold tw-text-gray-900"><%= row[:value] %></span>
-            <span class="sla-legend-muted tw-text-gray-400 tw-text-xs">(<%= sla_percentage(row[:value], @counts.total) %>%)</span>
           </span>
         </div>
       <% end %>

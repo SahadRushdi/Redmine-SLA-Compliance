@@ -79,20 +79,19 @@ class SlaDashboardController < ApplicationController
     # aggregation over the sla_results cache (Global Rule 4).
     @priority_breakdown = Sla::PriorityBreakdown.call(scope: @scope)
 
-    # The Trend tab is period-scoped. Its SLA Met denominator is the evaluated cohort whose current
-    # SLA cycle began during the selected period, using the engine-cached cycle_started_at derived
-    # from each project's configured Created statuses. Resolved tickets remain in this cohort, so
-    # this is a period compliance measure rather than the remaining open backlog after breaches.
+    # The Trend tab is period-scoped. Its SLA Met denominator contains only evaluated tickets whose
+    # policy-derived resolution milestone falls inside the selected period. Open tickets are not
+    # final outcomes and therefore cannot inflate historical compliance as provisionally "met".
     trend_scope = Sla::DashboardScope.call(project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
                                             priority_ids: @filters[:priority_ids])
-    trend_period_scope = Sla::DashboardScope.call(
+    resolved_period_scope = Sla::DashboardScope.call(
       project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
-      priority_ids: @filters[:priority_ids], cycle_started_range: @filters[:date_range]
+      priority_ids: @filters[:priority_ids], resolved_range: @filters[:date_range]
     )
-    @trend_counts = Sla::ResultSummary.call(scope: trend_period_scope)
+    @trend_counts = Sla::ResultSummary.call(scope: resolved_period_scope)
 
     # Created and Resolved use independent milestone timestamps so an older cycle resolved during
-    # this period still appears on the Resolved line without entering the Created-period cohort.
+    # this period still appears on the Resolved line without appearing on the Created line.
     @trend_series = Sla::TrendSeries.call(scope: trend_scope, date_range: @filters[:date_range],
                                           granularity: @filters[:granularity])
 

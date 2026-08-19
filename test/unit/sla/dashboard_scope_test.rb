@@ -116,6 +116,34 @@ class Sla::DashboardScopeTest < ActiveSupport::TestCase
     assert_empty scope
   end
 
+  test 'resolved_range keeps only tickets resolved during the full selected days' do
+    before = make_issue
+    first_day = make_issue
+    last_day = make_issue
+    open_issue = make_issue
+    make_result(before, resolved_at: Time.zone.local(2026, 6, 30, 23, 59, 59))
+    make_result(first_day, resolved_at: Time.zone.local(2026, 7, 1, 0, 0, 1))
+    make_result(last_day, resolved_at: Time.zone.local(2026, 7, 31, 23, 59, 59))
+    make_result(open_issue)
+
+    scope = Sla::DashboardScope.call(
+      project_ids: [1], resolved_range: Date.new(2026, 7, 1)..Date.new(2026, 7, 31)
+    )
+
+    assert_equal [first_day.id, last_day.id].sort, scope.pluck(:issue_id).sort
+  end
+
+  test 'resolved_range excludes open tickets even when their SLA cycle started in the period' do
+    open_issue = make_issue
+    make_result(open_issue).update!(cycle_started_at: Time.zone.local(2026, 7, 10, 9, 0, 0))
+
+    scope = Sla::DashboardScope.call(
+      project_ids: [1], resolved_range: Date.new(2026, 7, 1)..Date.new(2026, 7, 31)
+    )
+
+    assert_empty scope
+  end
+
   test 'combines project + tracker + priority + open_only with AND semantics' do
     matches_all = make_issue(project_id: 1, tracker_id: 1, priority_id: 4)
     wrong_tracker = make_issue(project_id: 1, tracker_id: 2, priority_id: 4)

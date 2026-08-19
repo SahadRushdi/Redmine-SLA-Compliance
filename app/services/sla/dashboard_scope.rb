@@ -10,28 +10,29 @@ module Sla
   # the join/filter logic across every dashboard consumer.
   #
   # `open_only` defines the current dashboard population: every ticket not yet resolved, at all
-  # times. `cycle_started_range` defines the SLA Trend population: tickets whose current SLA cycle
-  # began in the selected period. The engine derives that timestamp from the project's configured
-  # `created`-role statuses (initial creation or the latest reopen), so the Trend card does not fall
-  # back to Redmine's raw issue creation timestamp.
+  # times. `resolved_range` defines the SLA Trend card's historical outcome population: tickets
+  # whose engine-cached resolution milestone falls inside the selected period. `cycle_started_range`
+  # remains available to consumers that need the configured Created/reopen milestone cohort.
   #
   # Deliberately does not scope by permission or resolve which projects/trackers/priorities are
   # valid — the caller (SlaDashboardController#resolve_filters) is responsible for clamping
   # user-submitted ids against what's actually permitted/configured before calling this.
   class DashboardScope
     def self.call(project_ids:, tracker_ids: [], priority_ids: [], open_only: false,
-                  cycle_started_range: nil)
+                  cycle_started_range: nil, resolved_range: nil)
       new(project_ids: project_ids, tracker_ids: tracker_ids, priority_ids: priority_ids,
-          open_only: open_only, cycle_started_range: cycle_started_range).call
+          open_only: open_only, cycle_started_range: cycle_started_range,
+          resolved_range: resolved_range).call
     end
 
     def initialize(project_ids:, tracker_ids: [], priority_ids: [], open_only: false,
-                   cycle_started_range: nil)
+                   cycle_started_range: nil, resolved_range: nil)
       @project_ids = project_ids
       @tracker_ids = tracker_ids
       @priority_ids = priority_ids
       @open_only = open_only
       @cycle_started_range = cycle_started_range
+      @resolved_range = resolved_range
     end
 
     def call
@@ -44,6 +45,9 @@ module Sla
       scope = scope.where(sla_results: { resolved_at: nil }) if @open_only
       if @cycle_started_range
         scope = scope.where(sla_results: { cycle_started_at: timestamp_range(@cycle_started_range) })
+      end
+      if @resolved_range
+        scope = scope.where(sla_results: { resolved_at: timestamp_range(@resolved_range) })
       end
       scope
     end

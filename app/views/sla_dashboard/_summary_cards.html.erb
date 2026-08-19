@@ -28,17 +28,11 @@
         caption: @stale.configured? ? l(:label_sla_card_stale_caption) : l(:label_sla_card_stale_unset_caption),
         caption_id: 'sla-card-stale-hint' %>
 
-  <%# The breached figure is a percentage with the raw count beside it, so it is assembled here %>
-  <%# rather than passed as a bare number — safe_join keeps the two spans' ids intact without %>
-  <%# hand-rolling html_safe over interpolated values. %>
+  <%# Breached is a direct open-ticket count; the caption retains its population context. %>
   <%= render 'sla_dashboard/summary_card',
         state: :breached, label: sla_card_label(:breached),
-        value: safe_join([
-          content_tag(:span, sla_percentage(@counts.breached, @counts.total), id: 'sla-card-breached-percentage'),
-          '%',
-          content_tag(:span, safe_join(['(', content_tag(:span, @counts.breached, id: 'sla-card-breached-value'), ')']),
-                      class: 'tw-text-xl tw-font-semibold tw-opacity-80 tw-ml-1')
-        ]),
+        value: @counts.breached,
+        value_id: 'sla-card-breached-value',
         caption: l(:text_sla_card_breached_caption, count: @counts.breached, total: @counts.total) %>
 
   <%= render 'sla_dashboard/summary_card',

@@ -13,10 +13,6 @@
     return JSON.parse(canvas.getAttribute('data-chart'));
   }
 
-  function formatPercent(value, total) {
-    return total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
-  }
-
   // #ffffff/#fff or rgb(a)(...) -> the same color at a lower alpha, for dimming a non-highlighted
   // series rather than hiding it. Unrecognized formats pass through unchanged (safe no-op) rather
   // than throwing, since the server payload controls the actual color values, not this file.
@@ -294,7 +290,7 @@
             label: function (item, data) {
               var label = data.labels[item.index] || '';
               var value = data.datasets[item.datasetIndex].data[item.index];
-              return label + ': ' + value + ' (' + formatPercent(value, payload.total) + '%)';
+              return label + ': ' + value;
             }
           }
         }

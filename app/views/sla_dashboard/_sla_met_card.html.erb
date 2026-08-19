@@ -1,6 +1,6 @@
-<%# SLA Met card for the selected Trend period. The cohort is based on cycle_started_at, the SLA %>
-<%# engine's cached Created/reopen milestone timestamp, and includes both open and resolved evaluated %>
-<%# tickets. At-risk remains a subset of met and No-SLA is excluded by Sla::DashboardScope. %>
+<%# SLA Met card for the selected Trend period. The cohort contains only evaluated tickets whose %>
+<%# policy-derived resolved_at falls inside the selected window. Open tickets cannot be final met %>
+<%# outcomes; No-SLA is excluded by Sla::DashboardScope. %>
 <%# %>
 <%# Same _summary_card anatomy as the Open Tickets tab's row (icon tile, label, big number, muted %>
 <%# caption) so the two tabs share one card design and one type scale. The surface is overridden to %>
@@ -15,5 +15,6 @@
         content_tag(:span, safe_join(['(', content_tag(:span, @trend_counts.met, id: 'sla-met-window-value'), ')']),
                     class: 'tw-text-xl tw-font-semibold tw-opacity-80 tw-ml-1')
       ]),
-      caption: l(:text_sla_met_in_target, met: @trend_counts.met, total: @trend_counts.total),
+      caption: l(:text_sla_met_in_target, count: @trend_counts.total,
+                 met: @trend_counts.met, total: @trend_counts.total),
       caption_id: 'sla-met-window-caption' %>
