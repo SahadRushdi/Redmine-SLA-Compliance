@@ -15,8 +15,6 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     @role = Role.find(1) # Manager — user 2 (jsmith)
     @role.add_permission!(:edit_sla_policy, :manage_sla_notifications)
     @request.session[:user_id] = 2
-    SlaTargetOption.create!(target_type: 'response', code: '4h', label: '4 hours',
-                            seconds: 14_400)
     Setting.plugin_redmine_sla_compliance = {}
   end
 
@@ -72,8 +70,9 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     saved.sla_definitions.create!(tracker_id: @project.trackers.first.id,
                                   priority_id: IssuePriority.active.first.id,
                                   response_seconds: 14_400)
-    SlaNotificationSetting.create!(project_id: @project.id,
-                                   at_risk_email_recipients: ['ops@example.com'])
+    notification = SlaNotificationSetting.create!(project_id: @project.id)
+    recipient = @project.users.joins(:email_address).first
+    notification.replace_recipient_user_ids!(:at_risk, [recipient.id])
 
     get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
     assert_response :success
@@ -84,8 +83,8 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
       assert_select 'input#sla_policy_at_risk_threshold[value="85"]'
       assert_select "select[name='status_mappings[created][]'] option[selected][value='#{status_id}']"
       assert_select "#sla-definitions-rows-#{@project.trackers.first.id} " \
-                    'option[selected][value="14400"]'
-      assert_select "option[selected][value='ops@example.com']"
+                    '[data-sla-target-cell][data-seconds="14400"]'
+      assert_select "option[selected][value='#{recipient.id}']", text: /#{Regexp.escape(recipient.mail)}/
     end
   end
 
@@ -112,15 +111,31 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select "a[data-sla-section-link='general'].is-active"
     assert_select "[data-sla-panel='general']:not(.hidden)"
     assert_select "[data-sla-panel='targets'].hidden"
+    assert_select "[data-sla-panel='exclusions']", 0
+    assert_select '#sla-general-form button[type=submit]', 0,
+                  'SLA Tracking autosaves and General must not expose a save button'
   end
 
   test "the requested section is the one rendered open" do
-    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'exclusions' }
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'measurement' }
     assert_response :success
 
-    assert_select "a[data-sla-section-link='exclusions'].is-active"
-    assert_select "[data-sla-panel='exclusions']:not(.hidden)"
+    assert_select "a[data-sla-section-link='measurement'].is-active"
+    assert_select "[data-sla-panel='measurement']:not(.hidden)"
     assert_select "[data-sla-panel='general'].hidden"
+  end
+
+  test "Measurement Rules uses horizontal milestone controls and has no save button" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'measurement' }
+    assert_response :success
+
+    assert_select '#sla-measurement-form[data-measurement-url]' do
+      assert_select '.lg\\:tw-grid-cols-3 [data-sla-measurement-role]', 3
+      assert_select '[data-sla-measurement-attribute="first_response_rule"]', 3
+      assert_select '[data-sla-measurement-attribute="at_risk_threshold"]', 1
+      assert_select '[data-sla-measurement-attribute="stale_threshold_days"]', 1
+      assert_select 'button[type=submit]', 0
+    end
   end
 
   test "an unknown section falls back to the first permitted one" do
@@ -163,9 +178,9 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
 
   # Every section EXCEPT General, which owns the switch that would unlock the others — locking it
   # would be a one-way door.
-  LOCKED_PANELS = %w[targets measurement exclusions notifications].freeze
+  LOCKED_PANELS = %w[targets measurement notifications].freeze
 
-  test "the four configuration sections are locked while SLA tracking is off" do
+  test "the configuration sections are locked while SLA tracking is off" do
     SlaPolicy.create!(project_id: @project.id, enabled: false)
 
     get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
@@ -230,7 +245,7 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select '[data-sla-locked-notice] a', 0
   end
 
-  # An inheriting project's on/off decision lives in the TRI-STATE control, not the plain switch,
+  # An inheriting project's on/off decision lives in the inherited toggle, not the plain switch,
   # so the lock has to resolve that instead — including :inherit, which means asking the ancestor.
 
   test "an inheriting project locks on its own Disabled decision" do
@@ -253,7 +268,7 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     get :settings, params: { id: child.identifier, tab: 'sla_policy' }
     assert_response :success
 
-    assert_select "input[name='sla_policy[enablement]'][value='inherit'][checked]"
+    assert_select "input[type='checkbox'][name='sla_policy[enablement]'][data-sla-inherited-enablement][checked]", 1
     assert_select 'fieldset[data-sla-lock][disabled]', 0, 'the ancestor has tracking on'
   end
 
@@ -270,38 +285,29 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
 
   # --- Section bodies ---------------------------------------------------------------------------
 
-  # The unclassified priority can never hold a target (enforced in
-  # SlaPoliciesController#replace_tracker_definitions!), so the Priority Targets card states that
-  # once in a notice rather than rendering a permanently disabled row. Rendering inputs for it
-  # would be worse than redundant — it would invite a submission the server is bound to discard.
-  test "the unclassified priority is a notice above the table, never a row with inputs" do
-    none = IssuePriority.active.first
+  test "every active Redmine priority gets target controls without global priority configuration" do
+    none = IssuePriority.create!(name: 'None', type: 'IssuePriority', position: 99)
+    tracker_id = @project.trackers.sorted.first.id
+    SlaPolicy.create!(project_id: @project.id, enabled: true, selected_tracker_ids: [tracker_id])
+    # A stale value from an older plugin version must no longer hide that priority.
     Setting.plugin_redmine_sla_compliance = { 'unclassified_priority_id' => none.id.to_s }
-    classified = IssuePriority.active.detect { |p| p.id != none.id }
 
     get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
     assert_response :success
 
-    tracker_id = @project.trackers.sorted.first.id
     assert_select '[data-sla-panel="targets"]' do
-      assert_select "select[name^='definitions[rows][#{tracker_id}][#{none.id}]']", 0,
-                    'no input may be offered for a priority whose submission is always rejected'
-      assert_select "select[name='definitions[rows][#{tracker_id}][#{classified.id}][response]']", 1,
-                    'other priorities must still get their target dropdowns'
+      IssuePriority.active.each do |priority|
+        assert_select "[data-sla-target-cell][data-tracker-id='#{tracker_id}']" \
+                      "[data-priority-id='#{priority.id}'][data-target-type='response']", 1
+      end
+      assert_select 'span', { text: 'Unclassified', count: 0 },
+                    'the removed unclassified-priority label must not render'
     end
+  ensure
+    Setting.plugin_redmine_sla_compliance = {}
   end
 
-  test "with no unclassified priority configured every active priority gets a row" do
-    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
-    assert_response :success
-
-    tracker_id = @project.trackers.sorted.first.id
-    IssuePriority.active.each do |priority|
-      assert_select "select[name='definitions[rows][#{tracker_id}][#{priority.id}][response]']", 1
-    end
-  end
-
-  # --- Step 6.2a: the Stale threshold field, and the "what happens if I leave this empty" line ---
+  # --- Step 6.2a: the Stale threshold field -----------------------------------------------
 
   def get_measurement_section(project = @project)
     get :settings, params: { id: project.identifier, tab: 'sla_policy', section: 'measurement' }
@@ -324,11 +330,11 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select "input[name='sla_policy[stale_threshold_days]'][value='4']", 1
   end
 
-  test "with nothing set anywhere the field is empty and says so" do
+  test "with nothing set anywhere the field is empty without helper text" do
     get_measurement_section
 
     assert_select "input[name='sla_policy[stale_threshold_days]'][value]", 0, 'no value, so it inherits'
-    assert_select '#sla-stale-threshold-source', text: I18n.t(:text_sla_stale_threshold_unset_anywhere)
+    assert_select '#sla-stale-threshold-source', 0
   end
 
   test "a subproject shows which ancestor its inherited threshold comes from" do
@@ -338,32 +344,17 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
 
     get_measurement_section(child)
 
-    assert_select '#sla-stale-threshold-source',
-                  text: I18n.t(:text_sla_stale_threshold_inherited, days: 4, source: @project.name)
     # The placeholder repeats it inside the empty box, so the number is visible where it is typed.
     assert_select "input[name='sla_policy[stale_threshold_days]'][placeholder=?]",
                   I18n.t(:label_sla_stale_threshold_placeholder_inherited, days: 4)
   end
 
-  # There is ONE status line under the field now, so it has to report the state the project is
-  # ACTUALLY in. It used to always answer "what would apply if this box were empty" — the parent's
-  # answer — which put "Not set — never flagged stale" directly beneath a field showing a number.
-  test "a project with its own value says so, not that nothing is set" do
+  test "a project with its own value has no label below the field" do
     SlaPolicy.create!(project_id: @project.id, enabled: true, stale_threshold_days: 9)
 
     get_measurement_section
 
-    assert_select '#sla-stale-threshold-source', text: I18n.t(:text_sla_stale_threshold_own)
-  end
-
-  # The consolidation: one line, never a second static paragraph restating how empty behaves.
-  test "the stale card carries exactly one line under its field" do
-    SlaPolicy.create!(project_id: @project.id, enabled: true, stale_threshold_days: 9)
-
-    get_measurement_section
-
-    assert_select '#sla-stale-threshold-source', 1
-    assert_select "[data-sla-panel='measurement'] p", text: /Leave empty to inherit/, count: 0
+    assert_select '#sla-stale-threshold-source', 0
   end
 
   # The render half of the "I add a tracker, save, and it is gone" bug (the save half is covered in
@@ -378,7 +369,7 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
 
     assert_response :success
     assert_select "#sla-definitions-table-#{targetless.id}", 1
-    assert_select "select[name='definitions[tracker_ids][]'] option[selected][value='#{targetless.id}']", 1
+    assert_select "#sla-tracker-tabs [data-sla-tracker-tab='#{targetless.id}']", 1
   end
 
   # The Clone card reopens saying where the configuration came from, instead of on a blank picker
@@ -400,34 +391,197 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select '.sla-plugin', text: /#{Regexp.escape(source_project.name)}/
   end
 
-  test "every configured target type gets its own column, header and dropdown per priority" do
+  test "the clone-from-project card renders in General below SLA Tracking, not in SLA Targets" do
+    source_project = Project.find(2)
+    source_project.enable_module!(:sla_compliance)
+    member = Member.find_or_initialize_by(user_id: 2, project_id: source_project.id)
+    member.role_ids = (member.role_ids + [@role.id]).uniq
+    member.save!
+    SlaPolicy.create!(project_id: source_project.id, enabled: true)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'general' }
+
+    assert_response :success
+    assert_select '[data-sla-panel="general"] #sla-clone-source', 1
+    assert_select '[data-sla-panel="general"] #sla-clone-load', 1
+    assert_select '[data-sla-panel="general"] label[for="sla-clone-source"]', 0
+    assert_select '[data-sla-panel="general"] #sla-clone-source[aria-label=?]', I18n.t(:field_sla_clone_source)
+    assert_select '[data-sla-panel="general"] #sla-clone-source.sla-clone-project-select', 1
+    assert_select '#sla-clone-confirm-modal[role="dialog"][aria-modal="true"]', 1 do
+      assert_select '[data-sla-clone-confirm]', text: I18n.t(:button_sla_load_policy), count: 1
+      assert_select '[data-sla-clone-cancel]', text: I18n.t(:button_cancel), count: 1
+    end
+    assert_select '[data-sla-panel="targets"] #sla-clone-source', 0
+  end
+
+  test "data-driven policy dropdowns are ordered alphabetically" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select "select[name='status_mappings[created][]']" do |selects|
+      names = selects.first.css('option').map { |option| option.text.strip }
+      assert_equal names.sort_by { |name| [name.downcase, name] }, names
+    end
+
+    assert_select '#sla-at-risk-recipients' do |selects|
+      names = selects.first.css('option').map { |option| option.text.strip }
+      assert_equal names.sort_by { |name| [name.downcase, name] }, names
+    end
+  end
+
+  test "clone project options are ordered alphabetically regardless of project tree order" do
+    %w[Zulu Alpha].each do |prefix|
+      source = Project.create!(name: "#{prefix} Clone Source",
+                               identifier: "#{prefix.downcase}-clone-source")
+      source.enable_module!(:sla_compliance)
+      Member.create!(project: source, principal: User.find(2), roles: [@role])
+      SlaPolicy.create!(project: source, enabled: true)
+    end
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    names = css_select('#sla-clone-source option').map { |option| option.text.strip }
+    names.shift # prompt stays deliberately first
+    assert_equal names.sort_by { |name| [name.downcase, name] }, names
+  end
+
+  test "every configured target type gets its own column, header and inline editor per priority" do
+    tracker_id = @project.trackers.sorted.first.id
+    SlaPolicy.create!(project_id: @project.id, enabled: true, selected_tracker_ids: [tracker_id])
     get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
     assert_response :success
 
-    tracker_id = @project.trackers.sorted.first.id
     priority   = IssuePriority.active.first
     SlaDefinition::TARGET_TYPES.each do |target_type|
-      assert_select "select[name='definitions[rows][#{tracker_id}][#{priority.id}][#{target_type}]']", 1,
-                    "#{target_type} must have a dropdown on every priority row"
+      assert_select "[data-sla-target-cell][data-tracker-id='#{tracker_id}']" \
+                    "[data-priority-id='#{priority.id}'][data-target-type='#{target_type}']", 1,
+                    "#{target_type} must have an inline editor on every priority row"
+      assert_select "[data-sla-target-cell][data-priority-id='#{priority.id}']" \
+                    "[data-target-type='#{target_type}'] " \
+                    'select[data-sla-target-unit][data-sla-select]', 1,
+                    "#{target_type} must use the styled single-select component"
       # Title case from the i18n value, never an uppercase CSS transform (CLAUDE.md).
       assert_select "#sla-definitions-table-#{tracker_id} thead th",
                     text: I18n.t("label_sla_target_#{target_type}"), count: 1
     end
   end
 
+  test "an unconfigured policy shows the tracker empty state and labeled add control" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select '#sla-definitions-trackers', 0
+    assert_select '#sla-tracker-empty:not(.hidden) h3', text: I18n.t(:label_sla_no_configured_trackers), count: 1
+    assert_select '#sla-tracker-empty [data-sla-add-tracker-toggle]', text: I18n.t(:button_sla_add_tracker), count: 1
+    assert_select '#sla-tracker-content.hidden', 1
+  end
+
+
+  test "the add tracker control only lists enabled trackers not already selected" do
+    selected = @project.trackers.sorted.first
+    policy = SlaPolicy.create!(project_id: @project.id, enabled: true,
+                               selected_tracker_ids: [selected.id])
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select "[data-sla-add-tracker='#{selected.id}']", 0
+    (@project.trackers - [selected]).each do |tracker|
+      assert_select "[data-sla-add-tracker='#{tracker.id}']", text: tracker.name, count: 1
+    end
+    assert_select '#sla-tracker-tabs [data-sla-add-tracker-toggle]', text: I18n.t(:button_sla_add_tracker), count: 1
+  end
+
+  test "the add tracker control is hidden when every project tracker is selected" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true,
+                      selected_tracker_ids: @project.trackers.ids)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select '[data-sla-add-tracker]', 0
+    assert_select '[data-sla-add-tracker-toggle]:not(.hidden)', 0
+  end
+
+  test "selected trackers render as tabs with one target table visible" do
+    policy = SlaPolicy.create!(project_id: @project.id, enabled: true,
+                               selected_tracker_ids: @project.trackers.first(2).map(&:id))
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select '#sla-tracker-tabs [data-sla-tracker-tab]', 2
+    assert_select '#sla-tracker-tabs [aria-selected="true"]', 1
+    assert_select '[data-sla-definition-table]:not(.hidden)', 1
+    assert_select '[data-sla-definition-table].hidden', 1
+  ensure
+    policy&.destroy
+  end
+
+  test "clone sources exclude trackers removed from this project's selection" do
+    selected_tracker, removed_tracker = @project.trackers.first(2)
+    policy = SlaPolicy.create!(project_id: @project.id, enabled: true,
+                               selected_tracker_ids: [selected_tracker.id])
+    [selected_tracker, removed_tracker].each do |tracker|
+      policy.sla_definitions.create!(tracker_id: tracker.id, priority_id: IssuePriority.active.first.id,
+                                     response_seconds: 3600)
+    end
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select "#sla-clone-tracker-source option[value='#{selected_tracker.id}']", 1
+    assert_select "#sla-clone-tracker-source option[value='#{removed_tracker.id}']", 0
+  ensure
+    policy&.destroy
+  end
+
+  test "tracker clone uses the Clone Tracker button and centered confirmation modal" do
+    trackers = @project.trackers.first(2)
+    policy = SlaPolicy.create!(project_id: @project.id, enabled: true,
+                               selected_tracker_ids: trackers.map(&:id))
+    policy.sla_definitions.create!(tracker_id: trackers.first.id,
+                                   priority_id: IssuePriority.active.first.id,
+                                   response_seconds: 3600)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select '#sla-clone-tracker-button', text: I18n.t(:button_sla_clone_tracker), count: 1
+    assert_select '#sla-clone-tracker-modal[role="dialog"][aria-modal="true"]', 1 do
+      assert_select '.tw-text-center', 1
+      assert_select '[data-sla-clone-tracker-confirm]', text: I18n.t(:button_sla_clone_tracker), count: 1
+      assert_select '[data-sla-clone-tracker-cancel]', text: I18n.t(:button_cancel), count: 1
+    end
+  end
+
+  test "SLA Targets has only a checkbox-enabled standalone Recalculate action" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select '[data-sla-panel="targets"] [data-sla-targets-save]', 0
+    assert_select '[data-sla-panel="targets"] button[type="submit"]', 0
+    assert_select '[data-sla-panel="targets"] input[name="recalculate"]', 1
+    assert_select '[data-sla-panel="targets"] [data-sla-recalculate-button][disabled]',
+                  text: I18n.t(:button_sla_recalculate), count: 1
+  end
+
   # A disabled alert card collapses to just its switch, but its fields stay in the DOM and keep
   # posting — otherwise turning an alert off and on again would silently drop the recipients the
   # project had already saved.
   test "a disabled alert card hides its detail fields without dropping them from the form" do
-    SlaNotificationSetting.create!(project_id: @project.id, at_risk_email_enabled: false,
-                                   at_risk_email_recipients: ['ops@example.com'])
+    notification = SlaNotificationSetting.create!(project_id: @project.id, at_risk_email_enabled: false)
+    recipient = @project.users.joins(:email_address).first
+    notification.replace_recipient_user_ids!(:at_risk, [recipient.id])
 
     get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'notifications' }
     assert_response :success
 
     assert_select '[data-sla-reveal="at-risk-email"].hidden'
     assert_select '#sla-notification-form select#sla-at-risk-recipients' do
-      assert_select "option[selected][value='ops@example.com']"
+      assert_select "option[selected][value='#{recipient.id}']", text: /#{Regexp.escape(recipient.mail)}/
     end
   end
 
@@ -440,6 +594,40 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select '[data-sla-reveal="at-risk-email"]:not(.hidden)'
     # The switch has to name the block it owns, or the JS has nothing to bind the two together by.
     assert_select 'input[data-sla-reveals="at-risk-email"][type=checkbox]'
+  end
+
+  test "notifications autosave every control and render no dedicated save button" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'notifications' }
+
+    assert_response :success
+    assert_select '#sla-notification-form[data-sla-notification-autosave]' do
+    assert_select '[data-sla-notification-field]', 6
+      assert_select '[data-sla-notification-status]', 1
+      assert_select 'button[type=submit]', 0
+      assert_select 'input[type=submit]', 0
+    end
+  end
+
+  test "each inactive project channel identifies its effective fallback source" do
+    global = SlaNotificationSetting.global_for_form
+    global.google_chat_webhook = 'https://chat.example.test/global'
+    global.stale_email_enabled = true
+    global.save!
+    parent = Project.find(3).parent
+    SlaPolicy.create!(project_id: parent.id, enabled: true)
+    SlaNotificationSetting.create!(project_id: parent.id, at_risk_email_enabled: true)
+    @project = Project.find(3)
+    @project.enable_module!(:sla_compliance)
+    grant_child_access(@project)
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'notifications' }
+
+    assert_response :success
+    assert_select '[data-sla-notification-fallback="admin"]', 2
+    assert_select '[data-sla-notification-fallback="parent"]',
+                  { count: 1, text: /#{Regexp.escape(parent.name)}/ }
+    assert_select '[data-sla-notification-fallback="admin"] a', 0,
+                  'non-admin project managers must not receive an admin settings link'
   end
 
   test "the tab is absent without either permission" do
@@ -479,7 +667,7 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_response :success
 
     # Same sidebar and same sections as the project it inherits from — no read-only summary.
-    %w[general measurement targets exclusions notifications].each do |key|
+    %w[general measurement targets notifications].each do |key|
       assert_select "a[data-sla-section-link='#{key}']"
     end
     assert_select '#sla-policy-form'
@@ -488,13 +676,13 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select 'input#sla_policy_at_risk_threshold[value="85"]'
     assert_select "select[name='status_mappings[created][]'] option[selected][value='#{status_id}']"
     assert_select "#sla-definitions-rows-#{child.trackers.first.id} " \
-                  'option[selected][value="14400"]'
+                  '[data-sla-target-cell][data-seconds="14400"]'
     assert_select 'button#sla-override-load', 0, 'the form itself is the override now'
   end
 
-  # --- Tri-state SLA on/off above the inherited (pre-filled) sections --------------------------
+  # --- Toggle SLA on/off above the inherited (pre-filled) sections -----------------------------
 
-  test "the inherited policy offers the tri-state control, defaulted to Inherit" do
+  test "the inherited policy offers one toggle reflecting the inherited state" do
     child = Project.find(5)
     grant_child_access(child)
     SlaPolicy.create!(project_id: @project.id, enabled: true)
@@ -502,11 +690,11 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     get :settings, params: { id: child.identifier, tab: 'sla_policy' }
     assert_response :success
 
-    assert_select 'form#sla-enablement-form' do
-      assert_select "input[name='sla_policy[enablement]'][value='inherit'][checked]"
-      assert_select "input[name='sla_policy[enablement]'][value='enabled']:not([checked])"
-      assert_select "input[name='sla_policy[enablement]'][value='disabled']:not([checked])"
-      assert_select "input[name='section'][value='enablement']", 1
+    assert_select '#sla-enablement-form' do
+      assert_select "input[type='checkbox'][name='sla_policy[enablement]'][data-sla-inherited-enablement][checked]", 1
+      assert_select "input[type='radio'][name='sla_policy[enablement]']", 0
+      assert_select 'span', text: I18n.t(:label_sla_enablement_inherited_from, project: @project.name)
+      assert_select '[data-tracking-url]', 1
     end
   end
 
@@ -520,14 +708,26 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_response :success
 
     # A lightweight row owns no configuration, so the form still shows the ancestor's — but the
-    # tri-state, not the plain switch, owns the on/off decision, and it must show THIS project's.
+    # inherited toggle, not the plain policy switch, owns the on/off decision and shows THIS project's.
     assert_select '#sla-policy-form'
-    assert_select "input[name='sla_policy[enablement]'][value='disabled'][checked]"
+    assert_select "input[type='checkbox'][name='sla_policy[enablement]'][data-sla-inherited-enablement]:not([checked])", 1
+    assert_select "input[type='radio'][name='sla_policy[enablement]']", 0
     assert_select "input[type=checkbox][name='sla_policy[enabled]']", 0,
                   'the plain SLA-tracking switch would be a second, conflicting on/off control'
   end
 
-  test "the tri-state control is not offered to a project that defines its own policy" do
+  test "an inherited toggle is off when the ancestor is off" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: @project.id, enabled: false)
+
+    get :settings, params: { id: child.identifier, tab: 'sla_policy' }
+    assert_response :success
+
+    assert_select "input[type='checkbox'][name='sla_policy[enablement]'][data-sla-inherited-enablement]:not([checked])", 1
+  end
+
+  test "the inherited toggle is not offered to a project that defines its own policy" do
     child = Project.find(5)
     grant_child_access(child)
     SlaPolicy.create!(project_id: @project.id, enabled: true)
@@ -563,6 +763,33 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
     assert_select 'button#sla-override-load', 0
   end
 
+  test "SLA Targets renders the scoped historical recalculation progress component" do
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+    assert_response :success
+
+    assert_select '[data-sla-panel="targets"]' do
+      assert_select '#sla-recalculation-progress[data-sla-recalculation-progress][data-status="idle"]', 1 do
+        assert_select '[data-status-url*="recalculation_status"]', 1
+        assert_select '[role="progressbar"][aria-valuemin="0"][aria-valuemax="100"]', 1
+        assert_select '[data-sla-recalculation-status][aria-live="polite"]', 1
+        assert_select '[data-sla-recalculation-fill]', 1
+      end
+    end
+  end
+
+  test "tracker removal modal uses the centered remove copy and action" do
+    tracker = @project.trackers.first
+    SlaPolicy.create!(project_id: @project.id, enabled: true, selected_tracker_ids: [tracker.id])
+
+    get :settings, params: { id: @project.identifier, tab: 'sla_policy', section: 'targets' }
+
+    assert_response :success
+    assert_select '#sla-remove-tracker-modal [data-sla-remove-message]', 1
+    assert_select '#sla-remove-tracker-modal .tw-text-center', 1
+    assert_select '#sla-remove-tracker-modal [data-sla-remove-confirm]', text: I18n.t(:button_sla_remove), count: 1
+    assert_select '#sla-remove-tracker-modal [data-sla-remove-cancel]', text: I18n.t(:button_cancel), count: 1
+  end
+
   def revert_delete_form_selector(project)
     "form[action='#{project_sla_policy_path(project)}'] input[name='_method'][value='delete']"
   end
@@ -575,6 +802,16 @@ class ProjectsSettingsSlaTabTest < ActionController::TestCase
 
     get :settings, params: { id: child.identifier, tab: 'sla_policy' }
     assert_select revert_delete_form_selector(child)
+    assert_select 'button[data-sla-revert-open].tw-bg-red-600',
+                  text: I18n.t(:button_sla_revert_to_inherited), count: 1
+    assert_select '#sla-revert-policy-modal[role="dialog"][aria-modal="true"][aria-hidden="true"]', 1 do
+      assert_select '#sla-revert-policy-title', text: I18n.t(:label_sla_revert_confirm)
+      assert_select '#sla-revert-policy-description',
+                    text: I18n.t(:text_sla_revert_confirm, project: @project.name)
+      assert_select 'button[data-sla-revert-cancel]', text: I18n.t(:button_cancel), count: 1
+      assert_select 'form .tw-bg-red-600', count: 1
+    end
+    assert_select '[data-sla-revert-open][data-confirm]', 0
   end
 
   test "Revert to inherited policy is NOT offered when no ancestor has a policy" do

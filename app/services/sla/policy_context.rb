@@ -15,7 +15,7 @@ module Sla
   # behaves as "not configured" — the classifier then yields `no_sla / not_configured`.
   class PolicyContext
     # Milestone roles, mirroring SlaStatusMapping::ROLES. Exposed to the classifier as symbols.
-    ROLES = %w[created work_started resolved pause].freeze
+    ROLES = %w[created work_started resolved].freeze
 
     # Resolve the effective policy for +project+ (inheriting up the tree) and build a context.
     def self.for_project(project)
@@ -28,6 +28,8 @@ module Sla
       @policy = policy
       if policy
         definitions        = policy.sla_definitions.to_a
+        selected_ids       = policy.selected_tracker_ids_or_nil
+        definitions.select! { |definition| selected_ids.include?(definition.tracker_id) } if selected_ids
         @definition_by_key = definitions.index_by { |d| [d.tracker_id, d.priority_id] }
         @configured_tracker_ids = definitions.map(&:tracker_id).to_set
         @status_roles      = build_status_roles(policy)
@@ -44,18 +46,9 @@ module Sla
       @configured_tracker_ids.include?(tracker_id)
     end
 
-    # The SlaDefinition for this exact tracker x priority, or nil (⇒ not_tracked). The
-    # admin-designated "unclassified" priority (Sla::PluginSettings#unclassified_priority_id) is
-    # always treated as untracked, even if a stray SlaDefinition row exists for it — the plan and
-    # the spec both call for this priority to be unconditionally excluded from SLA evaluation.
+    # The SlaDefinition for this exact tracker x priority, or nil (⇒ not_tracked).
     def definition_for(tracker_id, priority_id)
-      return nil if unclassified_priority?(priority_id)
-
       @definition_by_key[[tracker_id, priority_id]]
-    end
-
-    def unclassified_priority?(priority_id)
-      priority_id.present? && priority_id == PluginSettings.unclassified_priority_id
     end
 
     # Journal authors that are not a real person — consumed by the Update Frequency target, which
@@ -76,7 +69,7 @@ module Sla
 
     private
 
-    # {created: [id, ...], work_started: [...], resolved: [...], pause: [...]} from one query.
+    # {created: [id, ...], work_started: [...], resolved: [...]} from one query.
     def build_status_roles(policy)
       grouped = policy.sla_status_mappings.to_a.group_by(&:role)
       ROLES.each_with_object({}) do |role, roles|

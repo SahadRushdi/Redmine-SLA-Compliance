@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Precomputed SLA result cache, one row per issue. Written by the event-driven recompute and the
-# time-driven sweep (Phase 3); the dashboard reads only from here, never computing on page load.
+# one-off live transition jobs; the dashboard reads only from here, never rebuilding timelines.
 class SlaResult < ActiveRecord::Base
   self.table_name = 'sla_results'
 
@@ -28,6 +28,17 @@ class SlaResult < ActiveRecord::Base
 
   def no_sla?
     primary_state == 'no_sla'
+  end
+
+  # The engine's elapsed fields keep advancing while a milestone is pending so breach and at-risk
+  # classification remain correct. Dashboard readers must use these completion-aware accessors
+  # instead of exposing those running clocks as though the milestone had already happened.
+  def completed_response_seconds
+    response_seconds if first_response_at.present?
+  end
+
+  def completed_resolution_seconds
+    resolution_seconds if resolved_at.present?
   end
 
   private

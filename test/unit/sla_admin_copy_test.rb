@@ -16,8 +16,6 @@ class SlaAdminCopyTest < ActiveSupport::TestCase
   # brief's budget is "under ~8 words"; 10 is the hard ceiling asserted here so a caption that
   # genuinely needs a couple of extra words is not a test failure, but a sentence is.
   CAPTION_KEYS = %i[
-    text_sla_sweep_interval_hint
-    text_sla_unclassified_priority_hint
     text_sla_access_roles_hint
     text_sla_target_options_hint
     text_sla_target_option_details
@@ -32,11 +30,6 @@ class SlaAdminCopyTest < ActiveSupport::TestCase
   ].freeze
 
   MAX_CAPTION_WORDS = 10
-
-  # The nav renders these on one line with `text-overflow: ellipsis`, so an over-long one is
-  # silently truncated mid-word — which is precisely what "Sweep interval & unclassified priority"
-  # was doing. Bound measured against the longest that renders in full at the nav's width.
-  MAX_SIDEBAR_SUBTITLE_CHARS = 30
 
   # "e.g." and "i.e." carry full stops that are not sentence ends — a naive split counts
   # "Unique per target type, e.g. 4h" as two sentences and fails a caption that is perfectly fine.
@@ -54,14 +47,6 @@ class SlaAdminCopyTest < ActiveSupport::TestCase
       assert_operator text.split.size, :<=, MAX_CAPTION_WORDS,
                       "#{key} is #{text.split.size} words — that belongs in the setup doc: #{text}"
       assert_equal 1, sentence_count(text), "#{key} is more than one sentence: #{text}"
-    end
-  end
-
-  test "sidebar subtitles fit on one line without being cut off" do
-    SlaAdminHelper::SECTIONS.each do |section|
-      text = I18n.t(:"text_sla_admin_section_#{section[:key]}")
-      assert_operator text.length, :<=, MAX_SIDEBAR_SUBTITLE_CHARS,
-                      "#{section[:key]} subtitle would be ellipsised: #{text}"
     end
   end
 

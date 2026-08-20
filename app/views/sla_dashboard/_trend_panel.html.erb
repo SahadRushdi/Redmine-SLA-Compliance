@@ -1,13 +1,14 @@
-<%# SLA Trend tab. The ONLY place the date range applies. The Date Range pills + custom-range %>
+<%# SLA Trend tab. Its SLA Met cohort and Created-vs-Resolved series use this date range. %>
+<%# The Date Range pills + custom-range %>
 <%# inputs were moved here from the header filter bar; they sit OUTSIDE #sla-filter-form's DOM %>
 <%# subtree, so each carries form="sla-filter-form" (HTML5 form association) to still submit as %>
 <%# part of that one filter form — the same pattern the granularity pills already use. %>
 <%# The date controls lead this tab from the LEFT edge, directly under the tabs, because they are %>
-<%# the tab's primary control — not a trailing accessory to a sentence. The sentence that used to %>
+<%# the chart's primary control — not a trailing accessory to a sentence. The sentence that used to %>
 <%# run alongside them ("Tickets within the selected window — the only view this date range %>
 <%# affects.") is gone: only this tab renders these buttons, so their presence already says which %>
-<%# view they scope. What is left beside them is the one fact the buttons don't state — the actual %>
-<%# resolved-date window they resolve to — as subdued text, with the full explanation on hover. %>
+<%# chart they scope. What is left beside them is the one fact the buttons don't state — the actual %>
+<%# date window they resolve to — as subdued text, with the full explanation on hover. %>
 <div class="tw-flex tw-items-center tw-flex-wrap tw-gap-x-3 tw-gap-y-2 tw-mb-6">
   <div class="tw-flex tw-flex-wrap tw-items-center tw-gap-2" role="group" aria-label="<%= l(:label_sla_filter_date_range) %>">
     <% sla_date_presets.each do |preset| %>
@@ -49,17 +50,36 @@
   </div>
 </div>
 
-<%# lg:tw-items-start, not items-stretch: the SLA Met card is a fixed-content tile (label, one %>
-<%# percentage, one caption) and stretching it to the trend chart's height left a tall band of %>
-<%# empty white under the caption. It now sits at its natural height. %>
-<div class="tw-grid tw-grid-cols-1 lg:tw-grid-cols-12 tw-gap-6 tw-mb-6 lg:tw-items-start">
-  <%# 2/10 rather than 3/9: the SLA Met card holds only a label, one percentage and one caption — %>
-  <%# there is no second metric to fill a wider column — so the extra width read as dead space next %>
-  <%# to the chart. Give the reclaimed width to the trend chart, which always uses it. %>
-  <div class="lg:tw-col-span-2">
+<div class="tw-grid tw-grid-cols-1 lg:tw-grid-cols-12 tw-gap-6 tw-mb-6 tw-items-stretch">
+  <div class="lg:tw-col-span-2 tw-flex">
     <%= render 'sla_dashboard/sla_met_card' %>
   </div>
-  <div class="lg:tw-col-span-10 tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-shadow-sm tw-p-5">
-    <%= render 'sla_dashboard/trend_chart' %>
+  <div data-sla-trend-card
+       class="lg:tw-col-span-10 tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-shadow-sm tw-p-5 tw-min-h-[24rem] tw-flex tw-flex-col tw-min-w-0">
+    <div class="tw-flex tw-items-center tw-justify-between tw-flex-wrap tw-gap-3 tw-pb-3 tw-mb-4 tw-border-b tw-border-gray-200">
+      <div class="tw-inline-flex tw-items-center tw-gap-2" role="tablist" aria-label="<%= l(:label_sla_tab_sla_trend) %>">
+        <button type="button" data-sla-trend-card-tab="chart" role="tab" aria-selected="true"
+                aria-controls="sla-trend-card-chart"
+                class="sla-trend-card-tab tw-px-4 tw-py-2 tw-rounded-lg tw-border-0 tw-text-sm tw-font-semibold tw-shadow-none focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-primary-200 tw-bg-primary-600 tw-text-white">
+          <%= l(:label_sla_trend_card_tab_trend) %>
+        </button>
+        <button type="button" data-sla-trend-card-tab="detail" role="tab" aria-selected="false"
+                aria-controls="sla-trend-card-detail"
+                class="sla-trend-card-tab tw-px-4 tw-py-2 tw-rounded-lg tw-border-0 tw-text-sm tw-font-semibold tw-shadow-none focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-primary-200 tw-bg-white tw-text-primary-600 hover:tw-bg-primary-50">
+          <%= "#{l(:label_sla_detail_table)} (#{@trend_detail_counts.total})" %>
+        </button>
+      </div>
+    </div>
+
+    <div id="sla-trend-card-chart" data-sla-trend-card-panel="chart" role="tabpanel" class="tw-flex-1 tw-min-h-0">
+      <%= render 'sla_dashboard/trend_chart' %>
+    </div>
+    <div id="sla-trend-card-detail" data-sla-trend-card-panel="detail" role="tabpanel"
+         class="hidden tw-flex-1 tw-min-h-0">
+      <%= render 'sla_dashboard/detail_table',
+            table_key: :trend, results: @trend_detail_results, counts: @trend_detail_counts,
+            include_resolution: true, show_title: false,
+            card_classes: 'tw-flex tw-flex-col tw-h-full tw-min-w-0' %>
+    </div>
   </div>
 </div>

@@ -11,6 +11,7 @@ class SlaNotificationSettingsControllerTest < ActionController::TestCase
     @role = Role.find(1) # Manager — user 2 (jsmith)
     @role.add_permission!(:manage_sla_notifications)
     @request.session[:user_id] = 2
+    @recipient_ids = @project.users.joins(:email_address).limit(2).pluck(:id)
   end
 
   def setting
@@ -23,11 +24,11 @@ class SlaNotificationSettingsControllerTest < ActionController::TestCase
       sla_notification_setting: {
         google_chat_webhook: 'https://chat.googleapis.com/v1/spaces/x/messages?key=y',
         at_risk_email_enabled: '1',
-        at_risk_email_recipients: ['', 'ops@example.com', 'lead@example.com'],
+        at_risk_email_recipient_user_ids: ['', *@recipient_ids],
         at_risk_email_frequency: 'digest',
         at_risk_digest_interval_minutes: '120',
         stale_email_enabled: '1',
-        stale_email_recipients: ['', 'ops@example.com'],
+        stale_email_recipient_user_ids: ['', @recipient_ids.first],
         stale_email_frequency: 'monthly',
         stale_threshold_days: '10'
       }
@@ -35,30 +36,64 @@ class SlaNotificationSettingsControllerTest < ActionController::TestCase
     assert_redirected_to settings_project_path(@project, tab: 'sla_policy')
     saved = setting
     assert saved.at_risk_email_enabled?
-    assert_equal %w[ops@example.com lead@example.com], saved.at_risk_email_recipients
-    assert_equal 'digest', saved.at_risk_email_frequency
-    assert_equal 120, saved.at_risk_digest_interval_minutes
+    assert_equal @recipient_ids.sort, saved.recipient_user_ids(:at_risk).sort
+    assert_equal 'realtime', saved.at_risk_email_frequency
+    assert_equal 60, saved.at_risk_digest_interval_minutes
     assert saved.stale_email_enabled?
-    assert_equal %w[ops@example.com], saved.stale_email_recipients
-    assert_equal 'monthly', saved.stale_email_frequency
+    assert_equal [@recipient_ids.first], saved.recipient_user_ids(:stale)
+    assert_equal 'weekly', saved.stale_email_frequency
     assert_equal 10, saved.stale_threshold_days
     assert_includes saved.google_chat_webhook, 'chat.googleapis.com'
   end
 
   test "clearing every recipient persists an empty list" do
-    SlaNotificationSetting.create!(project_id: @project.id,
-                                   at_risk_email_recipients: ['ops@example.com'])
+    existing = SlaNotificationSetting.create!(project_id: @project.id)
+    existing.replace_recipient_user_ids!(:at_risk, [@recipient_ids.first])
     put :update, params: {
       project_id: @project.id,
-      sla_notification_setting: { at_risk_email_recipients: [''] }
+      sla_notification_setting: { at_risk_email_recipient_user_ids: [''] }
     }
-    assert_equal [], setting.at_risk_email_recipients
+    assert_equal [], setting.recipient_user_ids(:at_risk)
   end
 
-  test "an invalid email is rejected with a flash error" do
+  test "legacy frequency parameters are ignored and preserve both recipient channels" do
+    saved = SlaNotificationSetting.create!(project_id: @project.id,
+                                           at_risk_digest_interval_minutes: 60)
+    saved.replace_recipient_user_ids!(:at_risk, [@recipient_ids.first])
+    saved.replace_recipient_user_ids!(:stale, [@recipient_ids.last])
+
+    patch :update, params: {
+      project_id: @project.id,
+      sla_notification_setting: { at_risk_digest_interval_minutes: '120' }
+    }, xhr: true
+
+    assert_response :success
+    assert_equal I18n.t(:notice_successful_update), response.parsed_body['message']
+    assert_equal 60, saved.reload.at_risk_digest_interval_minutes
+    assert_equal [@recipient_ids.first], saved.recipient_user_ids(:at_risk)
+    assert_equal [@recipient_ids.last], saved.recipient_user_ids(:stale)
+  end
+
+  test "autosaving one recipient channel never clears the other channel" do
+    saved = SlaNotificationSetting.create!(project_id: @project.id)
+    saved.replace_recipient_user_ids!(:at_risk, [@recipient_ids.first])
+    saved.replace_recipient_user_ids!(:stale, [@recipient_ids.last])
+
+    patch :update, params: {
+      project_id: @project.id,
+      sla_notification_setting: { at_risk_email_recipient_user_ids: [''] }
+    }, xhr: true
+
+    assert_response :success
+    assert_empty saved.reload.recipient_user_ids(:at_risk)
+    assert_equal [@recipient_ids.last], saved.recipient_user_ids(:stale)
+  end
+
+  test "a non-member user id is rejected with a flash error" do
+    outsider = User.active.where.not(id: @project.users.select(:id)).first
     put :update, params: {
       project_id: @project.id,
-      sla_notification_setting: { at_risk_email_recipients: ['not-an-email'] }
+      sla_notification_setting: { at_risk_email_recipient_user_ids: [outsider.id] }
     }
     assert_redirected_to settings_project_path(@project, tab: 'sla_policy')
     assert flash[:error].present?
@@ -96,7 +131,7 @@ class SlaNotificationSettingsControllerTest < ActionController::TestCase
                            sla_notification_setting: { stale_email_frequency: 'daily' } }
 
     assert_redirected_to settings_project_path(@project, tab: 'sla_policy')
-    assert_equal 'daily', setting.stale_email_frequency
+    assert_equal 'weekly', setting.stale_email_frequency
   ensure
     Setting.plugin_redmine_sla_compliance = {}
   end
@@ -113,5 +148,35 @@ class SlaNotificationSettingsControllerTest < ActionController::TestCase
     assert_nil setting
   ensure
     Setting.plugin_redmine_sla_compliance = {}
+  end
+
+  test "an administrator can save the instance-wide notification fallback" do
+    @request.session[:user_id] = 1
+
+    patch :update_global, params: {
+      sla_notification_setting: {
+        google_chat_webhook: 'https://chat.googleapis.com/v1/spaces/global/messages?key=test',
+        at_risk_email_enabled: '1', at_risk_email_recipient_user_ids: ['', @recipient_ids.first],
+        at_risk_email_frequency: 'digest', at_risk_digest_interval_minutes: '90',
+        stale_email_enabled: '1', stale_email_recipient_user_ids: ['', @recipient_ids.last],
+        stale_email_frequency: 'daily', stale_threshold_days: '4'
+      }
+    }
+
+    assert_redirected_to sla_settings_path(section: 'notifications')
+    global = SlaNotificationSetting.global
+    assert global.at_risk_email_enabled?
+    assert_equal [@recipient_ids.first], global.recipient_user_ids(:at_risk)
+    assert global.stale_email_enabled?
+    assert_equal [@recipient_ids.last], global.recipient_user_ids(:stale)
+  end
+
+  test "a non-administrator cannot save the instance-wide notification fallback" do
+    patch :update_global, params: {
+      sla_notification_setting: { at_risk_email_enabled: '1' }
+    }
+
+    assert_response :forbidden
+    assert_nil SlaNotificationSetting.global
   end
 end

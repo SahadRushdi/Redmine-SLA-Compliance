@@ -105,7 +105,7 @@ module Sla
     end
 
     # Lean, immutable value object wrapping the ordered event list plus the derived views that
-    # later engine steps (2.3 business hours, 2.4 pauses, 2.6 classification) consume.
+    # later engine steps consume.
     class Timeline
       attr_reader :events
 

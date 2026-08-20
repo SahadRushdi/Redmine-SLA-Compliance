@@ -15,6 +15,8 @@
   var ACTIVE_CLASSES = ['tw-bg-white', 'tw-text-gray-900', 'tw-shadow-sm'];
   var INACTIVE_CLASSES = ['tw-bg-transparent', 'hover:tw-bg-transparent', 'tw-text-gray-500',
                           'hover:tw-text-gray-700', 'tw-shadow-none'];
+  var TREND_CARD_ACTIVE_CLASSES = ['tw-bg-primary-600', 'tw-text-white'];
+  var TREND_CARD_INACTIVE_CLASSES = ['tw-bg-white', 'tw-text-primary-600', 'hover:tw-bg-primary-50'];
 
   function panels() {
     return Array.prototype.slice.call(document.querySelectorAll('[data-sla-tab-panel]'));
@@ -52,6 +54,38 @@
     }
   }
 
+  function initTrendCardTabs() {
+    var card = document.querySelector('[data-sla-trend-card]');
+    if (!card || card.slaTrendTabsInitialized) { return; }
+    card.slaTrendTabsInitialized = true;
+    var cardButtons = Array.prototype.slice.call(card.querySelectorAll('[data-sla-trend-card-tab]'));
+    var cardPanels = Array.prototype.slice.call(card.querySelectorAll('[data-sla-trend-card-panel]'));
+
+    function activateCardPanel(key) {
+      cardPanels.forEach(function (panel) {
+        var active = panel.getAttribute('data-sla-trend-card-panel') === key;
+        panel.classList.toggle('hidden', !active);
+        if (active) { resizeChartsIn(panel); }
+      });
+      cardButtons.forEach(function (button) {
+        var active = button.getAttribute('data-sla-trend-card-tab') === key;
+        button.setAttribute('aria-selected', active ? 'true' : 'false');
+        TREND_CARD_ACTIVE_CLASSES.forEach(function (className) {
+          button.classList.toggle(className, active);
+        });
+        TREND_CARD_INACTIVE_CLASSES.forEach(function (className) {
+          button.classList.toggle(className, !active);
+        });
+      });
+    }
+
+    cardButtons.forEach(function (button) {
+      button.addEventListener('click', function () {
+        activateCardPanel(button.getAttribute('data-sla-trend-card-tab'));
+      });
+    });
+  }
+
   function init() {
     var nav = document.getElementById('sla-dashboard-tabs');
     if (!nav || nav.slaTabsInitialized) { return; }
@@ -67,6 +101,7 @@
     buttons().forEach(function (btn) {
       btn.addEventListener('click', function () { activate(btn.getAttribute('data-sla-tab'), true); });
     });
+    initTrendCardTabs();
   }
 
   window.slaDashboardTabs = { init: init };

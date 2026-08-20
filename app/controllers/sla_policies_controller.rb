@@ -15,10 +15,12 @@ class SlaPoliciesController < ApplicationController
   # every key here must appear there (pinned by a test). A submit carries the section it came from
   # and may only rewrite that section's slice of the policy — otherwise saving, say, General would post no
   # status_mappings and silently wipe every milestone status configured under Measurement Rules.
-  POLICY_SECTIONS = %w[general measurement targets exclusions].freeze
+  POLICY_SECTIONS = %w[general measurement targets].freeze
 
-  # The tri-state SLA on/off control offered to a project that inherits its configuration. It is
-  # NOT one of POLICY_SECTIONS: those all write policy fields through #policy_params, whereas this
+  # The SLA on/off toggle offered to a project that inherits its configuration. Its backend keeps
+  # three semantic states (inherit/enabled/disabled), even though the screen presents a switch and
+  # a separate Revert action. It is NOT one of POLICY_SECTIONS: those all write policy fields
+  # through #policy_params, whereas this
   # one writes nothing but `enabled` (+ the `inherits_config` marker) and can also DELETE the row.
   # Keeping it out of that list is what stops a forged `section=enablement` submit from reaching
   # the field-writing path at all.
@@ -28,15 +30,69 @@ class SlaPoliciesController < ApplicationController
   # Every policy scalar the sectioned form manages, in one place: it is both the strong-params
   # allow-list and the set copied when a section other than General creates the row
   # (see #seed_scalars_from!). The two must not drift apart.
-  POLICY_ATTRIBUTES = %i[enabled coverage_hours business_calendar_id first_response_rule
-                         at_risk_threshold stale_threshold_days pause_enabled].freeze
+  POLICY_ATTRIBUTES = %i[enabled coverage_hours first_response_rule
+                         at_risk_threshold stale_threshold_days].freeze
 
   # Milestone roles owned by each section; roles NOT listed for the posted section are left
   # untouched. Every role in SlaStatusMapping::ROLES must appear in exactly one entry.
-  SECTION_STATUS_ROLES = {
-    'measurement' => %w[created work_started resolved],
-    'exclusions' => %w[pause]
-  }.freeze
+  SECTION_STATUS_ROLES = { 'measurement' => %w[created work_started resolved] }.freeze
+
+  # SLA Tracking is the one General setting and persists as soon as it changes.
+  def update_tracking
+    if params[:enablement].present?
+      return render_403 unless enablement_offered?
+
+      case posted_enablement_value(params[:enablement])
+      when 'inherit'  then revert_to_inherited_enablement
+      when 'enabled'  then write_lightweight_policy(true)
+      when 'disabled' then write_lightweight_policy(false)
+      end
+    else
+      policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
+      policy.update!(enabled: ActiveModel::Type::Boolean.new.cast(params[:enabled]),
+                     inherits_config: false)
+      queue_recalculation
+    end
+
+    flash.discard
+    render json: { message: l(:notice_successful_update) }
+  rescue ActiveRecord::RecordInvalid => e
+    render json: { error: e.record.errors.full_messages.join(', ') }, status: :unprocessable_entity
+  end
+
+  # PATCH /projects/:project_id/sla_policy/measurement
+  # Persists one Measurement Rules control at a time. Scalar and status-role allow-lists keep an
+  # autosave from rewriting sibling controls that were not part of the request.
+  def update_measurement
+    @sla_policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
+    attribute = params[:attribute].to_s
+    role = params[:role].to_s
+    valid_attribute = %w[first_response_rule at_risk_threshold stale_threshold_days].include?(attribute)
+    valid_role = SECTION_STATUS_ROLES.fetch('measurement').include?(role)
+    return render json: { error: l(:error_sla_measurement_invalid) }, status: :unprocessable_entity unless
+      valid_attribute || valid_role
+
+    ActiveRecord::Base.transaction do
+      source = forking_from_inherited? ? inherited_seed_source : nil
+      seed_scalars_from!(source) if source
+      @sla_policy.coverage_hours = '24x7'
+      @sla_policy.inherits_config = false
+      @sla_policy.save!
+      copy_configuration_from!(source) if source
+
+      if valid_role
+        replace_status_role!(role, params[:status_ids])
+      else
+        value = params[:value]
+        value = nil if attribute == 'stale_threshold_days' && value.blank?
+        @sla_policy.update!(attribute => value)
+      end
+    end
+
+    render json: { message: l(:text_sla_measurement_saved) }
+  rescue ActiveRecord::RecordInvalid => e
+    render json: { error: e.record.errors.full_messages.join(', ') }, status: :unprocessable_entity
+  end
 
   # GET /projects/:project_id/sla_policy/edit (js only):
   #   ?tracker_id=N  -> re-render the definition rows for that tracker (from saved data)
@@ -94,7 +150,7 @@ class SlaPoliciesController < ApplicationController
         # replaces it, which is exactly the question the Clone card's dropdown reopens on.
         @sla_policy.cloned_from_project_id = clone_source.project_id if clone_source
         # Saving any policy section writes configuration onto this row, which by definition makes
-        # it self-defining — the case that matters is a project that first used the tri-state
+        # it self-defining — the case that matters is a project that first used the inherited toggle
         # control (leaving a lightweight row) and then edited a field here.
         @sla_policy.inherits_config = false
         @sla_policy.save!
@@ -115,11 +171,161 @@ class SlaPoliciesController < ApplicationController
 
     flash[:notice] = l(:notice_successful_update)
     announce_clone_outcome(clone_source, notifications_skipped)
+    recalculation = nil
     if section == 'targets' && params[:recalculate] == '1'
-      SlaPolicyRecalculationJob.perform_later(@project.id)
+      recalculation = queue_recalculation
       flash[:notice] = "#{flash[:notice]} #{l(:notice_sla_recalculation_queued)}"
     end
+    if request.xhr? && section == 'targets'
+      message = flash[:notice]
+      flash.discard
+      return render json: { message: message, recalculation: recalculation_payload(recalculation) }
+    end
+
     redirect_to settings_project_path(@project, tab: 'sla_policy', section: section)
+  end
+
+  # PATCH /projects/:project_id/sla_policy/target
+  # Saves one tracker/priority/target cell. Target edits are intentionally independent from the
+  # section form so a deadline is durable as soon as the user leaves the inline editor.
+  def update_target
+    @sla_policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
+    tracker_id = params[:tracker_id].to_i
+    priority_id = params[:priority_id].to_i
+    target_type = params[:target_type].to_s
+    return render json: { error: l(:error_sla_target_invalid) }, status: :unprocessable_entity unless
+      @project.trackers.exists?(tracker_id) && IssuePriority.active.exists?(priority_id) &&
+      SlaDefinition::TARGET_TYPES.include?(target_type)
+
+    target = Sla::DirectDuration.parse(mode: params[:mode], value: params[:value], unit: params[:unit])
+    ActiveRecord::Base.transaction do
+      source = forking_from_inherited? ? inherited_seed_source : nil
+      seed_scalars_from!(source) if source
+      @sla_policy.coverage_hours = '24x7'
+      @sla_policy.inherits_config = false
+      @sla_policy.save!
+      copy_configuration_from!(source) if source
+
+      definition = @sla_policy.sla_definitions.find_or_initialize_by(
+        tracker_id: tracker_id, priority_id: priority_id
+      )
+      definition.public_send("#{target_type}_seconds=", target[:seconds])
+      definition.public_send("#{target_type}_best_effort=", target[:best_effort])
+      definition.public_send("#{target_type}_unit=", target[:unit])
+      definition_has_target?(definition) ? definition.save! : definition.destroy!
+    end
+    recalculation = queue_recalculation if params[:recalculate].to_s == '1'
+    render json: target.merge(display: Sla::DirectDuration.label(target),
+                              message: l(:text_sla_target_saved),
+                              recalculation: recalculation_payload(recalculation))
+  rescue Sla::DirectDuration::InvalidDuration, ActiveRecord::RecordInvalid => e
+    render json: { error: e.message.presence || l(:error_sla_target_invalid) },
+           status: :unprocessable_entity
+  end
+
+  # Tracker membership is managed directly from the tab row. Both mutations are immediate and
+  # project-scoped; a forged tracker id from another project is rejected.
+  def add_tracker
+    tracker = @project.trackers.find_by(id: params[:tracker_id])
+    return render json: { error: l(:error_sla_tracker_invalid) }, status: :unprocessable_entity unless tracker
+
+    @sla_policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
+    ActiveRecord::Base.transaction do
+      source = forking_from_inherited? ? inherited_seed_source : nil
+      seed_scalars_from!(source) if source
+      @sla_policy.coverage_hours = '24x7'
+      @sla_policy.inherits_config = false
+      @sla_policy.save!
+      copy_configuration_from!(source) if source
+      @sla_policy.with_lock do
+        ids = Array(@sla_policy.selected_tracker_ids_or_nil).map(&:to_i)
+        ids = @sla_policy.sla_definitions.distinct.pluck(:tracker_id) if @sla_policy.selected_tracker_ids_or_nil.nil?
+        @sla_policy.update!(selected_tracker_ids: (ids + [tracker.id]).uniq)
+      end
+    end
+
+    render json: { id: tracker.id, name: tracker.name,
+                   table_url: edit_project_sla_policy_path(@project, tracker_id: tracker.id) }
+  rescue ActiveRecord::RecordInvalid => e
+    render json: { error: e.record.errors.full_messages.join(', ') }, status: :unprocessable_entity
+  end
+
+  def remove_tracker
+    tracker = @project.trackers.find_by(id: params[:tracker_id])
+    return render json: { error: l(:error_sla_tracker_invalid) }, status: :unprocessable_entity unless tracker
+
+    @sla_policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
+    ActiveRecord::Base.transaction do
+      source = forking_from_inherited? ? inherited_seed_source : nil
+      seed_scalars_from!(source) if source
+      @sla_policy.coverage_hours = '24x7'
+      @sla_policy.inherits_config = false
+      @sla_policy.save!
+      copy_configuration_from!(source) if source
+      @sla_policy.with_lock do
+        ids = Array(@sla_policy.selected_tracker_ids_or_nil).map(&:to_i)
+        ids = @sla_policy.sla_definitions.distinct.pluck(:tracker_id) if @sla_policy.selected_tracker_ids_or_nil.nil?
+        @sla_policy.update!(selected_tracker_ids: ids - [tracker.id])
+        @sla_policy.sla_definitions.where(tracker_id: tracker.id).delete_all
+      end
+    end
+    render json: { id: tracker.id, message: l(:text_sla_tracker_removed, tracker: tracker.name) }
+  end
+
+  # Copies all priority targets from one configured tracker into another tracker in this project.
+  def clone_tracker
+    @sla_policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
+    source_id = params[:source_tracker_id].to_i
+    target_id = params[:target_tracker_id].to_i
+    project_tracker_ids = @project.trackers.ids
+    inherited_source = forking_from_inherited? ? inherited_seed_source : nil
+    config_source = inherited_source || @sla_policy
+    source_definitions = config_source.sla_definitions.where(tracker_id: source_id)
+    selected_ids = config_source.selected_tracker_ids_or_nil
+    valid = source_id != target_id && project_tracker_ids.include?(source_id) &&
+            project_tracker_ids.include?(target_id) && source_definitions&.exists? &&
+            (selected_ids.nil? || (selected_ids.include?(source_id) && selected_ids.include?(target_id)))
+    return render json: { error: l(:error_sla_tracker_clone_invalid) },
+                  status: :unprocessable_entity unless valid
+
+    ActiveRecord::Base.transaction do
+      if inherited_source
+        seed_scalars_from!(inherited_source)
+        @sla_policy.coverage_hours = '24x7'
+        @sla_policy.inherits_config = false
+        @sla_policy.save!
+        copy_configuration_from!(inherited_source)
+      end
+      source_definitions = @sla_policy.sla_definitions.where(tracker_id: source_id)
+      @sla_policy.sla_definitions.where(tracker_id: target_id).delete_all
+      source_definitions.find_each do |definition|
+        attributes = definition.attributes.slice(*SlaDefinition::COPY_ATTRIBUTES)
+        attributes['tracker_id'] = target_id
+        @sla_policy.sla_definitions.create!(attributes)
+      end
+    end
+    recalculation = queue_recalculation if params[:recalculate].to_s == '1'
+    render json: { message: l(:text_sla_tracker_clone_saved),
+                   recalculation: recalculation_payload(recalculation) }
+  rescue ActiveRecord::RecordInvalid => e
+    render json: { error: e.record.errors.full_messages.join(', ') }, status: :unprocessable_entity
+  end
+
+  # GET /projects/:project_id/sla_policy/recalculation_status
+  # `before_action :authorize` applies the same project permission as every policy edit action.
+  def recalculation_status
+    state = SlaRecalculationState.find_by(project_id: @project.id)
+    requested_token = params[:run_token].to_s
+    state = nil if state && requested_token.present? && state.run_token != requested_token
+    state = nil if state && requested_token.blank? && !state.active?
+
+    render json: recalculation_status_payload(state)
+  end
+
+  def recalculate
+    state = queue_recalculation
+    render json: { message: l(:notice_sla_recalculation_queued),
+                   recalculation: recalculation_payload(state) }
   end
 
   # B3 — "Revert to inherited policy": deletes THIS project's own policy row (cascading to its
@@ -130,13 +336,48 @@ class SlaPoliciesController < ApplicationController
     sla_policy = SlaPolicy.find_by(project_id: @project.id)
     if sla_policy
       sla_policy.destroy!
-      SlaPolicyRecalculationJob.perform_later(@project.id)
+      queue_recalculation
       flash[:notice] = l(:notice_sla_reverted_to_inherited)
     end
     redirect_to settings_project_path(@project, tab: 'sla_policy')
   end
 
   private
+
+  def queue_recalculation
+    Sla::RecalculationDispatcher.call(@project)
+  end
+
+  def recalculation_payload(state)
+    return nil unless state
+
+    { run_token: state.run_token, status: state.status }
+  end
+
+  def recalculation_status_payload(state)
+    return { status: 'idle', progress: 0 } unless state
+
+    message = case state.status
+              when 'queued'
+                l(:text_sla_recalculation_waiting)
+              when 'running'
+                l(:text_sla_recalculation_running,
+                  processed: state.processed_count, total: state.total_count)
+              when 'completed'
+                l(:text_sla_recalculation_completed, count: state.processed_count)
+              else
+                state.error_message.presence || l(:error_sla_recalculation_failed)
+              end
+    {
+      run_token: state.run_token,
+      status: state.status,
+      processed: state.processed_count,
+      total: state.total_count,
+      progress: state.progress_percentage,
+      message: message,
+      updated_at: state.updated_at&.iso8601
+    }
+  end
 
   # Tri-state SLA on/off for a project that inherits its configuration (Global Rule 5). Writes a
   # LIGHTWEIGHT policy row — `inherits_config: true`, carrying only the enabled decision — so the
@@ -172,7 +413,11 @@ class SlaPoliciesController < ApplicationController
   end
 
   def posted_enablement
-    value = params.fetch(:sla_policy, {})[:enablement].to_s
+    posted_enablement_value(params.fetch(:sla_policy, {})[:enablement])
+  end
+
+  def posted_enablement_value(raw_value)
+    value = raw_value.to_s
     ENABLEMENT_CHOICES.include?(value) ? value : 'inherit'
   end
 
@@ -180,7 +425,7 @@ class SlaPoliciesController < ApplicationController
     policy = SlaPolicy.find_or_initialize_by(project_id: @project.id)
     policy.assign_attributes(enabled: enabled, inherits_config: true)
     policy.save!
-    SlaPolicyRecalculationJob.perform_later(@project.id)
+    queue_recalculation
     flash[:notice] = l(:notice_successful_update)
   end
 
@@ -192,7 +437,7 @@ class SlaPoliciesController < ApplicationController
     return flash[:notice] = l(:notice_successful_update) if policy.nil?
 
     policy.destroy!
-    SlaPolicyRecalculationJob.perform_later(@project.id)
+    queue_recalculation
     flash[:notice] = l(:notice_sla_reverted_to_inherited)
   end
 
@@ -240,7 +485,7 @@ class SlaPoliciesController < ApplicationController
   #
   # `enabled` on an EXISTING row is the one attribute that needs a decision, and it differs by
   # reason: a FORK must leave it alone, because a lightweight row's on/off is the project's own
-  # (set through the tri-state control) and an ancestor's must not overwrite it — whereas a CLONE
+  # (set through the inherited toggle) and an ancestor's must not overwrite it — whereas a CLONE
   # copies it, because it is part of the policy the user chose and the General panel showed them
   # its state, switch included, before they saved.
   def seed_scalars_from!(source, clone: false)
@@ -345,11 +590,9 @@ class SlaPoliciesController < ApplicationController
   end
 
   # Shared by the fork above and Step 4.7's clone: the source's definitions, restricted to trackers
-  # this project has enabled and never including the unclassified priority (which can hold no
-  # target — see Sla::PolicyContext#definition_for).
+  # this project has enabled.
   def copy_definitions_from!(source)
     source.sla_definitions.where(tracker_id: @project.trackers.ids)
-          .where.not(priority_id: Sla::PluginSettings.unclassified_priority_id)
           .find_each do |definition|
       @sla_policy.sla_definitions.create!(
         definition.attributes.slice(*SlaDefinition::COPY_ATTRIBUTES)
@@ -381,6 +624,15 @@ class SlaPoliciesController < ApplicationController
     end
   end
 
+  def replace_status_role!(role, raw_status_ids)
+    wanted = Array(raw_status_ids).map(&:to_i).uniq & project_status_ids
+    scope = @sla_policy.sla_status_mappings.where(role: role)
+    scope.where.not(status_id: wanted).delete_all
+    (wanted - scope.pluck(:status_id)).each do |status_id|
+      @sla_policy.sla_status_mappings.create!(role: role, status_id: status_id)
+    end
+  end
+
   # Step 4.7 save half: when the form was prefilled from another project, copy ALL the source's
   # definitions first (restricted to this project's trackers); the posted tracker's rows below
   # then override the copied ones. Scalars and status mappings are copied by #update's shared
@@ -400,6 +652,8 @@ class SlaPoliciesController < ApplicationController
   # done by setting its rows to "not tracked" (all-blank rows create no record), not by hiding it —
   # so deselecting can never silently discard stored targets.
   def replace_tracker_definitions!
+    return unless params[:definitions].respond_to?(:key?) && params[:definitions].key?(:tracker_ids)
+
     tracker_ids = Array(params.dig(:definitions, :tracker_ids)).map(&:to_i).uniq &
                   @project.trackers.ids
 
@@ -409,7 +663,7 @@ class SlaPoliciesController < ApplicationController
     # the time the redirect landed. Written even when the list is empty — [] is a real answer here,
     # distinct from the nil that means "this row predates the column" (see migration 009).
     @sla_policy.update!(selected_tracker_ids: tracker_ids)
-    return if tracker_ids.empty?
+    return if tracker_ids.empty? || params.dig(:definitions, :rows).blank?
 
     previous = @sla_policy.sla_definitions.where(tracker_id: tracker_ids).group_by(&:tracker_id)
     @sla_policy.sla_definitions.where(tracker_id: tracker_ids).delete_all
@@ -429,14 +683,10 @@ class SlaPoliciesController < ApplicationController
   # is excluded.
   def create_tracker_definitions!(tracker_id, rows, previous)
     allowed_priority_ids = IssuePriority.active.ids
-    unclassified_priority_id = Sla::PluginSettings.unclassified_priority_id
 
     rows.each do |priority_id, targets|
       priority_id = priority_id.to_i
       next unless allowed_priority_ids.include?(priority_id)
-      # Defense in depth: the form never renders inputs for the unclassified priority (it's
-      # shown disabled), but never trust the client — reject a forged/stale submission for it too.
-      next if priority_id == unclassified_priority_id
 
       attributes = definition_targets(targets, previous[priority_id])
       next if attributes.empty?
@@ -447,31 +697,30 @@ class SlaPoliciesController < ApplicationController
     end
   end
 
-  def definition_targets(targets, previous_definition)
-    SlaTargetOption::TARGET_TYPES.each_with_object({}) do |target_type, attributes|
+  def definition_targets(targets, _previous_definition)
+    SlaDefinition::TARGET_TYPES.each_with_object({}) do |target_type, attributes|
       raw = targets[target_type].presence
       next unless raw
 
       if raw == SlaPoliciesHelper::SLA_BEST_EFFORT_VALUE
-        next unless SlaTargetOption.exists?(target_type: target_type, best_effort: true)
-
         attributes["#{target_type}_seconds"] = nil
         attributes["#{target_type}_best_effort"] = true
+        attributes["#{target_type}_unit"] = nil
       else
         seconds = raw.to_i
-        previously_saved = previous_definition&.public_send("#{target_type}_seconds")
-        if allowed_seconds_for(target_type).include?(seconds) || seconds == previously_saved
+        if seconds.positive? && seconds <= Sla::DirectDuration::MAX_SECONDS
           attributes["#{target_type}_seconds"] = seconds
           attributes["#{target_type}_best_effort"] = false
+          attributes["#{target_type}_unit"] = 'hours'
         end
       end
     end
   end
 
-  def allowed_seconds_for(target_type)
-    @allowed_seconds ||= SlaTargetOption.where(best_effort: false).group_by(&:target_type)
-                                        .transform_values { |options| options.map(&:seconds) }
-    @allowed_seconds.fetch(target_type.to_s, [])
+  def definition_has_target?(definition)
+    SlaDefinition::TARGET_TYPES.any? do |type|
+      definition.public_send("#{type}_seconds").present? || definition.best_effort?(type)
+    end
   end
 
   # A source project is a valid prefill source (for both Step 4.7 "Clone from another project"

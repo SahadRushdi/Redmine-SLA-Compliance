@@ -79,24 +79,26 @@ class SlaDashboardController < ApplicationController
     # aggregation over the sla_results cache (Global Rule 4).
     @priority_breakdown = Sla::PriorityBreakdown.call(scope: @scope)
 
-    # SLA Trend tab. The SLA Met card is the one date-scoped figure on the dashboard, and it is
-    # the mirror image of the above: closed-loop compliance over tickets RESOLVED inside the
-    # selected window. Open tickets never appear in it — an open ticket has not yet met anything.
-    window_scope = Sla::DashboardScope.call(project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
-                                            priority_ids: @filters[:priority_ids],
-                                            resolved_range: @filters[:date_range])
-    @window_counts = Sla::ResultSummary.call(scope: window_scope)
-
-    # Trend chart needs Created and Resolved filtered independently against date_range (see
-    # Sla::TrendSeries) rather than a created_on-filtered scope, so it's built from its own
-    # project/tracker/priority-only scope with no date_range applied.
+    # The Trend tab is period-scoped. Its SLA Met card and Detail table intentionally share one
+    # population: unresolved cycles started in the period plus outcomes resolved in the period.
+    # ResultSummary applies the current effective state, including live breach reclassification.
     trend_scope = Sla::DashboardScope.call(project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
                                             priority_ids: @filters[:priority_ids])
+    trend_detail_scope = Sla::DashboardScope.call(
+      project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
+      priority_ids: @filters[:priority_ids], trend_detail_range: @filters[:date_range]
+    )
+    @trend_detail_counts = Sla::ResultSummary.call(scope: trend_detail_scope)
+
+    # Created and Resolved use independent milestone timestamps so an older cycle resolved during
+    # this period still appears on the Resolved line without appearing on the Created line.
     @trend_series = Sla::TrendSeries.call(scope: trend_scope, date_range: @filters[:date_range],
                                           granularity: @filters[:granularity])
 
-    # Step 6.4 — detail table (current state, same @scope as the cards/charts).
-    build_detail_table
+    # Step 6.4 — two independently interactive detail tables. Open Tickets keeps the current
+    # backlog scope; SLA Trend combines unresolved cycles started in the period with resolved
+    # outcomes completed in the period.
+    build_detail_tables(trend_detail_scope)
 
     respond_to do |format|
       format.html { render :index }
@@ -148,11 +150,11 @@ class SlaDashboardController < ApplicationController
   end
 
   # Union of the priorities configured across every selected tracker (a multi-tracker selection
-  # can span several via per-project inheritance), minus the admin's "unclassified" priority.
+  # can span several via per-project inheritance).
   def configured_priorities(project_ids, tracker_ids)
     priority_ids = effective_policies(project_ids).flat_map do |p|
       p.sla_definitions.where(tracker_id: tracker_ids).distinct.pluck(:priority_id)
-    end.uniq - [Sla::PluginSettings.unclassified_priority_id]
+    end.uniq
     IssuePriority.where(id: priority_ids).sorted
   end
 
@@ -203,7 +205,7 @@ class SlaDashboardController < ApplicationController
 
   # --- Step 6.4: detail table -----------------------------------------------------------------
 
-  DETAIL_STATES = %w[all met breached at_risk no_sla].freeze
+  DETAIL_STATES = %w[all met breached at_risk].freeze
 
   # State tabs, sorting and pagination are ALL handled client-side (sla_dashboard_detail_table.js)
   # over the rows rendered here — no page reload for any of them. Only the main filters still
@@ -217,16 +219,23 @@ class SlaDashboardController < ApplicationController
   # Bounded by Redmine's own export-size setting so a pathological scope can't emit an unbounded
   # page. @detail_scope is the state-filtered relation CSV export reads — an export has no client to
   # do the filtering, so that one stays server-side.
-  def build_detail_table
+  def build_detail_tables(trend_detail_scope)
     @state_filter = DETAIL_STATES.include?(params[:state]) ? params[:state] : 'all'
     @search_query = params[:q].to_s.strip.presence
 
-    base = @scope.joins(issue: %i[project tracker status]).left_joins(issue: :assigned_to)
-    base = apply_search_filter(base, @search_query)
-    base = base.reorder('issues.id DESC').includes(issue: %i[project tracker status assigned_to])
+    open_base = detail_relation(@scope)
+    open_base = apply_search_filter(open_base, @search_query)
 
-    @detail_results = base.limit(Setting.issues_export_limit.to_i)
-    @detail_scope   = apply_state_filter(base, @state_filter)
+    @detail_results       = open_base.limit(Setting.issues_export_limit.to_i)
+    @detail_scope         = apply_state_filter(open_base, @state_filter)
+    @trend_detail_results = detail_relation(trend_detail_scope).limit(Setting.issues_export_limit.to_i)
+  end
+
+  def detail_relation(scope)
+    scope.joins(issue: %i[project tracker status])
+         .left_joins(issue: :assigned_to)
+         .reorder('issues.id DESC')
+         .includes(issue: %i[project tracker status assigned_to])
   end
 
   # Reuses the exact same effective-state definition as the summary cards (Sla::EffectiveState) -
@@ -237,7 +246,6 @@ class SlaDashboardController < ApplicationController
     when 'met'      then scope.where(Sla::EffectiveState::EFFECTIVE_MET, now: now)
     when 'breached' then scope.where(Sla::EffectiveState::EFFECTIVE_BREACHED, now: now)
     when 'at_risk'  then scope.where(Sla::EffectiveState::EFFECTIVE_AT_RISK, now: now, at_risk_true: true)
-    when 'no_sla'   then scope.where(Sla::EffectiveState::EFFECTIVE_NO_SLA)
     else scope
     end
   end
@@ -280,13 +288,18 @@ class SlaDashboardController < ApplicationController
   def detail_csv_row(sla_result)
     issue = sla_result.issue
     state = sla_result.effective_primary_state
+    deviation = sla_result.effective_deviation_seconds
     result_label = sla_card_label(state.to_sym)
     result_label = "#{result_label} (#{l(:label_sla_card_at_risk)})" if sla_result.effective_at_risk?
 
+    response_duration = sla_result.completed_response_seconds
+    resolution_duration = sla_result.completed_resolution_seconds
+
     [issue.id, issue.project.name, issue.tracker.name, issue.subject, issue.status.name,
-     issue.assigned_to&.name, format_sla_duration(sla_result.response_seconds),
-     format_sla_duration(sla_result.resolution_seconds), result_label,
-     sla_result.deviation_seconds.present? ? format_sla_duration(sla_result.deviation_seconds) : nil]
+     issue.assigned_to&.name,
+     response_duration.present? ? format_sla_duration(response_duration) : '-',
+     resolution_duration.present? ? format_sla_duration(resolution_duration) : '-', result_label,
+     deviation.present? ? format_sla_duration(deviation) : nil]
   end
 
   def detail_csv_filename

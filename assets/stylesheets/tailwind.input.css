@@ -39,6 +39,7 @@
 @import 'partials/_theme_isolation.css';
 @import 'partials/_datepicker.css';
 @import 'partials/_tom_select.css';
+@import 'partials/_tracker_tabs.css';
 @import 'partials/_settings_nav.css';
 @import 'partials/_locked_section.css';
 @import 'partials/_option_card.css';
@@ -46,6 +47,7 @@
 @import 'partials/_detail_table.css';
 @import 'partials/_pill_group.css';
 @import 'partials/_admin_settings.css';
+@import 'partials/_recalculation_progress.css';
 
 @tailwind base;
 @tailwind components;

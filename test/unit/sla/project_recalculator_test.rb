@@ -19,11 +19,11 @@ class Sla::ProjectRecalculatorTest < ActiveSupport::TestCase
     @child = Project.find(5)
 
     @policy = SlaPolicy.create!(project_id: @root.id, enabled: true, coverage_hours: '24x7',
-                                first_response_rule: 'either', at_risk_threshold: 80,
-                                pause_enabled: true)
+                                first_response_rule: 'either', at_risk_threshold: 80)
     SlaStatusMapping.create!(sla_policy: @policy, role: 'created', status_id: 1)
     SlaDefinition.create!(sla_policy: @policy, tracker_id: TRACKER, priority_id: PRIORITY,
                           response_seconds: 3600)
+    Sla::LiveTransitionScheduler.stubs(:call)
   end
 
   def make_issue(project)
@@ -58,6 +58,22 @@ class Sla::ProjectRecalculatorTest < ActiveSupport::TestCase
     child_row = SlaResult.find_by(issue_id: child_issue.id)
     assert_not_nil child_row, 'descendant issue must be recalculated'
     assert_equal 'met', child_row.primary_state
+  end
+
+  test "run reports progress against the same issue scope it recalculates" do
+    make_issue(@root)
+    make_issue(@child)
+    updates = []
+
+    count = Sla::ProjectRecalculator.run(
+      @root, include_descendants: true, now: @base + 1800,
+      progress: ->(processed:, total:) { updates << [processed, total] }
+    )
+
+    assert_equal [0, count], updates.first
+    assert_equal [count, count], updates.last
+    assert_equal (0..count).to_a, updates.map(&:first)
+    assert updates.all? { |(_, total)| total == count }
   end
 
   test "saving or updating a policy alone does not recompute (forward-only default)" do

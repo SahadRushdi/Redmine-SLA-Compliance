@@ -1,0 +1,68 @@
+<%# Shared notification cards. Locals: setting, fallbacks (optional hash keyed by channel). %>
+<% fallbacks = local_assigns[:fallbacks] || {} %>
+<%= render layout: 'sla_policies/card', locals: { title: l(:label_sla_google_chat_card) } do %>
+  <%= url_field_tag 'sla_notification_setting[google_chat_webhook]', setting.google_chat_webhook,
+        id: 'sla_notification_google_chat_webhook', class: sla_input_classes,
+        'aria-label': l(:field_sla_webhook_url), placeholder: l(:text_sla_webhook_placeholder),
+        data: { sla_notification_field: true } %>
+  <%= render 'sla_notification_settings/fallback_notice', resolution: fallbacks[:google_chat] %>
+<% end %>
+
+<% at_risk_note = render('sla_notification_settings/fallback_notice',
+                         resolution: fallbacks[:at_risk_email]) %>
+<%= render layout: 'sla_policies/card',
+           locals: { title: l(:label_sla_at_risk_email_card),
+                     header_note: at_risk_note,
+                     control: render('sla_compliance/toggle',
+                                     name: 'sla_notification_setting[at_risk_email_enabled]',
+                                     checked: setting.at_risk_email_enabled?,
+                                     data: { sla_notification_field: true },
+                                     reveals: 'at-risk-email'),
+                     body_reveal: 'at-risk-email',
+                     body_hidden: !setting.at_risk_email_enabled? } do %>
+  <div>
+      <div>
+        <label for="sla-at-risk-recipients" class="<%= sla_label_classes %>"><%= l(:field_at_risk_email_recipients) %></label>
+        <% recipients = setting.persisted? ? setting.recipient_user_ids(:at_risk) : [] %>
+        <%= hidden_field_tag 'sla_notification_setting[at_risk_email_recipient_user_ids][]', '', id: nil %>
+        <%= select_tag 'sla_notification_setting[at_risk_email_recipient_user_ids][]',
+              sla_notification_recipient_options(project, recipients), multiple: true,
+              id: 'sla-at-risk-recipients',
+              data: { sla_user_recipients: true, sla_notification_field: true } %>
+      </div>
+  </div>
+<% end %>
+
+<% stale_note = render('sla_notification_settings/fallback_notice',
+                       resolution: fallbacks[:stale_email]) %>
+<%= render layout: 'sla_policies/card',
+           locals: { title: l(:label_sla_stale_email_card),
+                     header_note: stale_note,
+                     control: render('sla_compliance/toggle',
+                                     name: 'sla_notification_setting[stale_email_enabled]',
+                                     checked: setting.stale_email_enabled?,
+                                     data: { sla_notification_field: true },
+                                     reveals: 'stale-email'),
+                     body_reveal: 'stale-email',
+                     body_hidden: !setting.stale_email_enabled? } do %>
+  <div class="tw-grid tw-grid-cols-1 md:tw-grid-cols-2 tw-gap-4">
+      <div>
+        <label for="sla-stale-recipients" class="<%= sla_label_classes %>"><%= l(:field_stale_email_recipients) %></label>
+        <% recipients = setting.persisted? ? setting.recipient_user_ids(:stale) : [] %>
+        <%= hidden_field_tag 'sla_notification_setting[stale_email_recipient_user_ids][]', '', id: nil %>
+        <%= select_tag 'sla_notification_setting[stale_email_recipient_user_ids][]',
+              sla_notification_recipient_options(project, recipients), multiple: true,
+              id: 'sla-stale-recipients',
+              data: { sla_user_recipients: true, sla_notification_field: true } %>
+      </div>
+      <div>
+        <div>
+          <label for="sla_notification_stale_threshold_days" class="<%= sla_label_classes %>"><%= l(:field_stale_threshold_days) %></label>
+          <%= number_field_tag 'sla_notification_setting[stale_threshold_days]',
+                setting.stale_threshold_days, min: 1,
+                id: 'sla_notification_stale_threshold_days', class: sla_input_classes,
+                data: { sla_notification_field: true } %>
+        </div>
+      </div>
+  </div>
+<% end %>

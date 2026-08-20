@@ -2,7 +2,10 @@
 <%# individually by edit.js.erb when a tracker is added to the picker — which is why the card, not %>
 <%# just its rows, is the unit here and carries the id the JS inserts against. Locals: policy, %>
 <%# tracker. %>
-<div id="sla-definitions-table-<%= tracker.id %>" data-sla-definition-table="<%= tracker.id %>">
+<div id="sla-definitions-table-<%= tracker.id %>"
+     class="<%= 'hidden' if local_assigns[:hidden] %>"
+     data-sla-definition-table="<%= tracker.id %>"
+     data-sla-tracker-name="<%= h tracker.name %>" role="tabpanel">
   <%# No description: the heading already names the tracker, and one caption per table meant the %>
   <%# same sentence repeated for every selected tracker down the page. The single line that %>
   <%# replaces them all lives above the tables in _definitions.html.erb — it has to, since this %>
@@ -28,7 +31,7 @@
         </tr>
       </thead>
       <tbody id="sla-definitions-rows-<%= tracker.id %>">
-        <%= render 'sla_policies/definition_rows', policy: policy, tracker: tracker %>
+        <%= render 'sla_policies/definition_rows', policy: policy, tracker: tracker, project: @project %>
       </tbody>
     </table>
   <% end %>

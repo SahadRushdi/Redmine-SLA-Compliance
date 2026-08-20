@@ -1,10 +1,6 @@
-<%# SLA Met card for the SLA Trend tab — the one date-scoped figure on the dashboard. @window_counts %>
-<%# is computed over tickets RESOLVED inside the selected window (Sla::DashboardScope resolved_range), %>
-<%# kept separate from the always-current @counts so the Open Tickets tab is never affected by the %>
-<%# date range. Closed-loop compliance: open tickets never appear here, because an open ticket has %>
-<%# not yet met anything. %>
-<%# Denominator is Counts#evaluated (met + breached), NOT total — a No-SLA ticket resolved in the %>
-<%# window was never evaluated and must not drag the percentage down. %>
+<%# SLA Met card for the selected Trend period. It reads the same evaluated cohort as Trend Detail: %>
+<%# unresolved cycles started in the window plus outcomes resolved in it. No-SLA is excluded by %>
+<%# Sla::DashboardScope, and ResultSummary supplies each row's current effective state. %>
 <%# %>
 <%# Same _summary_card anatomy as the Open Tickets tab's row (icon tile, label, big number, muted %>
 <%# caption) so the two tabs share one card design and one type scale. The surface is overridden to %>
@@ -13,8 +9,13 @@
 <%= render 'sla_dashboard/summary_card',
       state: :met, label: sla_card_label(:met_window),
       surface: 'tw-bg-white tw-border-gray-200',
+      centered: true,
       value: safe_join([
-        content_tag(:span, sla_percentage(@window_counts.met, @window_counts.evaluated), id: 'sla-met-window-percentage'),
-        '%'
+        content_tag(:span, sla_percentage(@trend_detail_counts.met, @trend_detail_counts.total), id: 'sla-met-window-percentage'),
+        '%',
+        content_tag(:span, safe_join(['(', content_tag(:span, @trend_detail_counts.met, id: 'sla-met-window-value'), ')']),
+                    class: 'tw-text-xl tw-font-semibold tw-opacity-80 tw-ml-1')
       ]),
-      caption: l(:text_sla_met_in_target, met: @window_counts.met, total: @window_counts.evaluated) %>
+      caption: l(:text_sla_met_in_target, count: @trend_detail_counts.total,
+                 met: @trend_detail_counts.met, total: @trend_detail_counts.total),
+      caption_id: 'sla-met-window-caption' %>

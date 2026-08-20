@@ -179,7 +179,7 @@ class EffectivePolicyResolverTest < ActiveSupport::TestCase
     assert_equal [@leaf, own], SlaPolicy.source_for(@leaf)
   end
 
-  # --- enablement_for (the tri-state control's current selection) ----------------------------
+  # --- enablement_for (the inherited toggle's semantic state) --------------------------------
 
   test "enablement_for reports the project's own decision, or :inherit when it has no row" do
     make_policy(@root, enabled: true)

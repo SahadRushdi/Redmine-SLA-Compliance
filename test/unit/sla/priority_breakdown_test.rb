@@ -2,7 +2,7 @@
 
 require_relative '../../test_helper'
 
-# Step 6.3 — Sla::PriorityBreakdown: per-priority effective met/breached/at_risk/no_sla counts for
+# Step 6.3 — Sla::PriorityBreakdown: per-priority effective met/breached/at_risk counts for
 # the tickets-by-priority stacked bar, over the same Sla::DashboardScope-filtered relation the rest
 # of the dashboard uses.
 class Sla::PriorityBreakdownTest < ActiveSupport::TestCase
@@ -46,7 +46,7 @@ class Sla::PriorityBreakdownTest < ActiveSupport::TestCase
     refute_includes rows.map(&:priority_id), HIGH
   end
 
-  test "met/breached/no_sla counts per priority use the same effective-state rules as ResultSummary" do
+  test "met/breached counts per priority use the same effective-state rules and exclude No SLA" do
     met_issue      = make_issue(priority_id: HIGH)
     breached_issue = make_issue(priority_id: HIGH)
     live_breached  = make_issue(priority_id: HIGH) # stale met + passed breach_at -> effectively breached
@@ -61,10 +61,10 @@ class Sla::PriorityBreakdownTest < ActiveSupport::TestCase
 
     assert_equal summary_counts.met, row.met
     assert_equal summary_counts.breached, row.breached
-    assert_equal summary_counts.no_sla, row.no_sla
     assert_equal 1, row.met
     assert_equal 2, row.breached
-    assert_equal 1, row.no_sla
+    assert_equal 0, summary_counts.no_sla
+    assert_equal 3, row.total
   end
 
   test "at_risk is reported per row as a subset of met, never counted toward a fourth segment" do
@@ -75,7 +75,7 @@ class Sla::PriorityBreakdownTest < ActiveSupport::TestCase
 
     assert_equal 1, row.met
     assert_equal 1, row.at_risk
-    assert_equal 1, row.total, 'total = met + breached + no_sla, at_risk is not added in'
+    assert_equal 1, row.total, 'total = met + breached; at_risk is not added in'
   end
 
   test "an empty/null-relation scope returns an empty array, not an exception" do

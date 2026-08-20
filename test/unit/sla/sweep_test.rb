@@ -26,7 +26,7 @@ class Sla::SweepTest < ActiveSupport::TestCase
       @calls = []
     end
 
-    def enqueue_at_risk(issue, _result)
+    def enqueue_at_risk(issue, _result, setting:, log:)
       @calls << issue.id
     end
   end
@@ -38,8 +38,8 @@ class Sla::SweepTest < ActiveSupport::TestCase
       @calls = []
     end
 
-    def enqueue_stale_digest(project, issues)
-      @calls << [project.id, issues.map(&:id)]
+    def enqueue_stale_digest(project, logs, setting:)
+      @calls << [project.id, logs.map(&:issue_id)]
     end
   end
 
@@ -55,11 +55,11 @@ class Sla::SweepTest < ActiveSupport::TestCase
     Issue.where(project_id: @project.id).open.update_all(status_id: CLOSED)
 
     @policy = SlaPolicy.create!(project_id: @project.id, enabled: true, coverage_hours: '24x7',
-                                first_response_rule: 'either', at_risk_threshold: 80,
-                                pause_enabled: true)
+                                first_response_rule: 'either', at_risk_threshold: 80)
     SlaStatusMapping.create!(sla_policy: @policy, role: 'created', status_id: NEW)
     SlaDefinition.create!(sla_policy: @policy, tracker_id: TRACKER, priority_id: PRIORITY,
                           response_seconds: 3600) # 1h response target
+    SlaNotificationSetting.create!(project_id: @project.id, at_risk_email_enabled: true)
   end
 
   def make_issue(status_id: NEW, priority_id: PRIORITY)
@@ -238,6 +238,21 @@ class Sla::SweepTest < ActiveSupport::TestCase
     assert_equal 1, at_risk_logs(issue)
   end
 
+  test "digest mode batches a threshold crossing once and repeated sweeps do not duplicate it" do
+    setting = SlaNotificationSetting.find_by!(project_id: @project.id)
+    setting.update!(at_risk_email_frequency: 'digest', at_risk_digest_interval_minutes: 60)
+    issue = make_issue
+    SlaEmailDeliveryJob.expects(:perform_later)
+                       .with('at_risk_digest', @project.id, is_a(Array), setting.id).once
+
+    sweep(now: at(50.0 / 60))
+    sweep(now: at(50.0 / 60) + 1.minute)
+
+    logs = SlaNotificationLog.where(issue_id: issue.id, notification_type: 'at_risk')
+    assert_equal 1, logs.count
+    assert_equal 'queued', logs.first.delivery_state
+  end
+
   # --- negative cases -----------------------------------------------------------------------
 
   test "an on-track ticket below the threshold is not queued" do
@@ -323,10 +338,12 @@ class Sla::SweepTest < ActiveSupport::TestCase
   UNTRACKED_PRIORITY = 5 # "Normal" in fixtures; not covered by the setup's SlaDefinition
 
   def enable_stale_digest(threshold_days: 5, frequency: 'weekly', last_at: nil)
-    SlaNotificationSetting.create!(project_id: @project.id, stale_email_enabled: true,
-                                   stale_email_frequency: frequency,
-                                   stale_threshold_days: threshold_days,
-                                   last_stale_digest_at: last_at)
+    SlaNotificationSetting.find_by!(project_id: @project.id).update!(
+      stale_email_enabled: true, stale_email_frequency: frequency,
+      stale_threshold_days: threshold_days
+    )
+    SlaNotificationDigestState.create!(project_id: @project.id,
+                                       last_stale_digest_at: last_at) if last_at
   end
 
   test "an excluded ticket past its inactivity threshold is queued in the stale digest" do
@@ -372,41 +389,31 @@ class Sla::SweepTest < ActiveSupport::TestCase
     assert_empty stale.calls
   end
 
-  test "the digest window is claimed once and not re-claimed until the frequency elapses" do
-    # A digest already ran 3 days ago; weekly frequency means the next one isn't due for 4 more.
+  test "legacy digest timing never delays an immediate stale alert" do
     enable_stale_digest(threshold_days: 1, frequency: 'weekly', last_at: @base + 3.days)
     issue = make_issue(priority_id: UNTRACKED_PRIORITY)
 
-    # The ticket itself is well past its 1-day threshold, but the project's digest window isn't
-    # due yet — the schedule gate, not per-ticket staleness, decides whether a digest fires.
     summary, _, stale = sweep(now: @base + 5.days)
-    assert_equal 0, summary.stale_queued
-    assert_empty stale.calls
-
-    # Once the weekly window has elapsed since the last digest, it fires.
-    summary2, _, stale2 = sweep(now: @base + 10.days)
-    assert_equal 1, summary2.stale_queued
-    assert_equal [issue.id], stale2.calls.first.last
+    assert_equal 1, summary.stale_queued
+    assert_equal [issue.id], stale.calls.first.last
   end
 
   # A3: a still-stale ticket must appear in EVERY digest window it's stale for, not just once
   # ever — a lifetime-scoped dedup key would silently suppress it after its first appearance,
   # defeating the entire point of a recurring "don't forget about excluded tickets" digest.
-  test "a still-stale ticket appears again in the next digest window, not just once ever" do
+  test "a still-stale ticket is alerted once per unchanged activity episode" do
     enable_stale_digest(threshold_days: 1, frequency: 'weekly')
     issue = make_issue(priority_id: UNTRACKED_PRIORITY)
 
     _, _, window1 = sweep(now: @base + 2.days)
     assert_equal [issue.id], window1.calls.first.last, 'appears in the first window'
 
-    # A full week later: a new digest window, and the ticket is STILL stale (no activity since).
     _, _, window2 = sweep(now: @base + 9.days)
-    assert_equal [issue.id], window2.calls.first.last,
-                 'a still-stale ticket must appear again in the next window, not be suppressed'
+    assert_empty window2.calls
 
     logs = SlaNotificationLog.where(issue_id: issue.id, notification_type: 'stale')
-    assert_equal 2, logs.count, 'one ledger row per window the ticket appeared in'
-    assert_equal 2, logs.pluck(:cycle_key).uniq.size, 'each window claims its own dedup key'
+    assert_equal 1, logs.count, 'one ledger row per unchanged inactivity episode'
+    assert_equal issue.updated_on.to_i.to_s, logs.first.cycle_key
   end
 
   test "repeated sweeps within the same digest window never queue the same ticket twice" do

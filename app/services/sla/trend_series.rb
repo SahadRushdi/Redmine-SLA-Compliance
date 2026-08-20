@@ -9,10 +9,12 @@ module Sla
   #
   # `scope:` must be a Sla::DashboardScope-built relation with NO date_range filter applied
   # (project/tracker/priority only — call DashboardScope.call(..., date_range: nil)). Reusing the
-  # controller's already date-filtered @scope (which filters on issues.created_on) would silently
-  # exclude issues created outside the window but resolved inside it. Created and Resolved are
+  # controller's date-cohort scope would silently exclude issues whose cycle began outside the
+  # window but resolved inside it. Created and Resolved are
   # therefore filtered against `date_range` independently here, each against its own timestamp
-  # column (issues.created_on / sla_results.resolved_at), not by reusing one shared filtered scope.
+  # column (sla_results.cycle_started_at / sla_results.resolved_at), not by reusing one shared
+  # filtered scope. Both timestamps are derived by the SLA engine from each project's configured
+  # Created/Resolved status milestones.
   #
   # `resolved_at` (migration 004) is nullable and lazily backfilled — only populated the next time
   # an issue is recomputed by the event hook, sweep, or a historical recalc. Older cached rows may
@@ -51,8 +53,8 @@ module Sla
 
     def created_dates
       @scope.reorder(nil).unscope(:includes)
-            .where(issues: { created_on: timestamp_range })
-            .pluck('issues.created_on')
+            .where(cycle_started_at: timestamp_range)
+            .pluck(:cycle_started_at)
     end
 
     def resolved_dates

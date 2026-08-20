@@ -30,44 +30,10 @@
     <%# offerable here — granting one would hand SLA access to everyone who can open the project, %>
     <%# member or not, which is precisely what this list is not for. %>
     <%= select_tag 'settings[sla_access_role_ids][]',
-          options_from_collection_for_select(Role.givable, :id, :name,
+          options_from_collection_for_select(sla_alphabetical(Role.givable), :id, :name,
                                              Sla::PluginSettings.access_role_ids),
           multiple: true, id: 'settings_sla_access_role_ids', class: sla_input_classes,
           'aria-label': l(:field_sla_access_roles),
           data: { sla_chips: true, sla_chip_placeholder: l(:label_sla_access_roles_placeholder) } %>
   </div>
 <% end %>
-
-<%= render layout: 'sla_policies/setting_card',
-           locals: { title: l(:field_sla_sweep_interval_minutes),
-                     description: l(:text_sla_sweep_interval_hint) } do %>
-  <div class="tw-w-full md:tw-w-40">
-    <%= number_field_tag 'settings[sweep_interval_minutes]',
-          settings['sweep_interval_minutes'].presence || Sla::PluginSettings::DEFAULT_SWEEP_INTERVAL_MINUTES,
-          min: Sla::PluginSettings::MIN_SWEEP_INTERVAL_MINUTES,
-          max: Sla::PluginSettings::MAX_SWEEP_INTERVAL_MINUTES,
-          id: 'settings_sweep_interval_minutes', class: sla_input_classes,
-          'aria-label': l(:field_sla_sweep_interval_minutes) %>
-  </div>
-<% end %>
-
-<%= render layout: 'sla_policies/setting_card',
-           locals: { title: l(:field_sla_unclassified_priority),
-                     description: l(:text_sla_unclassified_priority_hint) } do %>
-  <%# data-sla-select swaps the native <select> for the same Tom Select dropdown used across the %>
-  <%# rest of the plugin — a native popup is OS-rendered and cannot be themed to match. %>
-  <div class="tw-w-full md:tw-w-80">
-    <%= select_tag 'settings[unclassified_priority_id]',
-          options_for_select(
-            [[l(:label_sla_unclassified_priority_auto), '']] +
-              IssuePriority.all.map { |p| [p.name, p.id] },
-            settings['unclassified_priority_id'].presence
-          ),
-          id: 'settings_unclassified_priority_id', class: sla_input_classes,
-          'aria-label': l(:field_sla_unclassified_priority), data: { sla_select: true } %>
-  </div>
-<% end %>
-
-<%# The instance-wide "Default Google Chat webhook" that used to sit here is gone, along with the %>
-<%# fallback it fed (SlaNotificationSetting.google_chat_webhook_for). A webhook is now a per-project %>
-<%# setting only — Project Settings → SLA Policy → Notifications. %>

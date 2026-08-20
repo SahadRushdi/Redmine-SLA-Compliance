@@ -9,7 +9,8 @@
 <label class="tw-inline-flex tw-items-center tw-cursor-pointer tw-shrink-0">
   <%= hidden_field_tag name, '0', id: nil %>
   <%= check_box_tag name, '1', checked, class: 'tw-sr-only tw-peer',
-        data: { sla_reveals: local_assigns[:reveals].presence } %>
+        data: { sla_reveals: local_assigns[:reveals].presence }
+                .merge(local_assigns[:data] || {}) %>
   <div class="tw-relative tw-w-11 tw-h-6 tw-bg-gray-200 tw-rounded-full tw-peer
               peer-focus:tw-ring-2 peer-focus:tw-ring-primary-300
               peer-checked:tw-bg-primary-600 peer-checked:after:tw-translate-x-full

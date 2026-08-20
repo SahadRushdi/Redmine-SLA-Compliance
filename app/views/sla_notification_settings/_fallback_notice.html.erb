@@ -1,0 +1,10 @@
+<%# Effective-source notice shown only on project forms. Locals: resolution. %>
+<% if local_assigns[:resolution] %>
+  <p class="tw-mt-3 tw-mb-0 tw-text-sm tw-text-gray-500" data-sla-notification-fallback="<%= resolution.source %>">
+    <%= h(sla_notification_fallback_text(resolution)) %>
+    <% if resolution.source == :admin && User.current.admin? %>
+      <%= link_to l(:label_sla_open_admin_notifications),
+                  sla_settings_path(section: 'notifications') %>
+    <% end %>
+  </p>
+<% end %>

@@ -2,7 +2,7 @@
 <%# table share ONE horizontal band, matching the reference design. It is a 12-column grid rather %>
 <%# than three equal thirds so the compact compliance donut only takes the width it needs (3/12) %>
 <%# and the detail table gets the freed space (5/12) - priority keeps 4/12. The donut/priority bar %>
-<%# both encode the same met/breached/at_risk/no_sla state dimension with the identical color %>
+<%# both encode the same evaluated met/breached/at_risk dimension with the identical color %>
 <%# mapping (Global Rule 9); the donut's legend sits BELOW its chart so the card survives its %>
 <%# narrow column. Default grid `items-stretch` (no items-start) makes all three cards share ONE %>
 <%# height rather than each taking its own - the detail table now defaults to 6 rows per page so it %>
@@ -15,6 +15,9 @@
   <div class="lg:tw-col-span-3 tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-shadow-sm tw-p-5">
     <%= render 'sla_dashboard/donut_chart' %>
   </div>
-  <%# Renders its own lg:tw-col-span-5 card plus the expand-to-modal shell. %>
-  <%= render 'sla_dashboard/detail_table' %>
+  <%= render 'sla_dashboard/detail_table',
+        table_key: :open, results: @detail_results, counts: @counts,
+        include_resolution: false, show_title: true,
+        card_classes: 'lg:tw-col-span-5 tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl ' \
+                      'tw-p-5 tw-shadow-sm tw-flex tw-flex-col tw-min-w-0' %>
 </div>

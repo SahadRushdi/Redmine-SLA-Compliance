@@ -38,10 +38,10 @@
  * compact in-card table, which has no scroll container at all: `.sla-detail-expanded` is added only
  * while the table node lives in the modal.
  */
-#sla-detail-modal-body {
+[data-sla-detail-modal-body] {
   display: flex;
   flex-direction: column;
-  /* Beats the element's own tw-overflow-y-auto on specificity (id + class vs two classes). */
+  /* The inner table wrapper owns both scroll axes; the modal body must not scroll separately. */
   overflow: hidden;
   min-height: 0;
 }

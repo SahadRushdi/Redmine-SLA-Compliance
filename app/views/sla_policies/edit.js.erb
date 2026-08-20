@@ -1,6 +1,6 @@
 <% if params[:clone_from].present? %>
 <%# Clone-source load: swap the nav AND the policy sections. The sections are rebuilt from the %>
-<%# in-memory prefill (@sla_policy), and the inheritance notice/tri-state must go with them — %>
+<%# in-memory prefill (@sla_policy), and the inheritance notice/toggle must go with them — %>
 <%# what's on screen is now the clone source's policy, not the inherited one. %>
 <% sections = sla_visible_sections(@project) %>
 <% current = sla_current_section(sections) %>

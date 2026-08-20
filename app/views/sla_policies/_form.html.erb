@@ -1,8 +1,8 @@
 <%# The four policy sections of the sectioned settings tab (Steps 4.2–4.5, 4.7, 4.8). %>
 <%# Locals: project, policy, current (active section key), inherited_source. %>
 <%# %>
-<%# Panels are rendered in the sidebar's own order (General, SLA Targets, Measurement Rules, %>
-<%# Exclusions). Only one is visible at a time, so this is for the no-JS fallback and for reading %>
+<%# Panels are rendered in the sidebar's own order (General, SLA Targets, Measurement Rules). %>
+<%# Only one is visible at a time, so this is for the no-JS fallback and for reading %>
 <%# the file — but a file whose order contradicts the nav is a trap for the next person. %>
 <%# %>
 <%# Each section is its OWN <form> posting the same PUT with a hidden `section` field, so a save %>
@@ -19,21 +19,14 @@
            inherited_source: inherited_source %>
 
 <%= render layout: 'sla_policies/panel', locals: { key: 'targets', current: current } do %>
-  <%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-policy-form',
-               data: { edit_url: edit_project_sla_policy_path(project),
-                       confirm_clone: l(:text_sla_clone_confirm_overwrite) } do %>
-    <%= hidden_field_tag 'tab', 'sla_policy' %>
-    <%= hidden_field_tag 'section', 'targets' %>
-    <%= hidden_field_tag 'clone_source_id', params[:clone_from].presence, id: 'sla-clone-source-id' %>
+  <div id="sla-policy-form" data-policy-url="<%= project_sla_policy_path(project) %>"
+       data-recalculate-url="<%= recalculate_project_sla_policy_path(project) %>">
 
     <%= render layout: 'sla_policies/lock', locals: { project: project, locked: locked } do %>
-      <%= render 'sla_policies/clone', project: project, policy: policy %>
       <%= render 'sla_policies/definitions', project: project, policy: policy %>
 
-      <%# Step 4.8 — forward-only save by default; optional historical recalculation. It shares a %>
-      <%# row with this section's save button (rather than using the shared _save_bar) because the %>
-      <%# tick only means anything as a modifier of that very save. %>
-      <div class="tw-flex tw-flex-col md:tw-flex-row md:tw-items-start md:tw-justify-between
+      <%# Every target control autosaves; recalculation is a separate confirmed action. %>
+      <div class="tw-flex tw-flex-col md:tw-flex-row md:tw-items-center md:tw-justify-between
                   tw-gap-4 tw-pt-1 tw-pb-2">
         <div class="tw-min-w-0 md:tw-max-w-xl">
           <label class="tw-inline-flex tw-items-center tw-gap-2 tw-text-sm tw-font-medium tw-text-gray-900">
@@ -41,34 +34,43 @@
                   class: 'tw-w-4 tw-h-4 tw-rounded tw-border-gray-300 tw-text-primary-600 focus:tw-ring-primary-500' %>
             <%= l(:label_sla_recalculate_historical) %>
           </label>
-          <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500"><%= l(:text_sla_forward_only_hint) %></p>
         </div>
-        <button type="submit" class="<%= sla_primary_button_classes %> tw-shrink-0">
-          <%= sla_save_icon %><span><%= l(:button_sla_save_policy) %></span>
+        <button type="button" disabled data-sla-recalculate-button
+                class="<%= sla_primary_button_classes %> tw-shrink-0 disabled:tw-cursor-not-allowed disabled:tw-opacity-50">
+          <%= l(:button_sla_recalculate) %>
         </button>
       </div>
+
+      <%# Persisted project progress is discovered on load even without a flash token, so another %>
+      <%# authorized viewer can follow an active run. The token makes the initiating redirect keep %>
+      <%# showing a run that completed before the page finished loading. %>
+      <div id="sla-recalculation-progress" data-sla-recalculation-progress data-status="idle"
+           data-status-url="<%= recalculation_status_project_sla_policy_path(project) %>"
+           data-run-token=""
+           class="hidden tw-space-y-3 tw-pb-2">
+        <div class="tw-flex tw-items-center tw-justify-between tw-gap-4">
+          <p data-sla-recalculation-status aria-live="polite"
+             class="sla-recalculation-status tw-m-0 tw-text-sm tw-font-semibold tw-italic">
+            <%= l(:text_sla_recalculation_waiting) %>
+          </p>
+          <span data-sla-recalculation-percent
+                class="sla-recalculation-percent tw-text-xs tw-font-medium">0%</span>
+        </div>
+        <div class="sla-recalculation-track" role="progressbar"
+             aria-label="<%= l(:label_sla_recalculation_progress) %>"
+             aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div data-sla-recalculation-fill class="sla-recalculation-fill"></div>
+        </div>
+      </div>
     <% end %>
-  <% end %>
+  </div>
 <% end %>
 
 <%= render layout: 'sla_policies/panel', locals: { key: 'measurement', current: current } do %>
-  <%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-measurement-form' do %>
-    <%= hidden_field_tag 'tab', 'sla_policy' %>
-    <%= hidden_field_tag 'section', 'measurement' %>
+  <div id="sla-measurement-form"
+       data-measurement-url="<%= measurement_project_sla_policy_path(project) %>">
     <%= render layout: 'sla_policies/lock', locals: { project: project, locked: locked } do %>
       <%= render 'sla_policies/measurement', project: project, policy: policy %>
-      <%= render 'sla_policies/save_bar', label: l(:button_sla_save_measurement) %>
     <% end %>
-  <% end %>
-<% end %>
-
-<%= render layout: 'sla_policies/panel', locals: { key: 'exclusions', current: current } do %>
-  <%= form_tag project_sla_policy_path(project), method: :put, id: 'sla-exclusions-form' do %>
-    <%= hidden_field_tag 'tab', 'sla_policy' %>
-    <%= hidden_field_tag 'section', 'exclusions' %>
-    <%= render layout: 'sla_policies/lock', locals: { project: project, locked: locked } do %>
-      <%= render 'sla_policies/pause', project: project, policy: policy %>
-      <%= render 'sla_policies/save_bar', label: l(:button_sla_save_exclusions) %>
-    <% end %>
-  <% end %>
+  </div>
 <% end %>

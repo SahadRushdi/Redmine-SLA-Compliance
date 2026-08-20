@@ -6,7 +6,7 @@ class SlaStatusMapping < ActiveRecord::Base
   self.table_name = 'sla_status_mappings'
 
   # Plugin-internal milestone roles — NOT Redmine status names.
-  ROLES = %w[created work_started resolved pause].freeze
+  ROLES = %w[created work_started resolved].freeze
 
   belongs_to :sla_policy
 

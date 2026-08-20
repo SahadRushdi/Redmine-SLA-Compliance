@@ -37,6 +37,7 @@ class SlaGoogleChatNotificationJob < ApplicationJob
 
     deliver(issue, webhook, client)
   rescue StandardError => e
+    SlaNotificationLog.find_by(issue_id: issue_id, notification_type: 'google_chat_created')&.failed!(e)
     # Never re-raised: a webhook failure is logged and dropped. Re-raising would put the job into
     # the adapter's retry path and, more importantly, is not something the user creating the issue
     # should ever be able to observe.
@@ -55,7 +56,6 @@ class SlaGoogleChatNotificationJob < ApplicationJob
 
     # Stamped only after a successful POST, so `sent_at IS NULL` on a claimed row is the audit
     # trail of an attempted-but-failed delivery.
-    SlaNotificationLog.where(issue_id: issue.id, notification_type: 'google_chat_created')
-                      .update_all(sent_at: Time.current)
+    SlaNotificationLog.find_by(issue_id: issue.id, notification_type: 'google_chat_created')&.sent!
   end
 end

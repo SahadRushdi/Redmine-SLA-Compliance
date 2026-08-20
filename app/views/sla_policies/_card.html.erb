@@ -1,14 +1,14 @@
-<%# Section card: tinted header (title + optional description) over a white body. Used as a %>
+<%# Section card: tinted header over a white body. Used as a %>
 <%# LAYOUT partial so every section builds its cards the same way and none re-types the chrome — %>
-<%# render it with `render layout: "sla_policies/card", locals: { title:, description: }` and a %>
-<%# block holding the card body. `description` is optional. %>
+<%# render it with `render layout: "sla_policies/card", locals: { title: }` and a block holding %>
+<%# the card body. %>
 <%# %>
 <%# Optional locals for the case where the card and ONE control are the same idea: %>
 <%#   control     — markup placed on the HEADER row, beside the title. The heading and its %>
-<%#                 description are then that control's label, instead of being followed %>
-<%#                 immediately by a near-identical field label and hint saying it a second time %>
-<%#                 (which is what "Pause Handling" / "Pause handling" and both e-mail alert cards %>
-<%#                 used to do). Pass a rendered partial, e.g. render('sla_compliance/toggle', …). %>
+<%#                 title is then that control's label. Pass a rendered partial, e.g. %>
+<%#                 render('sla_compliance/toggle', …). %>
+<%#   header_note — optional status markup below the title which remains visible when a revealed %>
+<%#                 body is collapsed (used for notification fallback provenance). %>
 <%#   body_reveal — data-sla-reveal key for the BODY, so a switch passed as `control` collapses the %>
 <%#                 whole body, padding included, rather than leaving an empty white strip below %>
 <%#                 itself. body_hidden renders it already collapsed to match the switch's state. %>
@@ -26,9 +26,7 @@
               tw-flex tw-flex-wrap tw-items-center tw-justify-between tw-gap-x-6 tw-gap-y-3">
     <div class="tw-min-w-0 tw-flex-1">
       <h3 class="tw-m-0 tw-text-base tw-font-semibold tw-text-gray-900"><%= title %></h3>
-      <% if local_assigns[:description].present? %>
-        <p class="tw-mt-1 tw-mb-0 tw-text-xs tw-text-gray-500"><%= description %></p>
-      <% end %>
+      <%= local_assigns[:header_note] if local_assigns[:header_note].present? %>
     </div>
     <% if local_assigns[:control].present? %>
       <div class="tw-shrink-0"><%= control %></div>

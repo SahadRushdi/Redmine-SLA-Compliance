@@ -6,8 +6,8 @@ module Sla
   # even when no ticket event fires, then queues a one-time notification for each ticket that has
   # just crossed its at-risk threshold — and separately drives each project's stale-ticket digest
   # schedule (Step 2.8's excluded-ticket detector, wired in here). Runs off the request path
-  # (scheduler thread / rake task); the dashboard only ever reads the `sla_results` rows this
-  # refreshes.
+  # This remains available through the manual maintenance rake task; normal live transitions use
+  # targeted ActiveJob executions and dashboard timestamp projections instead of this full scan.
   #
   # Idempotency (the hard requirement): the sweep runs repeatedly, and may run concurrently in
   # more than one app-server process, and must NEVER double-send. Both notification paths rely on
@@ -15,10 +15,9 @@ module Sla
   #   * at-risk — `SlaNotificationLog.claim!` is guarded by a unique index on
   #     (issue_id, notification_type, target, cycle_key); only one caller anywhere can ever win a
   #     given at-risk episode (see #queue_at_risk for what an episode is).
-  #   * stale digest — `SlaNotificationSetting.claim_stale_digest_window!` is an atomic
-  #     conditional UPDATE keyed on the project's `last_stale_digest_at`; only one caller can win
-  #     a given project's digest window, and it naturally re-opens once the configured frequency
-  #     interval has elapsed.
+  #   * stale digest — `SlaNotificationDigestState.claim_stale_window!` is an atomic conditional
+  #     UPDATE keyed on the TARGET project. Configuration may be inherited from one shared parent
+  #     or the admin default without letting one project consume another project's window.
   #
   # Nothing domain-specific is hard-coded: "open" means not in one of the policy's own configured
   # `resolved`-role statuses (see #open_issues), projects are those with the SLA module enabled and
@@ -40,13 +39,17 @@ module Sla
 
     def run
       swept = newly = queued = stale_queued = 0
+      projects = swept_projects.to_a
+      notification_resolvers = NotificationSettingsResolver.for_projects(projects)
 
-      swept_projects.each do |project|
+      projects.each do |project|
         context = PolicyContext.for_project(project)
         next unless context.policy # only projects with an enabled effective policy
 
-        notification_setting = SlaNotificationSetting.find_by(project_id: project.id)
-        track_stale = notification_setting&.stale_email_enabled? || false
+        notification_resolver = notification_resolvers.fetch(project)
+        at_risk_setting = notification_resolver.resolve(:at_risk_email).setting
+        stale_setting = notification_resolver.resolve(:stale_email).setting
+        track_stale = stale_setting.present?
         stale_candidates = []
 
         open_issues(project, context).find_each do |issue|
@@ -55,13 +58,14 @@ module Sla
 
           if outcome.newly_at_risk?
             newly += 1
-            queued += 1 if queue_at_risk(issue, outcome)
+            queued += 1 if at_risk_setting && queue_at_risk(issue, outcome, at_risk_setting)
           elsif track_stale && excluded_not_tracked?(outcome.record)
-            stale_candidates << issue if stale?(issue, notification_setting.stale_threshold_days)
+            stale_candidates << issue if stale?(issue, stale_setting.stale_threshold_days)
           end
         end
 
-        stale_queued += queue_stale_digest(project, stale_candidates) if track_stale
+        stale_queued += queue_stale_digest(project, stale_candidates, stale_setting) if track_stale
+        queue_at_risk_digest(project, at_risk_setting) if at_risk_setting&.at_risk_email_frequency == 'digest'
       end
 
       Summary.new(swept: swept, newly_at_risk: newly, queued: queued, stale_queued: stale_queued)
@@ -85,22 +89,23 @@ module Sla
     #     the first silence and suppressed every later one for the life of that cycle.
     # Falls back to the ticket-level key if the engine reported no target, so a result predating
     # these fields still de-dupes rather than notifying on every sweep.
-    def queue_at_risk(issue, outcome)
+    def queue_at_risk(issue, outcome, setting)
       result  = outcome.result
       target  = result&.at_risk_target.presence || SlaNotificationLog::NO_TARGET
       episode = result&.at_risk_since || result&.cycle_started_at
 
-      return false unless SlaNotificationLog.claim!(
+      log = SlaNotificationLog.claim!(
         issue_id: issue.id, notification_type: 'at_risk', target: target,
         cycle_key: episode&.to_i&.to_s || SlaNotificationLog::NO_CYCLE
       )
+      return false unless log
 
-      @notifier.enqueue_at_risk(issue, outcome.record)
+      @notifier.enqueue_at_risk(issue, outcome.record, setting: setting, log: log)
       true
     end
 
-    # Step 2.8's exact scope: "unclassified priority or unset target" — both surface as
-    # no_sla/not_tracked (never not_configured, which means the tracker isn't under SLA at all and
+    # Step 2.8's excluded scope surfaces as no_sla/not_tracked (never not_configured, which means
+    # the tracker isn't under SLA at all and
     # so has no "excluded ticket that needs triage" signal to report).
     def excluded_not_tracked?(result)
       result.primary_state == 'no_sla' && result.no_sla_reason == 'not_tracked'
@@ -108,28 +113,38 @@ module Sla
 
     def stale?(issue, threshold_days)
       timeline = TimelineBuilder.new(issue).build
-      StaleTicketDetector.new(timeline, now: @now).stale?(threshold_days.days.to_i)
+      last_activity = [StaleTicketDetector.new(timeline, now: @now).last_activity_at,
+                       issue.updated_on].compact.select { |time| time <= @now }.max
+      (@now - last_activity) >= threshold_days.days
     end
 
-    # Claim this project's stale-digest window and queue whichever candidates are still stale at
-    # claim time. Called on every sweep tick while stale email is enabled — cheap no-op (0 rows
-    # updated) until the project's configured frequency interval has actually elapsed, at which
-    # point the schedule gate on `sla_notification_settings.last_stale_digest_at` advances. This
-    # runs even with an empty candidate list so a project with zero stale tickets this period
-    # still doesn't get re-checked every 15 minutes.
-    def queue_stale_digest(project, stale_candidates)
-      setting = SlaNotificationSetting.claim_stale_digest_window!(project.id, now: @now)
-      return 0 unless setting
-
-      # The window's own claimed instant is the cycle_key: a still-stale ticket gets a fresh key
-      # every window (rather than being claimed once, ever), so it keeps reappearing in
-      # subsequent digests for as long as it stays stale — the whole point of a recurring digest.
-      window_key = setting.last_stale_digest_at.to_i.to_s
-      claimed = stale_candidates.select do |issue|
-        SlaNotificationLog.claim!(issue_id: issue.id, notification_type: 'stale', cycle_key: window_key)
+    # Legacy maintenance fallback. Normal delivery comes from a targeted stale_at job. Keying the
+    # claim on updated_on makes this path converge with that job: one alert per inactivity episode,
+    # even if an operator runs the maintenance sweep repeatedly.
+    def queue_stale_digest(project, stale_candidates, setting)
+      claimed = stale_candidates.filter_map do |issue|
+        SlaNotificationLog.claim!(issue_id: issue.id, notification_type: 'stale',
+                                  cycle_key: issue.updated_on.to_i.to_s)
       end
-      @stale_notifier.enqueue_stale_digest(project, claimed) if claimed.any?
+      @stale_notifier.enqueue_stale_digest(project, claimed, setting: setting) if claimed.any?
       claimed.size
+    end
+
+    def queue_at_risk_digest(project, setting)
+      return unless SlaNotificationDigestState.claim_at_risk_window!(
+        project.id, setting.at_risk_digest_interval, now: @now
+      )
+
+      logs = SlaNotificationLog.joins(:issue)
+                               .where(notification_type: 'at_risk', delivery_state: 'pending',
+                                      issues: { project_id: project.id }).order(:id).to_a
+      queued = logs.select(&:queue!)
+      return if queued.empty?
+
+      SlaEmailDeliveryJob.perform_later('at_risk_digest', project.id, queued.map(&:id), setting.id)
+    rescue StandardError => e
+      Array(queued).each { |log| log.failed!(e) }
+      Rails.logger.error("[SLA] at-risk digest enqueue failed for project ##{project.id}: #{e.class}: #{e.message}")
     end
 
     # Active projects where the SLA module is enabled — mirrors the event-driven hook's gate so the

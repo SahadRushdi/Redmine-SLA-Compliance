@@ -1,12 +1,12 @@
-<%# Compliance-split donut: 3 legend categories (met/breached/no_sla), summing to @counts.total. %>
-<%# At-risk is rendered as a 4th ARC SEGMENT (same color family as met, a thin white border between %>
+<%# Compliance-split donut for evaluated tickets only, summing to @counts.total. %>
+<%# At-risk is rendered as its own ARC SEGMENT (same color family as met, a thin white border between %>
 <%# them reads as an in-slice boundary marker) and as a visually distinct subset legend row, but it %>
 <%# is not a 4th primary state — the legend beside the donut is the one legend for this compliance- %>
 <%# state dimension (Global Rule 9), and the priority chart's own legend below reuses the same %>
 <%# colors/labels rather than a conflicting mapping. Chart.js's own native legend is disabled below. %>
 <%#
   ORDER: arcs and legend rows are both sorted by count, descending — biggest bucket first — rather
-  than pinned to a fixed met/breached/no_sla/at_risk order. Sorting server-side means the order is
+  than pinned to a fixed met/breached/at_risk order. Sorting server-side means the order is
   recomputed from the same @counts every render, so it can never drift from the data. `each_with_index
   … sort_by [-value, i]` keeps the sort STABLE: equal counts (very common — several states sit at 0
   on a healthy board) hold the declaration order below instead of shuffling between requests.
@@ -15,8 +15,7 @@
 <% donut_arcs = [
      { key: :met,      label: l(:label_sla_chart_met_on_track), value: met_on_track },
      { key: :at_risk,  label: l(:label_sla_chart_met_at_risk),  value: @counts.at_risk },
-     { key: :breached, label: sla_card_label(:breached),        value: @counts.breached },
-     { key: :no_sla,   label: sla_card_label(:no_sla),          value: @counts.no_sla }
+     { key: :breached, label: sla_card_label(:breached),        value: @counts.breached }
    ].each_with_index.sort_by { |arc, i| [-arc[:value], i] }.map(&:first) %>
 <%# Where each state's arc ended up after the sort — the legend rows below need these indices to %>
 <%# tell the highlight JS which arc(s) they drive, and they are no longer positional constants. %>
@@ -57,14 +56,11 @@
     <% donut_legend_rows = [
          { state: :met,      value: @counts.met,      indices: [arc_index[:met], arc_index[:at_risk]].sort },
          { state: :breached, value: @counts.breached, indices: [arc_index[:breached]] },
-         { state: :no_sla,   value: @counts.no_sla,   indices: [arc_index[:no_sla]] },
          { state: :at_risk,  value: @counts.at_risk,  indices: [arc_index[:at_risk]], subset: true }
        ].each_with_index.sort_by { |row, i| [-row[:value], i] }.map(&:first) %>
     <div id="sla-chart-legend" class="tw-w-full tw-space-y-2.5">
       <% donut_legend_rows.each do |row| %>
-        <%# sla-legend-item carries the click affordance AND the active pill the JS toggles; the %>
-        <%# -label/-value/-muted hooks let that pill recolour the count and percentage too, which %>
-        <%# carry grey utilities of their own — see partials/_chart_legend.css. %>
+        <%# sla-legend-item carries the click affordance AND the active pill the JS toggles. %>
         <div class="sla-legend-item tw-flex tw-items-center tw-justify-between tw-gap-3 tw-text-sm"
              data-sla-legend-target="sla-donut-chart" data-sla-legend-indices="<%= row[:indices].join(',') %>">
           <span class="sla-legend-label tw-inline-flex tw-items-center tw-gap-2 tw-text-gray-700">
@@ -76,7 +72,6 @@
           </span>
           <span class="tw-whitespace-nowrap">
             <span class="sla-legend-value tw-font-semibold tw-text-gray-900"><%= row[:value] %></span>
-            <span class="sla-legend-muted tw-text-gray-400 tw-text-xs">(<%= sla_percentage(row[:value], @counts.total) %>%)</span>
           </span>
         </div>
       <% end %>

@@ -4,6 +4,22 @@
 # ProjectsController#settings (no plugin controller runs on that GET), so everything the form
 # needs is derived here. All lists come live from Redmine configuration — never constants.
 module SlaPoliciesHelper
+  # Portable, case-insensitive ordering for the small Redmine collections rendered in dropdowns.
+  # Sorting in Ruby avoids database-specific LOWER/collation behavior and uses the exact label the
+  # user sees. The original name and id make ties deterministic.
+  def sla_alphabetical(records)
+    records.to_a.sort_by do |record|
+      name = record.name.to_s
+      [name.downcase, name, record.id.to_i]
+    end
+  end
+
+  def sla_notification_recipient_options(project, selected_ids)
+    users = (project ? Sla::ProjectRecipientUsers.for(project) : User.active.joins(:email_address))
+            .distinct
+    options_for_select(sla_alphabetical(users).map { |user| ["#{user.name} — #{user.mail}", user.id] },
+                       selected_ids)
+  end
   # --- Sectioned settings shell -------------------------------------------------------------
   # The tab is split into sidebar-navigable sections instead of one long scrolling form. Section
   # keys are the single source of truth shared by the nav, the panels, each section form's hidden
@@ -20,13 +36,12 @@ module SlaPoliciesHelper
     { key: 'general',       permission: :edit_sla_policy },
     { key: 'targets',       permission: :edit_sla_policy },
     { key: 'measurement',   permission: :edit_sla_policy },
-    { key: 'exclusions',    permission: :edit_sla_policy },
     { key: 'notifications', permission: :manage_sla_notifications }
   ].freeze
 
   # B3 — [source_project, source_policy] when this project's CONFIGURATION comes from an ANCESTOR,
   # else nil. The tab renders the same editable sections either way (see #sla_policy_for_form); this
-  # only decides whether the inheritance notice and the tri-state on/off control appear above them.
+  # only decides whether the inheritance notice and inherited enablement toggle appear above them.
   # `clone_from` present means a clone source was just loaded and the form now shows THAT, so the
   # inheritance notice would be describing something no longer on screen.
   #
@@ -42,9 +57,9 @@ module SlaPoliciesHelper
     [source_project, source_policy]
   end
 
-  # Tri-state SLA on/off, shown in the General section while the configuration is inherited:
-  # :inherit / :enabled / :disabled for this project, plus whether SLA actually ends up on — so
-  # "Inherit" can say WHICH state it inherits.
+  # Three semantic SLA states used by the General toggle while configuration is inherited:
+  # :inherit / :enabled / :disabled for this project. The view resolves :inherit against the
+  # ancestor so the switch always represents the effective state.
   def sla_enablement_state(project)
     SlaPolicy.enablement_for(project)
   end
@@ -75,17 +90,13 @@ module SlaPoliciesHelper
     l(:"label_sla_section_#{key}")
   end
 
-  def sla_section_description(key)
-    l(:"text_sla_section_#{key}")
-  end
-
   # --- Locking the configuration sections while SLA tracking is off ---------------------------
   # These four sections only describe how an ACTIVE policy behaves; with tracking off, nothing they
   # hold is ever evaluated, so leaving them editable invites someone to spend an afternoon
   # configuring a policy that does nothing. They stay VISIBLE and readable — only their controls
   # are disabled (see sla_policies/_lock.html.erb). General is deliberately never lockable: it is
   # where tracking gets switched back on, so locking it would be a one-way door.
-  LOCKABLE_SECTIONS = %w[targets measurement exclusions notifications].freeze
+  LOCKABLE_SECTIONS = %w[targets measurement notifications].freeze
 
   def sla_lockable_section?(key)
     LOCKABLE_SECTIONS.include?(key)
@@ -104,8 +115,8 @@ module SlaPoliciesHelper
   # default) while effective_for is also nil, but a clone prefill or a failed validation puts an
   # unsaved policy on screen that no resolver walking the database would ever return.
   def sla_tracking_on?(project)
-    # An inheriting project shows the TRI-STATE radios instead of the switch, so "on" there means
-    # resolving :inherit against the ancestor's decision — the same thing those radios spell out.
+    # The inherited toggle represents the effective state, so :inherit resolves against the
+    # ancestor's decision while explicit lightweight rows use their own enabled flag.
     if sla_inherited_policy_source(project).present?
       state = sla_enablement_state(project)
       state == :inherit ? sla_inherited_enablement_on?(project) : state == :enabled
@@ -128,7 +139,6 @@ module SlaPoliciesHelper
     'general' => '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
     'measurement' => '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
     'targets' => '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
-    'exclusions' => '<circle cx="12" cy="12" r="10"/><line x1="10" y1="15" x2="10" y2="9"/><line x1="14" y1="15" x2="14" y2="9"/>',
     'notifications' => '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>'
   }.freeze
 
@@ -224,16 +234,6 @@ module SlaPoliciesHelper
          : l(:label_sla_stale_threshold_placeholder_unset)
   end
 
-  def sla_stale_threshold_source_text(project, policy, inherited)
-    own = sla_inherited_policy_source(project).blank? && policy.stale_threshold_days.present?
-    return l(:text_sla_stale_threshold_own) if own
-
-    days, source = inherited
-    return l(:text_sla_stale_threshold_unset_anywhere) if days.nil?
-
-    l(:text_sla_stale_threshold_inherited, days: days, source: source.name)
-  end
-
   # Status IDs selected for a milestone role, read from the in-memory association so unsaved
   # clone prefills render too.
   def sla_status_ids(policy, role)
@@ -256,36 +256,18 @@ module SlaPoliciesHelper
   # it and leaves its stored targets alone (see SlaPoliciesController#replace_tracker_definitions!).
   # Clearing a tracker's targets is done by setting its rows to "not tracked", not by hiding it.
   def sla_selected_trackers(project, policy)
-    trackers = project.trackers.sorted.to_a
+    trackers = sla_alphabetical(project.trackers)
     requested = sla_requested_tracker_ids
-    selected =
-      if requested.any?
-        trackers.select { |tracker| requested.include?(tracker.id) }
-      else
-        ids = sla_saved_tracker_ids(policy)
-        trackers.select { |tracker| ids.include?(tracker.id) }
-      end
+    return trackers.select { |tracker| requested.include?(tracker.id) } if requested.any?
 
-    selected.presence || Array(trackers.first)
-  end
+    saved_ids = policy.selected_tracker_ids_or_nil
+    # Once the picker has been saved it is authoritative, including an intentionally empty list.
+    # Definitions for removed trackers stay stored so re-adding a tracker restores its targets,
+    # but they must neither reappear on reload nor remain active in PolicyContext.
+    return trackers.select { |tracker| saved_ids.include?(tracker.id) } unless saved_ids.nil?
 
-  # What was SAVED, as a union of two sources — which is the whole fix for "I added a tracker, saved,
-  # and it was gone":
-  #
-  #   * the picker's own saved selection (migration 009). Before it existed the displayed set was
-  #     derived purely from the definitions below, so a tracker added and saved with every target
-  #     still on "not tracked" wrote no definition, left no trace, and disappeared on the redirect.
-  #   * every tracker that HAS definitions. This half is not redundant and must never be dropped: a
-  #     tracker with stored targets is being applied to real tickets, so hiding it — because it
-  #     happens to be missing from a selection saved before it, or one saved by an older version —
-  #     would leave an SLA in force that the settings page does not show anywhere.
-  #
-  # nil (never saved) therefore behaves exactly as this method did before the column existed.
-  def sla_saved_tracker_ids(policy)
-    from_definitions = policy.sla_definitions.map(&:tracker_id)
-    (policy.selected_tracker_ids_or_nil.to_a | from_definitions).uniq
+    trackers.select { |tracker| policy.sla_definitions.map(&:tracker_id).include?(tracker.id) }
   end
-  private :sla_saved_tracker_ids
 
   # Tracker ids named by THIS request: the picker's own array, or the single `tracker_id` the AJAX
   # per-table re-render sends. `definitions[tracker_ids][]` is the picker's real parameter name —
@@ -296,56 +278,27 @@ module SlaPoliciesHelper
   end
   private :sla_requested_tracker_ids
 
-  # <option> list for one target dropdown: a leading "not tracked" blank, then the admin lookup
-  # (numeric durations by seconds, Best Effort rows by the 'best_effort' sentinel — a Best Effort
-  # option has no seconds value to use as the option value). If the saved numeric value no longer
-  # matches any option (the admin edited the lookup), inject it so it isn't silently dropped on
-  # the next save.
   SLA_BEST_EFFORT_VALUE = 'best_effort'
 
-  def sla_target_select_options(target_type, current_seconds, current_best_effort = false)
-    rows = sla_target_options_by_type.fetch(target_type.to_s, [])
-    options = rows.reject(&:best_effort?).map { |o| [o.label, o.seconds.to_s] }
-    options += rows.select(&:best_effort?).map { |o| [o.label, SLA_BEST_EFFORT_VALUE] }
+  def sla_direct_duration_parts(seconds, unit = nil)
+    return ['', 'hours'] unless seconds.present?
+    return Sla::DirectDuration.parts(seconds) unless Sla::DirectDuration::UNITS.key?(unit.to_s)
 
-    if !current_best_effort && current_seconds.present? &&
-       options.none? { |_, value| value == current_seconds.to_s }
-      options.unshift([l(:label_sla_target_current_value,
-                         value: format_sla_duration(current_seconds)), current_seconds.to_s])
-    end
-    options.unshift([l(:label_sla_target_skipped), ''])
-
-    selected = current_best_effort ? SLA_BEST_EFFORT_VALUE : (current_seconds || '').to_s
-    options_for_select(options, selected)
+    amount = BigDecimal(seconds.to_s) / Sla::DirectDuration::UNITS.fetch(unit.to_s)
+    [amount.to_s('F').sub(/\.0+\z/, ''), unit.to_s]
   end
 
-  def sla_target_options_by_type
-    @sla_target_options_by_type ||=
-      SlaTargetOption.order(:position, :seconds).group_by(&:target_type)
-  end
-
-  # Is this the admin-designated "None / unclassified" priority (Administration →
-  # SLA Compliance)? Always excluded from SLA Definitions — see Sla::PolicyContext#definition_for.
-  def sla_unclassified_priority?(priority_id)
-    priority_id.present? && priority_id == Sla::PluginSettings.unclassified_priority_id
-  end
-
-  # The configured unclassified priority itself, or nil when none is designated. Drives the amber
-  # notice above the Priority Targets table (the row it replaces).
-  def sla_unclassified_priority
-    return @sla_unclassified_priority if defined?(@sla_unclassified_priority)
-
-    id = Sla::PluginSettings.unclassified_priority_id
-    @sla_unclassified_priority = id.present? ? IssuePriority.active.detect { |p| p.id == id } : nil
+  def sla_direct_duration_label(seconds, best_effort, unit = nil)
+    Sla::DirectDuration.label(seconds: seconds, best_effort: best_effort, unit: unit)
   end
 
   # Source candidates for "Clone from another project": projects the user could edit the
   # policy of, that actually have one — minus the current project.
   def sla_clone_source_projects(project)
-    Project.active.allowed_to(:edit_sla_policy)
-           .where(id: SlaPolicy.select(:project_id))
-           .where.not(id: project.id)
-           .sorted
+    sources = Project.active.allowed_to(:edit_sla_policy)
+                     .where(id: SlaPolicy.select(:project_id))
+                     .where.not(id: project.id)
+    sla_alphabetical(sources)
   end
 
   # The project this policy was last cloned from (migration 009), or nil. It preselects the Clone
@@ -366,6 +319,24 @@ module SlaPoliciesHelper
   def sla_notification_setting_for_form(project)
     @sla_notification_setting ||= SlaNotificationSetting.find_by(project_id: project.id) ||
                                   SlaNotificationSetting.new(project_id: project.id)
+  end
+
+  def sla_notification_fallbacks(project)
+    return {} if sla_tracking_off?(project)
+
+    resolver = Sla::NotificationSettingsResolver.new(project)
+    %i[google_chat at_risk_email stale_email].index_with do |channel|
+      resolution = resolver.resolve(channel)
+      resolution if resolution.inherited?
+    end.compact
+  end
+
+  def sla_notification_fallback_text(resolution)
+    if resolution.source == :parent
+      l(:text_sla_notification_parent_fallback, project: resolution.source_project.name)
+    else
+      l(:text_sla_notification_admin_fallback)
+    end
   end
 
   # Shared Flowbite control classes (single source, per CLAUDE.md — don't re-type per field).
@@ -391,6 +362,13 @@ module SlaPoliciesHelper
   def sla_primary_button_classes
     'tw-inline-flex tw-items-center tw-gap-2 tw-text-white tw-bg-primary-600 ' \
       'hover:tw-bg-primary-700 tw-border-0 tw-font-medium ' \
+      'tw-rounded-lg tw-text-sm tw-px-5 tw-py-2.5 tw-cursor-pointer'
+  end
+
+  # Destructive action button used for irreversible project-local configuration removal.
+  def sla_danger_button_classes
+    'tw-inline-flex tw-items-center tw-gap-2 tw-text-white tw-bg-red-600 ' \
+      'hover:tw-bg-red-700 tw-border-0 tw-font-medium ' \
       'tw-rounded-lg tw-text-sm tw-px-5 tw-py-2.5 tw-cursor-pointer'
   end
 

@@ -1,35 +1,52 @@
-<%# One row per active priority, for ONE tracker's table (see _definition_table). A priority with %>
-<%# every target unset gets no SlaDefinition row (it is excluded / unclassified). %>
-<%# %>
-<%# Field names are nested under the tracker id — definitions[rows][<tracker>][<priority>][<type>] %>
-<%# — so several trackers' tables can post together in one submit. %>
-<%# %>
-<%# The admin-designated "unclassified" priority (Administration → SLA Compliance) gets %>
-<%# no row at all: no SlaDefinition can ever be saved for it (enforced server-side too, see %>
-<%# SlaPoliciesController#replace_tracker_definitions!), so it is called out once in the notice %>
-<%# above the table instead of occupying a permanently disabled row. %>
-<%# Locals: policy, tracker. %>
+<%# Direct wall-clock target editor: one autosaved cell per tracker/priority/target. %>
 <% definitions = sla_definition_map(policy, tracker) %>
 <% IssuePriority.active.each do |priority| %>
-  <% next if sla_unclassified_priority?(priority.id) %>
   <% definition = definitions[priority.id] %>
   <tr class="tw-border-b tw-border-gray-200">
-    <%# Priority is rendered as its plain name. It deliberately carries NO severity colouring: any %>
-    <%# such scale would be a severity encoding baked into the plugin, which Global Rule 1 forbids %>
-    <%# ("no ... severity labels as constants or enums") — the priority's meaning and ordering %>
-    <%# belong to the site's Redmine configuration, not to this code. %>
     <td class="tw-px-4 tw-py-2 tw-font-medium tw-text-gray-900"><%= h priority.name %></td>
-    <%# One dropdown per target type, from the model's own list — Response, Workaround, Resolution %>
-    <%# and Update Frequency are configured identically, so the column set follows the constant %>
-    <%# rather than being re-typed here. Options come from the admin lookup in every case. %>
     <% SlaDefinition::TARGET_TYPES.each do |target_type| %>
-      <% current_seconds     = definition&.public_send("#{target_type}_seconds") %>
-      <% current_best_effort = definition&.best_effort?(target_type) %>
-      <td class="tw-px-4 tw-py-2">
-        <%= select_tag "definitions[rows][#{tracker.id}][#{priority.id}][#{target_type}]",
-              sla_target_select_options(target_type, current_seconds, current_best_effort),
-              id: "sla-def-#{tracker.id}-#{priority.id}-#{target_type}", class: sla_input_classes,
-              data: { sla_select: true } %>
+      <% seconds = definition&.public_send("#{target_type}_seconds") %>
+      <% saved_unit = definition&.public_send("#{target_type}_unit") %>
+      <% best_effort = definition&.best_effort?(target_type) || false %>
+      <% amount, unit = sla_direct_duration_parts(seconds, saved_unit) %>
+      <td class="tw-px-2 tw-py-2 tw-align-top">
+        <div class="sla-target-cell tw-relative" data-sla-target-cell
+             data-endpoint="<%= target_project_sla_policy_path(@project) %>"
+             data-tracker-id="<%= tracker.id %>" data-priority-id="<%= priority.id %>"
+             data-target-type="<%= target_type %>" data-seconds="<%= seconds %>"
+             data-best-effort="<%= best_effort %>"
+             data-whole-number-error="<%= l(:error_sla_target_whole_number) %>">
+          <button type="button" data-sla-target-display
+                  class="tw-w-full tw-min-h-9 tw-rounded-lg tw-border tw-border-gray-300 tw-bg-white
+                         tw-px-3 tw-py-2 tw-text-left tw-text-sm tw-text-gray-900 hover:tw-bg-gray-50
+                         focus:tw-ring-2 focus:tw-ring-primary-500">
+            <%= sla_direct_duration_label(seconds, best_effort, saved_unit) %>
+          </button>
+          <div data-sla-target-editor class="hidden tw-mt-1 tw-rounded-lg tw-border tw-border-gray-200
+                                             tw-bg-white tw-p-2 tw-shadow-sm">
+            <div class="tw-flex tw-items-center tw-gap-1">
+              <%# This is an AJAX-autosaved editor, not a posted form field. Keep native constraint %>
+              <%# validation off it so legacy decimal snapshots cannot block the enclosing policy %>
+              <%# form while hidden; JS + DirectDuration enforce positive whole numbers. %>
+              <input type="text" value="<%= amount %>" inputmode="numeric" autocomplete="off"
+                     aria-label="<%= l(:field_sla_duration_value) %>" data-sla-target-value
+                     class="tw-h-10 tw-w-20 tw-rounded-lg tw-border tw-border-gray-300 tw-px-2 tw-py-1 tw-text-sm">
+              <select aria-label="<%= l(:field_sla_duration_unit) %>" data-sla-target-unit
+                      data-sla-select
+                      class="tw-rounded-lg tw-border tw-border-gray-300 tw-bg-white tw-px-2 tw-py-1 tw-text-sm">
+                <option value="minutes" <%= 'selected' if unit == 'minutes' %>><%= l(:label_sla_minutes) %></option>
+                <option value="hours" <%= 'selected' if unit == 'hours' %>><%= l(:label_sla_hours) %></option>
+                <option value="days" <%= 'selected' if unit == 'days' %>><%= l(:label_sla_days) %></option>
+                <option value="weeks" <%= 'selected' if unit == 'weeks' %>><%= l(:label_sla_weeks) %></option>
+              </select>
+            </div>
+            <label class="tw-mt-2 tw-flex tw-items-center tw-gap-2 tw-text-xs tw-text-gray-700">
+              <input type="checkbox" data-sla-target-best-effort <%= 'checked' if best_effort %>>
+              <%= l(:label_sla_best_effort) %>
+            </label>
+          </div>
+          <span data-sla-target-status aria-live="polite" class="tw-mt-1 tw-block tw-text-xs"></span>
+        </div>
       </td>
     <% end %>
   </tr>

@@ -1,4 +1,4 @@
-<% html_title(@project ? "#{l(:label_sla_compliance)} — #{@project.name}" : l(:label_sla_dashboard_all)) %>
+<% html_title(@project ? "#{l(:label_sla_compliance)} - #{@project.name}" : l(:label_sla_dashboard_all)) %>
 <%= render 'sla_compliance/assets' %>
 <% content_for :header_tags do %>
   <%= javascript_include_tag 'sla_dashboard_tabs.js', plugin: 'redmine_sla_compliance' %>
@@ -47,8 +47,8 @@
       <%= render 'sla_dashboard/charts' %>
     </div>
 
-    <%# Tab 2 — SLA Trend (date-scoped): date-range controls + the SLA Met card and the %>
-    <%# Created vs Resolved chart. Hidden until selected (client-side, sla_dashboard_tabs.js). %>
+    <%# Tab 2 — SLA Trend: period-scoped SLA Met card plus Created vs Resolved chart. %>
+    <%# Hidden until selected (client-side, sla_dashboard_tabs.js). %>
     <div data-sla-tab-panel="trend" class="hidden">
       <%= render 'sla_dashboard/trend_panel' %>
     </div>

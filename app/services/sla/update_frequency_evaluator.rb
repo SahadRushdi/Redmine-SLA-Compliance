@@ -26,9 +26,6 @@ module Sla
   # excludes them: first response measures a CUSTOMER-FACING reply, whereas this measures whether the
   # ticket is being worked and reported on at all — an internal note is a real status update.
   #
-  # PAUSES are excluded from every gap via the same Sla::PauseCalculator the other three targets use
-  # (no special-casing): a ticket parked in "Waiting on Client" is not going quiet on the team.
-  #
   # Pure and side-effect free: reads a timeline, writes nothing, hard-codes no status/priority/user.
   class UpdateFrequencyEvaluator
     # Same shape the classifier already composes for the other three targets: a state plus a
@@ -51,17 +48,16 @@ module Sla
     # @param timeline [Sla::TimelineBuilder::Timeline] full journal history, already built.
     # @param target_seconds [Integer, nil] the configured cadence; nil ⇒ nothing to breach (a Best
     #   Effort cadence, whose elapsed gaps are still worth reporting).
-    # @param pause [Sla::PauseCalculator] the classifier's own, so paused time and coverage mode
-    #   (calendar vs business hours) are subtracted exactly as they are for the other targets.
+    # @param calculator [#elapsed] the classifier's elapsed-time calculator.
     # @param from [Time] clock start — creation, or the latest reopen (the classifier's cycle start).
     # @param to [Time] the window's end: the resolution instant for a resolved ticket, `now` for an
     #   open one. A resolved ticket's trailing silence still counts, for the same reason the other
     #   three milestones stop measuring at resolution rather than at `now`.
     # @param non_human_author_ids [Array<Integer>] authors that are not a person (see #human_author?).
-    def initialize(timeline, target_seconds:, pause:, from:, to:, non_human_author_ids: [])
+    def initialize(timeline, target_seconds:, calculator:, from:, to:, non_human_author_ids: [])
       @timeline             = timeline
       @target               = target_seconds
-      @pause                = pause
+      @calculator           = calculator
       @from                 = from
       @to                   = to
       @non_human_author_ids = Array(non_human_author_ids)
@@ -85,13 +81,13 @@ module Sla
 
     private
 
-    # Every gap in the window, paused time removed from each: clock start → first qualifying update,
+    # Every gap in the window: clock start → first qualifying update,
     # each consecutive pair, and the last one → the window's end. With no qualifying updates at all
     # this is the single span [from, to] — silence since creation, which is exactly the ticket the
     # rule exists to catch.
     def gap_seconds(updates)
       boundaries = [@from] + updates + [@to]
-      boundaries.each_cons(2).map { |started, ended| @pause.net_elapsed(started, ended) }
+      boundaries.each_cons(2).map { |started, ended| @calculator.elapsed(started, ended) }
     end
 
     # Qualifying updates inside this measurement cycle, in order. Bounded by `from` so a reopened

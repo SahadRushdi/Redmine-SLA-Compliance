@@ -53,4 +53,15 @@ class SlaNotificationLogTest < ActiveSupport::TestCase
     SlaNotificationLog.claim!(issue_id: ISSUE_ID, notification_type: 'at_risk')
     assert SlaNotificationLog.already_sent?(issue_id: ISSUE_ID, notification_type: 'at_risk')
   end
+
+  test 'delivery lifecycle is atomically queued and records success or failure' do
+    log = SlaNotificationLog.claim!(issue_id: ISSUE_ID, notification_type: 'at_risk',
+                                    target: 'response', cycle_key: 'delivery')
+    assert_equal 'pending', log.delivery_state
+    assert log.queue!
+    refute log.queue!
+    log.sent!
+    assert_equal 'sent', log.reload.delivery_state
+    assert_not_nil log.sent_at
+  end
 end

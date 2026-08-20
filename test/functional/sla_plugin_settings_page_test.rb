@@ -56,6 +56,13 @@ class SlaPluginSettingsPageTest < ActionController::TestCase
     end
   end
 
+  test "the role picker is ordered alphabetically" do
+    get_settings_page
+
+    names = css_select("#{PICKER} option").map { |option| option.text.strip }
+    assert_equal names.sort_by { |name| [name.downcase, name] }, names
+  end
+
   test "the picker is a Tom Select chip control, not a bare multi-select" do
     # Without this attribute the control still renders, but as an unstyled native multi-select
     # with no chips and no search — a silent degradation nothing else here would catch.
@@ -105,8 +112,8 @@ class SlaPluginSettingsPageTest < ActionController::TestCase
     get_settings_page
 
     assert_response :success
-    assert_select '[data-sla-admin-section]', 1,
-                  'General is the only panel section left; access was folded into it'
+    assert_select '[data-sla-admin-section]', 2,
+                  'General and Notifications are the two panel sections; access remains folded in'
     assert_select "[data-sla-admin-section='access']", 0
     assert_select "[data-sla-admin-panel='access']", 0
   end
@@ -150,8 +157,7 @@ class SlaPluginSettingsPageTest < ActionController::TestCase
     stored = Setting.plugin_redmine_sla_compliance
     assert_not stored.key?('sla_viewer_user_ids')
     assert_not stored.key?('sla_manager_user_ids')
-    assert_equal '20', stored['sweep_interval_minutes'],
-                 'a setting this form does not render must still survive the save'
+    assert_not stored.key?('sweep_interval_minutes')
   end
 
   # --- the whole point: saving here grants access there ----------------------------------------

@@ -1,0 +1,12 @@
+<h1><%= l(:mail_heading_sla_at_risk) %></h1>
+<p><%= l(:mail_text_sla_at_risk_intro, issue: "##{@issue.id}", project: @project.name) %></p>
+<table>
+  <tr><th><%= l(:field_sla_chat_title) %></th><td><%= link_to "##{@issue.id}: #{@issue.subject}", @issue_url %></td></tr>
+  <tr><th><%= l(:label_sla_email_target) %></th><td><%= l("label_sla_target_#{@log.target}") %></td></tr>
+  <tr><th><%= l(:label_sla_email_projected_breach) %></th><td><%= format_time(@result&.breach_at) %></td></tr>
+  <tr><th><%= l(:field_status) %></th><td><%= @issue.status %></td></tr>
+  <tr><th><%= l(:field_priority) %></th><td><%= @issue.priority || '—' %></td></tr>
+  <tr><th><%= l(:field_assigned_to) %></th><td><%= @issue.assigned_to || '—' %></td></tr>
+  <tr><th><%= l(:field_created_on) %></th><td><%= format_time(@issue.created_on) %></td></tr>
+  <tr><th><%= l(:field_updated_on) %></th><td><%= format_time(@issue.updated_on) %></td></tr>
+</table>

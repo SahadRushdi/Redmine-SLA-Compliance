@@ -54,8 +54,7 @@ class SlaGoogleChatNotificationJobTest < ActiveSupport::TestCase
   # absent one.
   def configure_sla(project)
     policy = SlaPolicy.create!(project_id: project.id, enabled: true, coverage_hours: '24x7',
-                               first_response_rule: 'either', at_risk_threshold: 80,
-                               pause_enabled: true)
+                               first_response_rule: 'either', at_risk_threshold: 80)
     SlaStatusMapping.create!(sla_policy: policy, role: 'created', status_id: 1)
     SlaDefinition.create!(sla_policy: policy, tracker_id: SLA_TRACKER, priority_id: PRIORITY,
                           response_seconds: 3600)
@@ -88,6 +87,7 @@ class SlaGoogleChatNotificationJobTest < ActiveSupport::TestCase
     url, payload = client.calls.first
     assert_equal WEBHOOK, url
     assert_includes payload[:text], "##{issue.id}"
+    assert payload[:text].start_with?("🚨 New *#{issue.tracker.name}* in *#{issue.project.name}*")
   end
 
   test "does not post for an issue on a tracker with no SLA definition" do
@@ -118,9 +118,26 @@ class SlaGoogleChatNotificationJobTest < ActiveSupport::TestCase
   end
 
   test "posts to the project's own webhook" do
-    # There is no instance-wide fallback any more (removed 2026-08-05 with its admin field), so the
-    # project's own value is the only source there is.
     set_webhook(WEBHOOK)
+    issue = make_issue
+
+    assert_equal WEBHOOK, run_job(issue.id, FakeClient.new).calls.first.first
+  end
+
+  test "uses the nearest parent webhook when the project has none" do
+    child = Project.find(3)
+    child.enable_module!(:sla_compliance)
+    configure_sla(child)
+    set_webhook(WEBHOOK, project: @project)
+    issue = make_issue(project: child)
+
+    assert_equal WEBHOOK, run_job(issue.id, FakeClient.new).calls.first.first
+  end
+
+  test "uses the admin webhook when neither project nor parent has one" do
+    global = SlaNotificationSetting.global_for_form
+    global.google_chat_webhook = WEBHOOK
+    global.save!
     issue = make_issue
 
     assert_equal WEBHOOK, run_job(issue.id, FakeClient.new).calls.first.first

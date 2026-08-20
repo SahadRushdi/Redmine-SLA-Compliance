@@ -3,22 +3,35 @@
 # Shared formatting helpers for the plugin (single place for duration/time formatting,
 # per the CLAUDE.md convention).
 module SlaComplianceHelper
-  # Compact human form of a duration in seconds: "30m", "4h", "1d 4h 30m".
-  # Days are 24h calendar days — target options are absolute durations, not working time.
+  # Scan-friendly human form of a duration in seconds. Precision decreases as the duration grows:
+  # seconds below one minute, minutes below one hour, hours/minutes below one day, days/hours below
+  # one week, weeks/days below 30 days, then whole days. Days are 24h calendar days — target
+  # options are absolute durations, not working time.
   def format_sla_duration(seconds)
     return '' if seconds.blank?
 
     seconds = seconds.to_i
-    days, rem = seconds.divmod(86_400)
-    hours, rem = rem.divmod(3600)
-    minutes = rem / 60
+    return "#{seconds}s" if seconds < 60
+    return "#{seconds / 60}m" if seconds < 3600
 
-    parts = []
-    parts << "#{days}d" if days.positive?
-    parts << "#{hours}h" if hours.positive?
-    parts << "#{minutes}m" if minutes.positive?
-    parts << "#{seconds}s" if parts.empty?
-    parts.join(' ')
+    if seconds < 86_400
+      hours, remainder = seconds.divmod(3600)
+      minutes = remainder / 60
+      return ["#{hours}h", ("#{minutes}m" if minutes.positive?)].compact.join(' ')
+    end
+
+    days, remainder = seconds.divmod(86_400)
+    if days < 7
+      hours = remainder / 3600
+      return ["#{days}d", ("#{hours}h" if hours.positive?)].compact.join(' ')
+    end
+
+    if days < 30
+      weeks, remaining_days = days.divmod(7)
+      return ["#{weeks}w", ("#{remaining_days}d" if remaining_days.positive?)].compact.join(' ')
+    end
+
+    "#{days}d"
   end
 
   # Label for a target type / milestone role from the plugin enum value.
@@ -92,7 +105,7 @@ module SlaComplianceHelper
   def sla_percentage(count, total)
     return 0 if total.to_i.zero?
 
-    ((count.to_f / total) * 100).round(1)
+    ((count.to_f / total) * 100).round
   end
 
   # Icon-tile background/text tint per card state - one step darker than the card's own pastel

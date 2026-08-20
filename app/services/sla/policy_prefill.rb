@@ -34,11 +34,9 @@ module Sla
         project_id: @project.id,
         enabled: @enabled.nil? ? @source.enabled : @enabled,
         coverage_hours: @source.coverage_hours,
-        business_calendar_id: @source.business_calendar_id,
         first_response_rule: @source.first_response_rule,
         at_risk_threshold: @source.at_risk_threshold,
         stale_threshold_days: @source.stale_threshold_days,
-        pause_enabled: @source.pause_enabled,
         # Restricted to trackers THIS project has, like the definitions below: a selection naming a
         # tracker the project cannot use would ask the form for a table it can never render. nil
         # (source never saved a selection) is passed through as nil, so the form falls back to
@@ -72,12 +70,8 @@ module Sla
 
     def build_definitions(policy)
       tracker_ids = @project.trackers.ids
-      unclassified_priority_id = Sla::PluginSettings.unclassified_priority_id
       @source.sla_definitions.each do |definition|
         next unless tracker_ids.include?(definition.tracker_id)
-        # The unclassified priority can hold no target and gets no form row, so a stale one on the
-        # source would select its tracker's table while showing nothing in it.
-        next if definition.priority_id == unclassified_priority_id
 
         policy.sla_definitions.build(definition.attributes.slice(*SlaDefinition::COPY_ATTRIBUTES))
       end

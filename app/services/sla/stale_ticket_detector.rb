@@ -3,7 +3,7 @@
 module Sla
   # Phase 2 · Step 2.8 — Stale-ticket detection.
   #
-  # For a ticket EXCLUDED from SLA (no_sla — unclassified priority or unset target), computes the
+  # For a ticket EXCLUDED from SLA (no_sla because its applicable target is unset), computes the
   # time since its last activity, where activity is any comment (public OR private — an internal
   # note still means someone touched the ticket) or status change. Falls back to the creation
   # time when there has been no activity at all.

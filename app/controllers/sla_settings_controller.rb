@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Home of the SLA Compliance admin module (Administration → SLA Compliance): the General and
-# Access control sections, alongside the two lookup CRUD screens that share its shell and sidebar.
+# Home of the SLA Compliance admin module (Administration → SLA Compliance): General and the
+# instance-wide Notifications fallback.
 #
 # WHY THIS EXISTS RATHER THAN A PLUGIN SETTINGS PARTIAL
 # -----------------------------------------------------
@@ -38,15 +38,16 @@ class SlaSettingsController < ApplicationController
   before_action :require_admin
 
   # Scalar settings, and the SLA access roles, which post as an array of role ids.
-  PERMITTED_SETTINGS = %i[sweep_interval_minutes unclassified_priority_id].freeze
+  PERMITTED_SETTINGS = [].freeze
   PERMITTED_LIST_SETTINGS = { sla_access_role_ids: [] }.freeze
 
   # Keys of settings this module no longer has a field for. #update merges over the stored hash
   # (see there for why), which on its own would preserve a removed setting's last value forever —
   # so a retired key is dropped here instead, on the first save after the upgrade. Nothing reads
-  # these two; they are the per-user SLA viewer / manager allow-lists that `sla_access_role_ids`
-  # replaced on 2026-08-06.
-  RETIRED_SETTINGS = %w[sla_viewer_user_ids sla_manager_user_ids].freeze
+  # The user allow-lists were replaced by `sla_access_role_ids` on 2026-08-06. The unclassified
+  # priority setting was removed when every active Redmine priority became directly configurable.
+  RETIRED_SETTINGS = %w[sla_viewer_user_ids sla_manager_user_ids unclassified_priority_id
+                        sweep_interval_minutes].freeze
 
   def show
     @settings = stored_settings

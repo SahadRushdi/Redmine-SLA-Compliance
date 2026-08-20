@@ -2,33 +2,14 @@
 
 # Shell for the plugin's ADMIN configuration module (Administration → SLA Compliance).
 #
-# Everything an admin configures for this plugin used to be three disconnected pages: the plugin
-# settings form, plus two lookup CRUD screens reachable only through inline text links on it, with
-# no way back except the browser's Back button. This helper makes them one module with one
-# persistent sidebar, mirroring the project-level SLA Policy tab (SlaPoliciesHelper::SECTIONS) so
-# the two configuration surfaces read as the same product.
-#
-# The one structural difference from the project tab: there, every section is a slice of ONE record
-# and all the panels can live in one page. Here two of the three sections are separate CRUD
-# resources with their own controllers, routes and forms, and Redmine hosts the settings form
-# inside its own <form> (app/views/settings/plugin.html.erb) — forms cannot nest. So:
-#
-#   general                      -> a panel on the plugin settings page, swapped client-side
-#   target_options / calendars   -> their own pages, rendering this same shell and sidebar
-#
-# Which means the sidebar is present and correct on every page of the module either way, which was
-# the actual complaint. `panel?` below is what tells the two apart.
+# General owns access configuration; Notifications owns the instance-wide channel fallbacks.
 module SlaAdminHelper
   # Order here IS the sidebar order. Keys are the single source of truth shared by the nav, the
   # panels, the section query param and sla_admin.js — do not rename one without the others.
   #
-  # :panel marks a section that lives as a hidden/shown panel on the plugin settings page rather
-  # than at a URL of its own. General leads because it is where an admin lands with nothing
-  # configured; the two lookups follow in the order the policy form consumes them.
   SECTIONS = [
-    { key: 'general',            panel: true },
-    { key: 'target_options',     panel: false },
-    { key: 'business_calendars', panel: false }
+    { key: 'general', panel: true },
+    { key: 'notifications', panel: true }
   ].freeze
 
   # The sections rendered as panels on the settings page, in sidebar order. Used by that page to
@@ -50,23 +31,13 @@ module SlaAdminHelper
     PANEL_KEYS.include?(requested) ? requested : PANEL_KEYS.first
   end
 
-  # Where a sidebar entry points. The panel sections share the settings page URL and differ only by
-  # ?section=, which is also the no-JS fallback: without JavaScript the link is a real navigation
-  # and the server opens that panel (see #sla_admin_current_panel).
+  # Every section remains a real URL for the no-JavaScript fallback.
   def sla_admin_section_path(key)
-    case key
-    when 'target_options'     then sla_target_options_path
-    when 'business_calendars' then sla_business_calendars_path
-    else sla_settings_path(section: key)
-    end
+    sla_settings_path(section: key)
   end
 
   def sla_admin_section_label(key)
     l(:"label_sla_admin_section_#{key}")
-  end
-
-  def sla_admin_section_description(key)
-    l(:"text_sla_admin_section_#{key}")
   end
 
   # Feather-style 24×24 outline icons, keyed by section — same convention (and same rendering
@@ -75,10 +46,7 @@ module SlaAdminHelper
   # html_safe correct here too.
   SECTION_ICON_PATHS = {
     'general' => SlaPoliciesHelper::SECTION_ICON_PATHS['general'],
-    'target_options' => SlaPoliciesHelper::SECTION_ICON_PATHS['targets'],
-    'business_calendars' => '<rect x="3" y="4" width="18" height="18" rx="2"/>' \
-                            '<line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>' \
-                            '<line x1="3" y1="10" x2="21" y2="10"/>'
+    'notifications' => SlaPoliciesHelper::SECTION_ICON_PATHS['notifications']
   }.freeze
 
   def sla_admin_section_icon(key)

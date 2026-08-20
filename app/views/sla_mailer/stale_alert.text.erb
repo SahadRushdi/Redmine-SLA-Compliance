@@ -1,0 +1,5 @@
+<%= l(:mail_heading_sla_stale_alert, issue: "##{@issue.id}") %>
+
+#<%= @issue.id %> — <%= @issue.subject %>
+<%= l(:mail_text_sla_stale_alert, project: @project.name, status: @issue.status.name) %>
+<%= @issue_url %>

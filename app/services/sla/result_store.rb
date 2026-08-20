@@ -37,13 +37,16 @@ module Sla
         primary_state:      result.primary_state,
         no_sla_reason:      result.no_sla_reason,
         at_risk:            result.at_risk || false,
+        at_risk_at:         result.at_risk_at,
         breach_at:          result.breach_at,
         response_seconds:   result.response_seconds,
         workaround_seconds: result.workaround_seconds,
         resolution_seconds: result.resolution_seconds,
         update_frequency_seconds: result.update_frequency_seconds,
         deviation_seconds:  result.deviation_seconds,
+        deviation_at:       result.deviation_at,
         cycle_started_at:   result.cycle_started_at,
+        first_response_at:  result.first_response_at,
         resolved_at:        result.resolved_at,
         calculated_at:      now
       )

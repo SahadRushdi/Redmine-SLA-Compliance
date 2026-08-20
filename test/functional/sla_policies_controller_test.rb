@@ -22,15 +22,11 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert @status_ids.size >= 2, 'fixtures must provide at least two project statuses'
     assert @trackers.size >= 2, 'fixtures must provide at least two project trackers'
 
-    # Admin lookup the target dropdowns post from.
-    @opt_1h = SlaTargetOption.create!(target_type: 'response', code: '1h', label: '1 hour',
-                                      seconds: 3600)
-    @opt_4h = SlaTargetOption.create!(target_type: 'response', code: '4h', label: '4 hours',
-                                      seconds: 14_400)
-    @opt_2h = SlaTargetOption.create!(target_type: 'workaround', code: '2h', label: '2 hours',
-                                      seconds: 7200)
-    @opt_1d = SlaTargetOption.create!(target_type: 'resolution', code: '1d', label: '1 day',
-                                      seconds: 86_400)
+    duration = Struct.new(:seconds)
+    @opt_1h = duration.new(3600)
+    @opt_4h = duration.new(14_400)
+    @opt_2h = duration.new(7200)
+    @opt_1d = duration.new(86_400)
   end
 
   # The tab saves one section at a time (SlaPoliciesHelper::SECTIONS): each section's form posts
@@ -39,8 +35,7 @@ class SlaPoliciesControllerTest < ActionController::TestCase
   # scenario spanning two sections posts twice, exactly as the UI does.
   def general_params(overrides = {})
     { project_id: @project.id, tab: 'sla_policy', section: 'general',
-      sla_policy: { enabled: '1', coverage_hours: '24x7',
-                    business_calendar_id: '' } }.deep_merge(overrides)
+      sla_policy: { enabled: '1', coverage_hours: '24x7' } }.deep_merge(overrides)
   end
 
   def measurement_params(overrides = {})
@@ -82,6 +77,64 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     @project.disable_module!(:sla_compliance)
     put :update, params: general_params
     assert_response :forbidden
+  end
+
+  test "tracking autosave persists the plain General toggle and queues recalculation" do
+    Sla::RecalculationDispatcher.expects(:call).with(@project)
+
+    patch :update_tracking, params: { project_id: @project.id, enabled: '1' }, xhr: true
+
+    assert_response :success
+    assert policy.enabled?
+    assert_not policy.inherits_config?
+  end
+
+  test "tracking autosave persists an inherited enablement choice without forking configuration" do
+    child = Project.find(5)
+    grant_child_access(child)
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    Sla::RecalculationDispatcher.expects(:call).with(child)
+
+    patch :update_tracking, params: { project_id: child.id, enablement: 'disabled' }, xhr: true
+
+    assert_response :success
+    saved = SlaPolicy.find_by(project_id: child.id)
+    assert_not saved.enabled?
+    assert saved.inherits_config?
+  end
+
+  test "measurement autosave persists one scalar without changing sibling settings" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true, first_response_rule: 'either',
+                      at_risk_threshold: 80, stale_threshold_days: 2)
+
+    patch :update_measurement,
+          params: { project_id: @project.id, attribute: 'at_risk_threshold', value: '70' }, xhr: true
+
+    assert_response :success
+    assert_equal 70, policy.reload.at_risk_threshold
+    assert_equal 2, policy.stale_threshold_days
+    assert_equal 'either', policy.first_response_rule
+  end
+
+  test "measurement autosave replaces only the selected status role" do
+    saved = SlaPolicy.create!(project_id: @project.id, enabled: true)
+    saved.sla_status_mappings.create!(role: 'resolved', status_id: @status_ids.last)
+
+    patch :update_measurement,
+          params: { project_id: @project.id, role: 'created',
+                    status_ids: @status_ids.first(2).map(&:to_s) }, xhr: true
+
+    assert_response :success
+    assert_equal @status_ids.first(2).sort, policy.status_ids_for(:created).sort
+    assert_equal [@status_ids.last], policy.status_ids_for(:resolved)
+  end
+
+  test "measurement autosave rejects unknown fields" do
+    patch :update_measurement,
+          params: { project_id: @project.id, attribute: 'enabled', value: '1' }, xhr: true
+
+    assert_response :unprocessable_entity
+    assert_nil policy
   end
 
   # --- Step 5.1: the SLA access roles ----------------------------------------------------------
@@ -552,25 +605,30 @@ class SlaPoliciesControllerTest < ActionController::TestCase
                     'the picker itself must be saved, or a targetless tracker vanishes on reload'
   end
 
-  # The half of the fix that keeps the settings page honest: a tracker with stored targets is being
-  # applied to real tickets, so it must be displayed even when it is missing from the saved
-  # selection — otherwise an SLA stays in force with nothing on screen showing it.
-  test "the displayed trackers are the saved selection plus anything that has targets" do
+  test "the saved tracker selection remains authoritative when removed trackers have targets" do
     saved_policy = SlaPolicy.create!(project_id: @project.id, enabled: true)
     with_targets = @trackers.second
     saved_policy.sla_definitions.create!(tracker_id: with_targets.id,
                                          priority_id: @priorities.first.id,
                                          response_seconds: 3600)
-    # A selection that names only the OTHER tracker — as an older save, or a deselect, would leave.
-    saved_policy.update!(selected_tracker_ids: [@trackers.first.id])
+    saved_policy.update!(selected_tracker_ids: @trackers.map(&:id))
+
+    # Submit exactly what the browser posts after removing the second tracker and pressing Save.
+    put :update, params: targets_params(
+      definitions: { tracker_ids: [@trackers.first.id.to_s] }
+    )
+    assert_redirected_to settings_project_path(@project, tab: 'sla_policy', section: 'targets')
+    saved_policy.reload
+    assert_equal [@trackers.first.id], saved_policy.selected_tracker_ids_or_nil
 
     # Called with no request params: a `tracker_id` in the request legitimately overrides the saved
     # set (that is how the AJAX per-table re-render asks for one tracker), which is a different
     # branch from the one under test here.
     displayed = @controller.view_context.send(:sla_selected_trackers, @project, saved_policy)
 
-    assert_includes displayed, with_targets, 'a tracker with stored targets is always displayed'
-    assert_includes displayed, @trackers.first, 'and so is one the saved picker named'
+    assert_equal [@trackers.first], displayed
+    assert saved_policy.sla_definitions.where(tracker_id: with_targets.id).exists?,
+           'the hidden target values remain available if the tracker is re-added'
   end
 
   test "a policy saved before the column existed still shows its definition-derived trackers" do
@@ -700,8 +758,9 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_equal 28_800, definition.resolution_seconds
   end
 
-  test "a posted row for the admin-designated unclassified priority is rejected" do
+  test "a priority named None can be assigned SLA targets" do
     none = IssuePriority.create!(name: 'None', type: 'IssuePriority', position: 99)
+    # Simulate a stale setting saved by an older plugin version.
     Setting.plugin_redmine_sla_compliance = { 'unclassified_priority_id' => none.id.to_s }
 
     put :update, params: targets_params(
@@ -709,7 +768,8 @@ class SlaPoliciesControllerTest < ActionController::TestCase
                      rows: { @trackers.first.id.to_s => { none.id.to_s => { response: @opt_1h.seconds.to_s } } } }
     )
 
-    assert_equal 0, policy.sla_definitions.where(priority_id: none.id).count
+    definition = policy.sla_definitions.find_by!(priority_id: none.id)
+    assert_equal @opt_1h.seconds, definition.response_seconds
   ensure
     Setting.plugin_redmine_sla_compliance = {}
   end
@@ -788,6 +848,20 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_equal 2, policy.cloned_from_project_id
   end
 
+  test "AJAX Load persists the selected policy immediately without a second save" do
+    source = build_full_clone_source
+
+    put :update, params: targets_params(clone_source_id: source.project_id.to_s), xhr: true
+
+    assert_response :success
+    saved = policy
+    assert_equal source.project_id, saved.cloned_from_project_id
+    assert_equal source.first_response_rule, saved.first_response_rule
+    assert_equal source.at_risk_threshold, saved.at_risk_threshold
+    assert_equal source.sla_definitions.count, saved.sla_definitions.count
+    assert_nil response.parsed_body['recalculation']
+  end
+
   test "an ordinary later save keeps the recorded clone source" do
     build_clone_source
     put :update, params: targets_params(
@@ -834,32 +908,15 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_nil @controller.view_context.send(:sla_cloned_from_project, policy, sources)
   end
 
-  test "cloning skips a source definition saved for the unclassified priority" do
-    source = build_clone_source
-    none = IssuePriority.create!(name: 'None', type: 'IssuePriority', position: 99)
-    source.sla_definitions.create!(tracker_id: @trackers.first.id, priority_id: none.id,
-                                   response_seconds: 3600)
-    Setting.plugin_redmine_sla_compliance = { 'unclassified_priority_id' => none.id.to_s }
-
-    put :update, params: targets_params(
-      { clone_source_id: '2',
-        definitions: { tracker_ids: [@trackers.second.id.to_s], rows: { @trackers.second.id.to_s => {} } } }
-    )
-
-    assert_equal 0, policy.sla_definitions.where(priority_id: none.id).count
-  ensure
-    Setting.plugin_redmine_sla_compliance = {}
-  end
-
   # A clone means the WHOLE policy, not the section hosting the button. This used to hold only for
   # a project with no policy of its own (which took the inherited-fork path); a project that
   # already had one copied its targets and silently kept everything else.
   def build_full_clone_source
     source = build_clone_source
     source.update!(coverage_hours: '24x7', first_response_rule: 'first_comment',
-                   at_risk_threshold: 65, stale_threshold_days: 9, pause_enabled: false)
+                   at_risk_threshold: 65, stale_threshold_days: 9)
     { created: @status_ids.first, work_started: @status_ids.second,
-      resolved: @status_ids.first, pause: @status_ids.second }.each do |role, status_id|
+      resolved: @status_ids.first }.each do |role, status_id|
       source.sla_status_mappings.create!(role: role.to_s, status_id: status_id)
     end
     source
@@ -874,7 +931,6 @@ class SlaPoliciesControllerTest < ActionController::TestCase
                       stale_threshold_days: '3' },
         status_mappings: { created: [@status_ids.second.to_s] } }
     )
-    put :update, params: exclusions_params(sla_policy: { pause_enabled: '1' })
     assert_equal 95, policy.at_risk_threshold, 'precondition: the target owns a different policy'
 
     # The posted section carries what the prefilled form showed for the tracker on screen; the
@@ -896,9 +952,6 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_equal [@status_ids.second], saved.status_ids_for(:work_started)
     assert_equal [@status_ids.first], saved.status_ids_for(:created),
                  "the target's own created-status must be replaced by the source's"
-    # Exclusions
-    refute saved.pause_enabled?
-    assert_equal [@status_ids.second], saved.status_ids_for(:pause)
     # SLA Targets — both the tracker that was on screen and the one that was only in the source.
     assert_equal source.sla_definitions.count, saved.sla_definitions.count
     assert_equal 14_400, saved.sla_definitions
@@ -909,15 +962,16 @@ class SlaPoliciesControllerTest < ActionController::TestCase
   test "cloning copies the source project's notification settings" do
     source = build_full_clone_source
     @role.add_permission!(:manage_sla_notifications)
-    SlaNotificationSetting.create!(project_id: source.project_id,
+    source_setting = SlaNotificationSetting.create!(project_id: source.project_id,
                                    google_chat_webhook: 'https://chat.example.com/hook',
                                    at_risk_email_enabled: true,
-                                   at_risk_email_recipients: ['ops@example.com'],
                                    at_risk_email_frequency: 'digest',
                                    at_risk_digest_interval_minutes: 30,
                                    stale_email_enabled: true,
                                    stale_email_frequency: 'daily', stale_threshold_days: 4,
                                    last_stale_digest_at: Time.zone.now)
+    recipient = Project.find(source.project_id).users.joins(:email_address).first
+    source_setting.replace_recipient_user_ids!(:at_risk, [recipient.id])
 
     put :update, params: targets_params(clone_source_id: '2')
 
@@ -925,7 +979,7 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_not_nil copied, 'the clone must carry the notification setup across'
     assert_equal 'https://chat.example.com/hook', copied.google_chat_webhook
     assert copied.at_risk_email_enabled?
-    assert_equal ['ops@example.com'], copied.at_risk_email_recipients
+    assert_equal [recipient.id], copied.recipient_user_ids(:at_risk)
     assert_equal 'digest', copied.at_risk_email_frequency
     assert_equal 30, copied.at_risk_digest_interval_minutes
     assert copied.stale_email_enabled?
@@ -1013,9 +1067,44 @@ class SlaPoliciesControllerTest < ActionController::TestCase
   # --- recalc tick (4.8) ----------------------------------------------------------------------
 
   test "recalculate tick enqueues the historical recalculation job" do
-    assert_enqueued_with(job: SlaPolicyRecalculationJob, args: [@project.id]) do
+    SlaRecalculationState.delete_all
+    assert_enqueued_jobs 1, only: SlaPolicyRecalculationJob do
       put :update, params: targets_params(recalculate: '1')
     end
+    job = enqueued_jobs.last
+    state = SlaRecalculationState.find_by!(project_id: @project.id)
+    assert_equal [@project.id, state.run_token], job[:args]
+    assert_nil flash[:sla_recalculation_token], 'the opaque run token must never render as a flash message'
+  end
+
+  test "AJAX recalculate save returns the run token without redirecting or flashing it" do
+    put :update, params: targets_params(recalculate: '1'), xhr: true
+
+    assert_response :success
+    payload = response.parsed_body
+    state = SlaRecalculationState.find_by!(project_id: @project.id)
+    assert_equal state.run_token, payload.dig('recalculation', 'run_token')
+    assert_equal 'queued', payload.dig('recalculation', 'status')
+    assert_nil flash[:sla_recalculation_token]
+  end
+
+  test "standalone recalculate action enqueues and returns observable progress" do
+    assert_enqueued_jobs 1, only: SlaPolicyRecalculationJob do
+      post :recalculate, params: { project_id: @project.id }, xhr: true
+    end
+
+    assert_response :success
+    state = SlaRecalculationState.find_by!(project_id: @project.id)
+    assert_equal state.run_token, response.parsed_body.dig('recalculation', 'run_token')
+    assert_equal 'queued', response.parsed_body.dig('recalculation', 'status')
+  end
+
+  test "standalone recalculate action is forbidden without policy edit permission" do
+    @role.remove_permission!(:edit_sla_policy)
+
+    post :recalculate, params: { project_id: @project.id }, xhr: true
+
+    assert_response :forbidden
   end
 
   test "save without the tick enqueues nothing" do
@@ -1044,6 +1133,39 @@ class SlaPoliciesControllerTest < ActionController::TestCase
       )
     end
     assert flash[:error].present?
+  end
+
+  test "recalculation status is project-authorized and returns progress JSON" do
+    state, = SlaRecalculationState.request!(@project)
+    state.start!(state.run_token)
+    state.record_progress!(state.run_token, processed: 2, total: 4)
+
+    get :recalculation_status, params: { project_id: @project.id, run_token: state.run_token }
+
+    assert_response :success
+    payload = JSON.parse(response.body)
+    assert_equal 'running', payload['status']
+    assert_equal 2, payload['processed']
+    assert_equal 4, payload['total']
+    assert_equal 50, payload['progress']
+  end
+
+  test "recalculation status is forbidden without policy edit permission" do
+    @role.remove_permission!(:edit_sla_policy)
+
+    get :recalculation_status, params: { project_id: @project.id }
+
+    assert_response :forbidden
+  end
+
+  test "recalculation status does not expose a superseded run token" do
+    state, = SlaRecalculationState.request!(@project)
+
+    get :recalculation_status, params: { project_id: @project.id, run_token: 'old-token' }
+
+    assert_response :success
+    assert_equal 'idle', JSON.parse(response.body)['status']
+    assert_not_equal 'old-token', state.run_token
   end
 
   # --- dynamic re-renders (4.4 switch / 4.7 prefill) ------------------------------------------
@@ -1124,11 +1246,12 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     saved_policy = SlaPolicy.create!(project_id: @project.id, enabled: true)
     result = SlaResult.create!(issue_id: 999_001, project_id: @project.id, primary_state: 'met')
 
-    assert_enqueued_with(job: SlaPolicyRecalculationJob, args: [@project.id]) do
+    assert_enqueued_jobs 1, only: SlaPolicyRecalculationJob do
       delete :destroy, params: { project_id: @project.id }
     end
 
     assert SlaResult.exists?(result.id), 'sla_results must never be deleted by a revert'
+    assert_equal @project.id, enqueued_jobs.last[:args].first
   end
 
   test "destroy is a no-op (no error) when the project has no own policy to revert" do
@@ -1204,9 +1327,10 @@ class SlaPoliciesControllerTest < ActionController::TestCase
   test "enablement enqueues a recalculation, since cached results change meaning" do
     child, = inheriting_child
 
-    assert_enqueued_with(job: SlaPolicyRecalculationJob, args: [child.id]) do
+    assert_enqueued_jobs 1, only: SlaPolicyRecalculationJob do
       put :update, params: enablement_params(child, 'disabled')
     end
+    assert_equal child.id, enqueued_jobs.last[:args].first
   end
 
   test "enablement writes nothing but the on/off decision, whatever else is posted" do

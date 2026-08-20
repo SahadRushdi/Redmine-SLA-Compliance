@@ -63,6 +63,20 @@
   color: #111827;
 }
 
+/* Render the clone-project list as a viewport overlay. This keeps the full list visible without
+ * extending the General tab or adding a second scrollbar inside the picker. Other dropdowns keep
+ * the bounded height because they can appear inside dense tables, cards, and modals. */
+.ts-wrapper.sla-clone-project-select .ts-dropdown {
+  position: fixed;
+  margin-top: 0;
+  z-index: 60;
+}
+
+.ts-wrapper.sla-clone-project-select .ts-dropdown-content {
+  max-height: none;
+  overflow: visible;
+}
+
 /*
  * Drop UP instead of down. sla_policy_form.js adds this class while a dropdown is open whose list
  * would not fit below the control in the viewport — without it, a dropdown on the last row of the
@@ -91,6 +105,13 @@
 .ts-wrapper.single .ts-control > input {
   min-width: 0;
   flex: 1 1 0%;
+}
+
+/* Match the duration value field beside it in the inline Priority Targets editor. */
+.sla-target-cell .ts-wrapper.single .ts-control {
+  min-height: 2.5rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
 }
 
 /*

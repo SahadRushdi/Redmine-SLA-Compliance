@@ -1,14 +1,20 @@
 # frozen_string_literal: true
 
-# Manual / cron entry point for the at-risk & stale sweep.
+# Recurring maintenance entry point for digest batching and the stale evaluator.
 # Usage:
 #   bundle exec rake redmine_sla_compliance:sweep RAILS_ENV=production
 #
-# Runs the same Sla::Sweep the in-process scheduler runs, off the request path. Safe to run
-# repeatedly (idempotent: it never re-queues an at-risk ticket). Provided so operators can trigger
-# a sweep on demand, verify behaviour, or drive it from OS cron instead of the in-process scheduler.
+# Safe to run repeatedly. Schedule at least every 15 minutes; normal time transitions also use
+# one-off ActiveJob executions projected from each issue's cached deadlines.
 namespace :redmine_sla_compliance do
-  desc 'Re-evaluate open SLA-tracked tickets and queue at-risk notifications (idempotent)'
+  desc 'Rebuild live SLA projections, schedule missing transitions, and drain legacy digest claims'
+  task reconcile_live: :environment do
+    summary = Sla::LiveReconciler.new.run
+    puts "[SLA] live reconciliation complete: #{summary.recalculated} recalculated, " \
+         "#{summary.legacy_queued} legacy alerts queued."
+  end
+
+  desc 'Re-evaluate open tickets and queue due at-risk/stale email digests (idempotent)'
   task sweep: :environment do
     summary = Sla::Sweep.new.run
     puts "[SLA] sweep complete: #{summary.swept} swept, " \

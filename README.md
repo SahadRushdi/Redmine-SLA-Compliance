@@ -2,11 +2,13 @@
 
 Per-project SLA policies and automatic SLA-compliance measurement for incident tickets in
 Redmine, presented as a filterable dashboard, with Google Chat + email notifications and a
-time-driven at-risk/stale sweep.
+time-aware dashboard state.
 
-The plugin is **event-driven** (recomputes when a ticket changes) **and time-driven** (a
-recurring sweep re-evaluates open tickets so at-risk/stale states stay current). SLA timelines
-are reconstructed from Redmine's journal history, never from the issue's current state.
+The plugin recomputes cached SLA projections whenever a ticket changes and schedules targeted
+background transitions for projected `at_risk_at`, `breach_at`, and `stale_at` timestamps. At-risk
+and stale email alerts are immediate and do not depend on a cron sweep; the dashboard evaluates
+the indexed projections against the current time on every request. SLA timelines are reconstructed
+from Redmine's journal history, never from the issue's current state.
 
 See `SLA_Compliance_Plugin_Implementation_Plan.md` for the full spec and phased plan.
 
@@ -18,14 +20,19 @@ See `SLA_Compliance_Plugin_Implementation_Plan.md` for the full spec and phased 
 | Ruby | 3.1.x |
 | Rails | 6.1.x |
 
-- **Background jobs:** ActiveJob using Redmine's configured adapter (default `:async`).
-- **Recurring scheduler:** `rufus-scheduler` (in-process), for the at-risk/stale sweep (Phase 3.3).
+- **Background jobs:** ActiveJob with a durable production adapter and running worker. The default
+  in-process `:async` adapter is suitable only for development because scheduled jobs are lost on
+  restart.
+- **Live calculations:** event-driven cache writes plus targeted background state transitions.
+- **Post-upgrade/recovery:** run `redmine_sla_compliance:reconcile_live` once after deployment and
+  after material queue downtime. The legacy `sweep` task remains an explicit maintenance tool,
+  not a scheduler requirement.
 
 ## Install
 
 ```bash
 # 1. Place this plugin under redmine/plugins/redmine_sla_compliance
-# 2. Install gems (rufus-scheduler / sucker_punch are already vendored on this instance)
+# 2. Install gems
 cd redmine && bundle install
 
 # 3. Build the scoped Tailwind + Flowbite stylesheet (see below)
@@ -54,7 +61,5 @@ npm run watch     # rebuild on change during development
 
 ## Status
 
-Phase 0 (setup & scoped UI foundation) is in place: loadable plugin, project module + the
-`view_sla_dashboard` / `edit_sla_policy` / `manage_sla_notifications` permissions, and the scoped
-Tailwind/Flowbite build with a Flowbite test page. Data model, engine, dashboard, and
-notifications follow in later phases.
+Phases 0–8 are implemented, including cached SLA evaluation, live transitions, dashboards,
+Google Chat notifications, at-risk email alerts/digests, and stale-ticket digests.

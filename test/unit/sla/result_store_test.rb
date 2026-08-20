@@ -24,8 +24,7 @@ class Sla::ResultStoreTest < ActiveSupport::TestCase
     @base    = Time.zone.local(2026, 6, 1, 9, 0, 0)
 
     @policy = SlaPolicy.create!(project_id: @project.id, enabled: true, coverage_hours: '24x7',
-                                first_response_rule: 'either', at_risk_threshold: 80,
-                                pause_enabled: true)
+                                first_response_rule: 'either', at_risk_threshold: 80)
     { created: NEW, work_started: WORK, resolved: RESOLVED }.each do |role, status_id|
       SlaStatusMapping.create!(sla_policy: @policy, role: role.to_s, status_id: status_id)
     end
@@ -75,7 +74,9 @@ class Sla::ResultStoreTest < ActiveSupport::TestCase
     assert_equal 'met', row.primary_state
     refute row.at_risk
     assert_equal 1800, row.response_seconds
+    assert_nil row.first_response_at, 'elapsed is cached, but the first response is not complete'
     assert_equal now + 1800, row.breach_at   # earliest pending breach = response
+    assert_equal now + 1080, row.at_risk_at
     assert_nil row.deviation_seconds
     assert_nil row.resolved_at
     assert_equal now.to_i, row.calculated_at.to_i
@@ -83,6 +84,18 @@ class Sla::ResultStoreTest < ActiveSupport::TestCase
   end
 
   # --- editing updates the SAME row -----------------------------------------------------
+
+  test "persists the first response completion timestamp separately from elapsed seconds" do
+    issue = make_issue
+    journal = Journal.new(journalized: issue, user: User.current, created_on: at(0.5), notes: 'Response')
+    journal.save!
+
+    recalc(issue, now: at(1))
+    row = SlaResult.find_by!(issue_id: issue.id)
+
+    assert_equal 1800, row.response_seconds
+    assert_equal at(0.5).to_i, row.first_response_at.to_i
+  end
 
   test "editing an untracked ticket to a tracked priority updates its cached result in place" do
     issue = make_issue(priority_id: UNTRACKED_PRIORITY)
@@ -112,6 +125,7 @@ class Sla::ResultStoreTest < ActiveSupport::TestCase
 
     assert_equal 'breached', row.primary_state
     assert_equal 3600, row.deviation_seconds
+    assert_equal at(1).to_i, row.deviation_at.to_i
     refute row.at_risk
     assert_nil row.breach_at
   end
@@ -128,6 +142,7 @@ class Sla::ResultStoreTest < ActiveSupport::TestCase
     assert_equal 'met', row.primary_state
     assert row.at_risk
     assert_equal now + 600, row.breach_at
+    assert_equal now.to_i, row.at_risk_at.to_i
   end
 
   # --- resolved within target -----------------------------------------------------------

@@ -11,7 +11,7 @@ class SlaPolicy < ActiveRecord::Base
   self.table_name = 'sla_policies'
 
   # Plugin-internal enums (modes/rules) — NOT Redmine domain data.
-  COVERAGE_HOURS      = %w[24x7 business_hours].freeze
+  COVERAGE_HOURS      = %w[24x7].freeze
   FIRST_RESPONSE_RULES = %w[first_comment first_status_change either].freeze
   # Accepted range for the Stale card's inactivity threshold. One definition, shared by the
   # validation below and the number input's min/max in the Measurement Rules form — a form that
@@ -19,8 +19,6 @@ class SlaPolicy < ActiveRecord::Base
   STALE_THRESHOLD_DAYS = (1..365).freeze
 
   belongs_to :project
-  belongs_to :business_calendar, class_name: 'SlaBusinessCalendar', optional: true
-
   has_many :sla_definitions,     dependent: :destroy
   has_many :sla_status_mappings, dependent: :destroy
 
@@ -37,16 +35,10 @@ class SlaPolicy < ActiveRecord::Base
                             greater_than_or_equal_to: STALE_THRESHOLD_DAYS.min,
                             less_than_or_equal_to: STALE_THRESHOLD_DAYS.max },
             allow_nil: true
-  # Business Hours coverage requires a calendar to compute against.
-  validates :business_calendar_id, presence: true, if: :business_hours?
 
   scope :enabled, -> { where(enabled: true) }
 
-  def business_hours?
-    coverage_hours == 'business_hours'
-  end
-
-  # Status IDs configured for a milestone role (created / work_started / resolved / pause).
+  # Status IDs configured for a milestone role (created / work_started / resolved).
   def status_ids_for(role)
     sla_status_mappings.where(role: role.to_s).pluck(:status_id)
   end
@@ -64,8 +56,8 @@ class SlaPolicy < ActiveRecord::Base
 
   # True for a LIGHTWEIGHT row: one that carries only the enabled DECISION for its project and
   # inherits every configuration field (coverage, calendar, first-response rule, at-risk threshold,
-  # pause, plus definitions and status mappings) from the nearest self-defining ancestor. Written
-  # by the tri-state control on the settings tab; see migration 005.
+  # definitions and status mappings) from the nearest self-defining ancestor. Written
+  # by the inherited enablement toggle on the settings tab; see migration 005.
   def inherits_config?
     !!inherits_config
   end
@@ -73,7 +65,7 @@ class SlaPolicy < ActiveRecord::Base
   # --- Step 1.2: effective-policy resolution -------------------------------------------------
   # Returns the effective SlaPolicy for +project+, walking up the project tree. A policy row
   # carries two separable things — an enabled DECISION and a CONFIGURATION — and inheritance
-  # resolves them independently (Global Rule 5's tri-state):
+  # resolves them independently (Global Rule 5's three semantic states):
   #
   #   * the nearest project (self, then ancestors) with a row makes the enabled decision;
   #   * disabled  -> nil (an explicit "SLA off" that stops inheritance, as it always has);
@@ -142,7 +134,7 @@ class SlaPolicy < ActiveRecord::Base
   end
 
   # This project's OWN enablement decision, ignoring the tree: :inherit (no row of its own, so the
-  # ancestor's decision applies), :enabled or :disabled. Drives the tri-state control's selection.
+  # ancestor's decision applies), :enabled or :disabled. Drives the inherited toggle's state.
   def self.enablement_for(project)
     policy = find_by(project_id: project&.id)
     return :inherit if policy.nil?
