@@ -4,39 +4,29 @@
 <%# at_risk is a subset of met, shown alongside it and never added into the total. %>
 <%# Card values carry stable ids (also useful for functional tests, since assigns() isn't %>
 <%# available in this Rails version without rails-controller-testing). %>
-<%# Every card is the shared _summary_card partial — icon tile, short label, one big number, one %>
-<%# short caption. Nothing else: no boxed explanatory banner under the number, and no (i) tooltip %>
-<%# either. Each caption is the whole supporting text the card gets. %>
+<%# Every Open Tickets card uses only the shared card title/icon and its headline value. Supporting %>
+<%# captions are intentionally omitted to keep this four-card row visually minimal. %>
 <div class="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 lg:tw-grid-cols-4 tw-gap-4 tw-mb-6">
   <%= render 'sla_dashboard/summary_card',
         state: :total, label: sla_card_label(:total), value: @counts.total,
-        value_id: 'sla-card-total-value',
-        caption: l(:label_sla_card_total_caption) %>
+        value_id: 'sla-card-total-value' %>
 
   <%# Stale replaces the SLA Met card on this current-state row (SLA Met now lives on the SLA Trend %>
   <%# tab). Count comes from Sla::StaleSummary: open tickets with no updates past the inactivity %>
   <%# threshold an admin configured. %>
-  <%# %>
   <%# With no threshold configured the card shows an em dash, NOT 0 — "nobody has defined stale %>
-  <%# here" and "nothing is stale" are different statements, and printing 0 would assert the second %>
-  <%# while meaning the first. The caption is the only place that distinction is stated now that the %>
-  <%# cards carry no tooltip, so the unset variant keeps the pointer to where it gets fixed. %>
+  <%# here" and "nothing is stale" are different states. %>
   <%= render 'sla_dashboard/summary_card',
         state: :stale, label: sla_card_label(:stale),
         value: @stale.configured? ? @stale.count : '—',
-        value_id: 'sla-card-stale-value',
-        caption: @stale.configured? ? l(:label_sla_card_stale_caption) : l(:label_sla_card_stale_unset_caption),
-        caption_id: 'sla-card-stale-hint' %>
+        value_id: 'sla-card-stale-value' %>
 
-  <%# Breached is a direct open-ticket count; the caption retains its population context. %>
   <%= render 'sla_dashboard/summary_card',
         state: :breached, label: sla_card_label(:breached),
         value: @counts.breached,
-        value_id: 'sla-card-breached-value',
-        caption: l(:text_sla_card_breached_caption, count: @counts.breached, total: @counts.total) %>
+        value_id: 'sla-card-breached-value' %>
 
   <%= render 'sla_dashboard/summary_card',
         state: :at_risk, label: sla_card_label(:at_risk), value: @counts.at_risk,
-        value_id: 'sla-card-at-risk-value',
-        caption: l(:label_sla_card_at_risk_caption) %>
+        value_id: 'sla-card-at-risk-value' %>
 </div>

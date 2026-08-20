@@ -1,15 +1,12 @@
 <%#
   Shared summary-card body — ONE definition of the card anatomy, rendered by both the Open Tickets
-  tab's five-card row (_summary_cards.html.erb) and the SLA Trend tab's SLA Met card
+  tab's four-card row (_summary_cards.html.erb) and the SLA Trend tab's SLA Met card
   (_sla_met_card.html.erb), so the two tabs cannot drift into two different card designs.
 
   Anatomy, top to bottom:
     row 1 — icon in a tinted rounded tile, then the label.
     row 2 — the headline number, the largest type on the page after the h1.
-    row 3 — one short muted caption.
-
-  No (i) tooltips. Every card says everything it has to say in the always-visible caption; if a
-  caption needs a paragraph behind an icon to be understood, the caption is wrong.
+    row 3 — an optional short muted caption (used by SLA Trend, omitted by Open Tickets).
 
   Locals:
     state        palette key (:total, :stale, :breached, :at_risk, :no_sla, :met)

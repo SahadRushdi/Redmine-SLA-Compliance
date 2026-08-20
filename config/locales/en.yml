@@ -50,16 +50,6 @@ en:
   label_sla_card_stale: "Stale"
   label_sla_card_not_configured: "Not Configured"
   label_sla_card_not_tracked: "Not Tracked"
-  # Each summary card carries exactly ONE short caption under its number — there are no card
-  # tooltips, so a caption that doesn't fit on a line or two of a five-across card is too long to
-  # be on the card at all. The unset-Stale caption keeps its pointer to where the threshold is
-  # configured, because that card's whole job in that state is to say "go set this".
-  label_sla_card_total_caption: "Met + Breached + No SLA"
-  label_sla_card_stale_caption: "No activity past threshold"
-  label_sla_card_stale_unset_caption: "No threshold set — see Project Settings"
-  label_sla_card_at_risk_caption: "Nearing SLA deadline"
-  text_sla_card_breached_caption: "%{count} of %{total} open tickets"
-
   # --- Dashboard tabs + SLA Trend (Phase 6) -------------------------------------------------
   label_sla_tab_open_tickets: "Open Tickets"
   label_sla_tab_sla_trend: "SLA Trend"
@@ -68,8 +58,8 @@ en:
   # beside the date-range buttons.
   text_sla_trend_window_hint: "SLA Met uses every ticket shown in Detail for this window. The chart counts configured Created and Resolved milestones independently within it."
   text_sla_met_in_target:
-    one: "%{met} of %{total} ticket SLA Met"
-    other: "%{met} of %{total} tickets SLA Met"
+    one: "%{met} of %{total} is SLA Met"
+    other: "%{met} of %{total} are SLA Met"
 
   # --- Dashboard charts (Phase 6, Step 6.3) -------------------------------------------------
   label_sla_chart_compliance_split: "Compliance Split"
