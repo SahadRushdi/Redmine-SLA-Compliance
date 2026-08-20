@@ -37,4 +37,12 @@ class SlaComplianceHelperTest < ActiveSupport::TestCase
     assert_equal '', format_sla_duration('')
     assert_equal '0s', format_sla_duration(0)
   end
+
+  test "rounds SLA percentages to whole numbers" do
+    assert_equal 100, sla_percentage(4, 4)
+    assert_equal 80, sla_percentage(4, 5)
+    assert_equal 67, sla_percentage(2, 3)
+    assert_equal 33, sla_percentage(1, 3)
+    assert_equal 0, sla_percentage(0, 0)
+  end
 end

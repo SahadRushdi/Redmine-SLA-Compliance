@@ -105,7 +105,7 @@ module SlaComplianceHelper
   def sla_percentage(count, total)
     return 0 if total.to_i.zero?
 
-    ((count.to_f / total) * 100).round(1)
+    ((count.to_f / total) * 100).round
   end
 
   # Icon-tile background/text tint per card state - one step darker than the card's own pastel

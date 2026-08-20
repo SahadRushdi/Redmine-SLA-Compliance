@@ -1,6 +1,6 @@
-<%# SLA Met card for the selected Trend period. The cohort contains only evaluated tickets whose %>
-<%# policy-derived resolved_at falls inside the selected window. Open tickets cannot be final met %>
-<%# outcomes; No-SLA is excluded by Sla::DashboardScope. %>
+<%# SLA Met card for the selected Trend period. It reads the same evaluated cohort as Trend Detail: %>
+<%# unresolved cycles started in the window plus outcomes resolved in it. No-SLA is excluded by %>
+<%# Sla::DashboardScope, and ResultSummary supplies each row's current effective state. %>
 <%# %>
 <%# Same _summary_card anatomy as the Open Tickets tab's row (icon tile, label, big number, muted %>
 <%# caption) so the two tabs share one card design and one type scale. The surface is overridden to %>
@@ -11,11 +11,11 @@
       surface: 'tw-bg-white tw-border-gray-200',
       centered: true,
       value: safe_join([
-        content_tag(:span, sla_percentage(@trend_counts.met, @trend_counts.total), id: 'sla-met-window-percentage'),
+        content_tag(:span, sla_percentage(@trend_detail_counts.met, @trend_detail_counts.total), id: 'sla-met-window-percentage'),
         '%',
-        content_tag(:span, safe_join(['(', content_tag(:span, @trend_counts.met, id: 'sla-met-window-value'), ')']),
+        content_tag(:span, safe_join(['(', content_tag(:span, @trend_detail_counts.met, id: 'sla-met-window-value'), ')']),
                     class: 'tw-text-xl tw-font-semibold tw-opacity-80 tw-ml-1')
       ]),
-      caption: l(:text_sla_met_in_target, count: @trend_counts.total,
-                 met: @trend_counts.met, total: @trend_counts.total),
+      caption: l(:text_sla_met_in_target, count: @trend_detail_counts.total,
+                 met: @trend_detail_counts.met, total: @trend_detail_counts.total),
       caption_id: 'sla-met-window-caption' %>

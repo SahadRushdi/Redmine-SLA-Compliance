@@ -79,16 +79,11 @@ class SlaDashboardController < ApplicationController
     # aggregation over the sla_results cache (Global Rule 4).
     @priority_breakdown = Sla::PriorityBreakdown.call(scope: @scope)
 
-    # The Trend tab is period-scoped. Its SLA Met denominator contains only evaluated tickets whose
-    # policy-derived resolution milestone falls inside the selected period. Open tickets are not
-    # final outcomes and therefore cannot inflate historical compliance as provisionally "met".
+    # The Trend tab is period-scoped. Its SLA Met card and Detail table intentionally share one
+    # population: unresolved cycles started in the period plus outcomes resolved in the period.
+    # ResultSummary applies the current effective state, including live breach reclassification.
     trend_scope = Sla::DashboardScope.call(project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
                                             priority_ids: @filters[:priority_ids])
-    resolved_period_scope = Sla::DashboardScope.call(
-      project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
-      priority_ids: @filters[:priority_ids], resolved_range: @filters[:date_range]
-    )
-    @trend_counts = Sla::ResultSummary.call(scope: resolved_period_scope)
     trend_detail_scope = Sla::DashboardScope.call(
       project_ids: @filters[:project_ids], tracker_ids: @filters[:tracker_ids],
       priority_ids: @filters[:priority_ids], trend_detail_range: @filters[:date_range]

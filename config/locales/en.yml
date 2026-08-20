@@ -66,10 +66,10 @@ en:
   label_sla_trend_card_tab_trend: "Trend"
   # No longer a banner on the SLA Trend tab — it is the hover title on the date-window label
   # beside the date-range buttons.
-  text_sla_trend_window_hint: "SLA Met uses tickets resolved in this window. The chart counts configured Created and Resolved milestones independently within it."
+  text_sla_trend_window_hint: "SLA Met uses every ticket shown in Detail for this window. The chart counts configured Created and Resolved milestones independently within it."
   text_sla_met_in_target:
-    one: "%{met} of %{total} resolved ticket met their SLA target"
-    other: "%{met} of %{total} resolved tickets met their SLA target"
+    one: "%{met} of %{total} ticket SLA Met"
+    other: "%{met} of %{total} tickets SLA Met"
 
   # --- Dashboard charts (Phase 6, Step 6.3) -------------------------------------------------
   label_sla_chart_compliance_split: "Compliance Split"
