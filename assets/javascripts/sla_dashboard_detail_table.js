@@ -1,43 +1,23 @@
-/* SLA dashboard ticket-level detail table — client-side state filter + search + sorting +
- * pagination (no page reload for any of them). The controller renders every in-scope row once,
- * across all SLA states; this file filters, sorts and paginates those already-rendered rows in
- * place. Only the main dashboard filters still resubmit server-side, since they change which
- * tickets are in scope at all.
- *
- * State pills match each row's data-sla-state / data-sla-at-risk; free-text search matches each
- * row's data-sla-search attribute (ticket id, project, tracker, title, status, assignee, result —
- * all built server-side in _detail_table.html.erb) and updates on every keystroke. Sort direction
- * is shown by a grey up/down arrow on the active column header (never blue). Same IIFE /
- * idempotent-init / DOMContentLoaded convention as the other dashboard scripts. Plain ES5 for
- * parity with the rest of the plugin's JS. */
+/* Independent Open Tickets and SLA Trend detail tables: state filtering, search, sorting,
+ * pagination and expand-to-modal behavior are scoped to each data-sla-detail-instance. */
 (function () {
   'use strict';
 
-  // Rows per page for the compact in-card table. It is deliberately NOT one of the per-page
-  // dropdown options (10/25/50/100) — that dropdown only governs the expanded modal; the compact
-  // card always paginates 6-at-a-time so it stays the same height as the donut/priority cards
-  // beside it. Opening the modal switches to the dropdown's size; closing it returns to 6.
   var COMPACT_PAGE_SIZE = 6;
 
-  function byId(id) { return document.getElementById(id); }
-
-  // Mirrors Redmine::Pagination::Paginator#linked_pages (lib/redmine/pagination.rb) so this
-  // client-side pager windows exactly like Redmine's own server-rendered ones (Spent time, issue
-  // list): always first + last + current, plus current ± 2, with the gaps rendered as an ellipsis.
-  // Without it a 259-row scope at 6/page emitted all 41 page buttons, which overflowed the card and
-  // pushed the whole dashboard into horizontal scroll.
   function linkedPages(current, pages) {
     var wanted = [1, current, pages];
-    for (var p = current - 2; p <= current + 2; p++) {
+    var p;
+    for (p = current - 2; p <= current + 2; p += 1) {
       if (p > 1 && p < pages) { wanted.push(p); }
     }
     return wanted
-      .filter(function (page, index) { return page >= 1 && page <= pages && wanted.indexOf(page) === index; })
+      .filter(function (page, index) {
+        return page >= 1 && page <= pages && wanted.indexOf(page) === index;
+      })
       .sort(function (a, b) { return a - b; });
   }
 
-  // Inert grey "…" marking a skipped range between two page buttons. Deliberately a <span>, never a
-  // <button>, so it can't be mistaken for (or focused as) a page.
   function ellipsisSpacer() {
     var span = document.createElement('span');
     span.className = 'tw-px-2 tw-py-1.5 tw-text-xs tw-text-gray-400 tw-select-none';
@@ -45,25 +25,23 @@
     return span;
   }
 
-  function Table(root) {
+  function Table(instance, root) {
+    this.instance = instance;
     this.root = root;
-    this.tbody = root.querySelector('#sla-detail-table-body');
-    this.rows = Array.prototype.slice.call(this.tbody.querySelectorAll('tr[data-sla-row]'));
+    this.tbody = root.querySelector('[data-sla-detail-tbody]');
+    this.rows = this.tbody ? Array.prototype.slice.call(this.tbody.querySelectorAll('tr[data-sla-row]')) : [];
     this.headers = Array.prototype.slice.call(root.querySelectorAll('thead th[data-sla-sort]'));
-    this.pager = root.querySelector('#sla-detail-pagination');
+    this.pager = root.querySelector('[data-sla-detail-pagination]');
     this.perPage = root.querySelector('[data-sla-perpage]');
-    this.searchInput = root.querySelector('#sla-detail-search');
+    this.searchInput = root.querySelector('[data-sla-detail-search]');
     this.noMatchRow = null;
-    this.pageSize = COMPACT_PAGE_SIZE; // compact default; modal open() switches to the dropdown size
+    this.pageSize = COMPACT_PAGE_SIZE;
     this.page = 1;
     this.sortKey = null;
     this.sortDir = 'asc';
-    // Seeded from whichever pill the server rendered active, so a bookmarked ?state=breached link
-    // opens filtered — the DOM, not a hard-coded 'all', is the starting truth.
-    var activePill = document.querySelector('[data-sla-state-filter].is-active');
+
+    var activePill = instance.querySelector('[data-sla-state-filter].is-active');
     this.stateFilter = activePill ? activePill.getAttribute('data-sla-state-filter') : 'all';
-    // Pre-filled from the server (e.g. a bookmarked ?q= link) so the table is already filtered
-    // to match the search box on first render, exactly like every other keystroke after that.
     this.searchQuery = this.searchInput ? this.searchInput.value.trim().toLowerCase() : '';
     this.labels = this.pager ? {
       showing: this.pager.getAttribute('data-l-showing') || 'Showing',
@@ -73,37 +51,30 @@
     } : {};
   }
 
-  // 10 is the default page size for the compact in-card table (the hidden <select> renders
-  // pre-selected on 10); the modal's per-page dropdown can raise it and closing the modal resets
-  // it back to 10 (see initExpandModal).
   Table.prototype.readPageSize = function () {
     var value = this.perPage ? parseInt(this.perPage.value, 10) : 10;
     return (value && value > 0) ? value : 10;
   };
 
   Table.prototype.columnIndex = function (key) {
-    for (var i = 0; i < this.headers.length; i++) {
+    var i;
+    for (i = 0; i < this.headers.length; i += 1) {
       if (this.headers[i].getAttribute('data-sla-sort') === key) { return i; }
     }
     return -1;
   };
 
-  // Matches against the row's pre-built data-sla-search attribute (ticket id, project, tracker,
-  // title, status, assignee, result - see _detail_table.html.erb), not just the visible columns,
-  // so the free-text box searches every field a user would reasonably expect it to.
   Table.prototype.matchesSearch = function (row) {
     if (!this.searchQuery) { return true; }
     var haystack = row.getAttribute('data-sla-search') || row.textContent || '';
     return haystack.toLowerCase().indexOf(this.searchQuery) !== -1;
   };
 
-  // Mirrors the server's apply_state_filter / Sla::EffectiveState predicates exactly. `at_risk` is
-  // NOT a fourth state: it is a boolean flag on an effectively-met row, and data-sla-at-risk is
-  // already `effective_at_risk?` (at_risk AND met), so this reads that one attribute rather than
-  // re-deriving the conjunction here and risking a second, drifting definition.
   Table.prototype.matchesState = function (row) {
     if (this.stateFilter === 'all') { return true; }
-    if (this.stateFilter === 'at_risk') { return row.getAttribute('data-sla-at-risk') === 'true'; }
+    if (this.stateFilter === 'at_risk') {
+      return row.getAttribute('data-sla-at-risk') === 'true';
+    }
     return row.getAttribute('data-sla-state') === this.stateFilter;
   };
 
@@ -121,17 +92,14 @@
     var header = index >= 0 ? this.headers[index] : null;
     var type = header ? header.getAttribute('data-sla-sort-type') : 'text';
     var dir = this.sortDir;
-    return rows.sort(function (r1, r2) {
-      // Shared with the admin module's lookup tables — see assets/javascripts/sla_table_sort.js.
-      // Read here rather than captured at parse time, so script order cannot matter.
-      var shared = window.slaTableSort;
-      return shared.compare(shared.cellValue(r1, index), shared.cellValue(r2, index), type, dir);
+    return rows.sort(function (left, right) {
+      return window.slaTableSort.compare(
+        window.slaTableSort.cellValue(left, index),
+        window.slaTableSort.cellValue(right, index), type, dir
+      );
     });
   };
 
-  // Shown in place of the table body when rows exist but the current state pill and/or search box
-  // match none of them — distinct from the empty-state row rendered by the ERB template, which only
-  // appears when the server returned zero rows to begin with.
   Table.prototype.renderNoMatchRow = function (total) {
     if (!this.noMatchRow) {
       var td = document.createElement('td');
@@ -142,9 +110,6 @@
       this.noMatchRow = tr;
     }
     if (total === 0 && (this.searchQuery || this.stateFilter !== 'all')) {
-      // A search that matched nothing is a different dead end from a state pill with no tickets in
-      // it, so they do not share a message. Search wins when both are narrowing, since that is the
-      // one the user just typed.
       var key = this.searchQuery ? 'data-l-no-search-match' : 'data-l-empty';
       this.noMatchRow.firstChild.textContent = this.root.getAttribute(key) || 'No matches.';
       this.tbody.appendChild(this.noMatchRow);
@@ -160,12 +125,11 @@
     if (this.page > pages) { this.page = pages; }
     var start = (this.page - 1) * this.pageSize;
     var end = Math.min(start + this.pageSize, total);
+    var i;
 
-    // Hide everything first: sorted/paginated rows below only re-show the current page, and
-    // rows filtered out by search never appear in `sorted` at all so must be hidden explicitly.
     this.rows.forEach(function (row) { row.style.display = 'none'; });
-    for (var i = 0; i < sorted.length; i++) {
-      this.tbody.appendChild(sorted[i]); // moves the node into sorted order
+    for (i = 0; i < sorted.length; i += 1) {
+      this.tbody.appendChild(sorted[i]);
       sorted[i].style.display = (i >= start && i < end) ? '' : 'none';
     }
 
@@ -180,8 +144,7 @@
       var span = th.querySelector('.sla-sort-icon');
       if (!span) { return; }
       var active = th.getAttribute('data-sla-sort') === self.sortKey;
-      var icons = window.slaTableSort.ICONS;
-      span.innerHTML = active ? icons[self.sortDir] : icons.neutral;
+      span.innerHTML = active ? window.slaTableSort.ICONS[self.sortDir] : window.slaTableSort.ICONS.neutral;
       span.classList.toggle('tw-text-gray-600', active);
       span.classList.toggle('tw-text-gray-400', !active);
     });
@@ -190,19 +153,22 @@
   Table.prototype.pageButton = function (label, page, opts) {
     var self = this;
     var base = 'tw-px-3 tw-py-1.5 tw-text-xs tw-font-medium tw-rounded-lg tw-border tw-border-solid tw-shadow-none tw-transition-colors ';
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.textContent = label;
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
     if (opts.active) {
-      btn.className = base + 'tw-bg-primary-600 tw-text-white tw-border-primary-600';
+      button.className = base + 'tw-bg-primary-600 tw-text-white tw-border-primary-600';
     } else if (opts.disabled) {
-      btn.className = base + 'tw-bg-white tw-text-gray-300 tw-border-gray-200 tw-cursor-not-allowed';
-      btn.disabled = true;
+      button.className = base + 'tw-bg-white tw-text-gray-300 tw-border-gray-200 tw-cursor-not-allowed';
+      button.disabled = true;
     } else {
-      btn.className = base + 'tw-bg-white tw-text-gray-700 tw-border-gray-300 hover:tw-bg-gray-50';
-      btn.addEventListener('click', function () { self.page = page; self.render(); });
+      button.className = base + 'tw-bg-white tw-text-gray-700 tw-border-gray-300 hover:tw-bg-gray-50';
+      button.addEventListener('click', function () {
+        self.page = page;
+        self.render();
+      });
     }
-    return btn;
+    return button;
   };
 
   Table.prototype.renderPager = function (total, start, end, pages) {
@@ -213,7 +179,6 @@
     var info = document.createElement('span');
     info.textContent = this.labels.showing + ' ' + (start + 1) + '–' + end + ' ' + this.labels.of + ' ' + total;
     this.pager.appendChild(info);
-
     if (pages <= 1) { return; }
 
     var nav = document.createElement('div');
@@ -221,23 +186,20 @@
     nav.appendChild(this.pageButton(this.labels.prev, this.page - 1, { disabled: this.page <= 1 }));
     var numbers = linkedPages(this.page, pages);
     var previous = null;
-    for (var i = 0; i < numbers.length; i++) {
-      var p = numbers[i];
-      if (previous !== null && p !== previous + 1) { nav.appendChild(ellipsisSpacer()); }
-      nav.appendChild(this.pageButton(String(p), p, { active: p === this.page }));
-      previous = p;
+    var i;
+    for (i = 0; i < numbers.length; i += 1) {
+      if (previous !== null && numbers[i] !== previous + 1) { nav.appendChild(ellipsisSpacer()); }
+      nav.appendChild(this.pageButton(String(numbers[i]), numbers[i], { active: numbers[i] === this.page }));
+      previous = numbers[i];
     }
     nav.appendChild(this.pageButton(this.labels.next, this.page + 1, { disabled: this.page >= pages }));
     this.pager.appendChild(nav);
   };
 
-  // Switch the active SLA state filter. Repaints BOTH copies of the pill row (the compact card's
-  // and the modal's) rather than just the clicked one, so expanding or closing the modal can never
-  // land the user on a pill row that disagrees with the table under it.
   Table.prototype.setState = function (state) {
     this.stateFilter = state;
     this.page = 1;
-    document.querySelectorAll('[data-sla-state-filter]').forEach(function (pill) {
+    this.instance.querySelectorAll('[data-sla-state-filter]').forEach(function (pill) {
       pill.classList.toggle('is-active', pill.getAttribute('data-sla-state-filter') === state);
     });
     this.render();
@@ -245,23 +207,17 @@
 
   Table.prototype.bind = function () {
     var self = this;
-    // Queried from the document, not from this.root: the modal's copy of the pills lives outside
-    // the table node (it is part of the modal chrome, so it survives the table being moved in and
-    // out of it).
-    document.querySelectorAll('[data-sla-state-filter]').forEach(function (pill) {
+    this.instance.querySelectorAll('[data-sla-state-filter]').forEach(function (pill) {
       pill.addEventListener('click', function () {
         self.setState(pill.getAttribute('data-sla-state-filter'));
       });
     });
-    this.headers.forEach(function (th) {
-      th.addEventListener('click', function () {
-        var key = th.getAttribute('data-sla-sort');
-        if (self.sortKey === key) {
-          self.sortDir = self.sortDir === 'asc' ? 'desc' : 'asc';
-        } else {
-          self.sortKey = key;
-          self.sortDir = 'asc';
-        }
+    this.headers.forEach(function (header) {
+      header.addEventListener('click', function () {
+        var key = header.getAttribute('data-sla-sort');
+        self.sortDir = self.sortKey === key && self.sortDir === 'asc' ? 'desc' : 'asc';
+        if (self.sortKey !== key) { self.sortDir = 'asc'; }
+        self.sortKey = key;
         self.page = 1;
         self.render();
       });
@@ -282,20 +238,11 @@
     }
   };
 
-  // The visible Flowbite Dropdown button/menu is purely presentational - the real <select
-  // data-sla-perpage> (now visually hidden) stays the one source of truth Table.prototype.bind
-  // listens to above, so picking a menu item just updates that select's value and dispatches the
-  // same `change` event a native picker would have fired, then updates the trigger button's own
-  // label and closes the menu. Flowbite's Dropdown component handles the button<->menu toggle
-  // open/positioning itself (data-dropdown-toggle, auto-initialized on window load) - this only
-  // handles what happens once an option is actually clicked, which Flowbite's own dropdown always
-  // leaves for the page to wire up itself.
-  function initPerPageDropdown() {
-    var select = byId('sla-detail-per-page');
-    var trigger = byId('sla-detail-perpage-trigger');
-    var menu = byId('sla-detail-perpage-menu');
+  function initPerPageDropdown(instance) {
+    var select = instance.querySelector('[data-sla-perpage]');
+    var trigger = instance.querySelector('[data-sla-perpage-trigger]');
+    var menu = instance.querySelector('[data-sla-perpage-menu]');
     if (!select || !trigger || !menu) { return; }
-
     var label = trigger.querySelector('[data-sla-perpage-label]');
 
     menu.querySelectorAll('[data-sla-perpage-option]').forEach(function (option) {
@@ -309,30 +256,20 @@
     });
   }
 
-  // Expand/collapse the detail table into a modal. The ONE #sla-detail-table node is physically
-  // moved from its in-card home into the modal body on expand (so rows are never duplicated) and
-  // returned on close. Adding `.sla-detail-expanded` is what reveals the extra columns + the
-  // search/per-page controls (partials/_detail_table.css); closing resets the page size back to
-  // the compact default of 10 so the narrow in-card table never renders 50/100 rows.
-  function initExpandModal(table) {
-    var tableNode = byId('sla-detail-table');
-    var home = byId('sla-detail-table-home');
-    var modal = byId('sla-detail-modal');
-    var body = byId('sla-detail-modal-body');
-    var expandBtn = document.querySelector('[data-sla-detail-expand]');
-    // Search + per-page: one node, moved onto the modal's pill row on expand and returned to the
-    // top of the table node on close (see _detail_table.css for the matching visibility rule).
-    var controls = document.querySelector('[data-sla-detail-controls]');
-    var controlsSlot = modal ? modal.querySelector('[data-sla-modal-controls-slot]') : null;
-    if (!tableNode || !home || !modal || !body || !expandBtn) { return; }
+  function initExpandModal(instance, table) {
+    var tableNode = instance.querySelector('[data-sla-detail-table]');
+    var home = instance.querySelector('[data-sla-detail-home]');
+    var modal = instance.querySelector('[data-sla-detail-modal]');
+    var body = instance.querySelector('[data-sla-detail-modal-body]');
+    var expandButton = instance.querySelector('[data-sla-detail-expand]');
+    var controls = instance.querySelector('[data-sla-detail-controls]');
+    var controlsSlot = instance.querySelector('[data-sla-modal-controls-slot]');
+    if (!tableNode || !home || !modal || !body || !expandButton) { return; }
 
-    // Point the (hidden) real <select> and its visible trigger label at `value` WITHOUT firing a
-    // change event — the caller sets table.pageSize itself, so a dispatched change would just
-    // double-apply. Used to park the control back on its default (10) whenever the modal closes.
     function syncPerPageControl(value) {
-      var select = byId('sla-detail-per-page');
+      var select = instance.querySelector('[data-sla-perpage]');
+      var label = instance.querySelector('[data-sla-perpage-label]');
       if (select) { select.value = String(value); }
-      var label = document.querySelector('#sla-detail-perpage-trigger [data-sla-perpage-label]');
       if (label) { label.textContent = String(value); }
     }
 
@@ -343,7 +280,7 @@
       modal.classList.remove('hidden');
       document.body.style.overflow = 'hidden';
       if (table) {
-        table.pageSize = table.readPageSize(); // modal follows the per-page dropdown (default 10)
+        table.pageSize = table.readPageSize();
         table.page = 1;
         table.render();
       }
@@ -351,46 +288,44 @@
 
     function close() {
       home.appendChild(tableNode);
-      // Back to where the ERB rendered it (first child), so the next expand finds it there again.
       if (controls) { tableNode.insertBefore(controls, tableNode.firstChild); }
       tableNode.classList.remove('sla-detail-expanded');
       modal.classList.add('hidden');
       document.body.style.overflow = '';
-      syncPerPageControl(10); // next modal open starts at 10 again
+      syncPerPageControl(10);
       if (table) {
-        table.pageSize = COMPACT_PAGE_SIZE; // back to the compact 6-per-page in-card view
+        table.pageSize = COMPACT_PAGE_SIZE;
         table.page = 1;
         table.render();
       }
     }
 
-    expandBtn.addEventListener('click', open);
-    modal.querySelectorAll('[data-sla-detail-close]').forEach(function (el) {
-      el.addEventListener('click', close);
+    expandButton.addEventListener('click', open);
+    modal.querySelectorAll('[data-sla-detail-close]').forEach(function (element) {
+      element.addEventListener('click', close);
     });
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && !modal.classList.contains('hidden')) { close(); }
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !modal.classList.contains('hidden')) { close(); }
     });
-
-    // The modal used to carry a sessionStorage "re-open me after the reload" flag, because its
-    // state pills were server links and clicking one threw the user back to the compact card
-    // mid-task. The pills filter in place now, so nothing here reloads and the flag has nothing
-    // left to paper over.
   }
 
-  function init() {
-    var root = byId('sla-detail-table');
-    if (!root || root.slaDetailInitialized) { return; }
-    root.slaDetailInitialized = true;
+  function initInstance(instance) {
+    if (instance.slaDetailInitialized) { return; }
+    instance.slaDetailInitialized = true;
+    var root = instance.querySelector('[data-sla-detail-table]');
+    if (!root) { return; }
 
-    var table = new Table(root);
-    initPerPageDropdown();
-    var hasRows = table.rows.length > 0;
-    if (hasRows) { // empty-state row only — nothing to sort/paginate, but expand still works
+    var table = new Table(instance, root);
+    initPerPageDropdown(instance);
+    if (table.rows.length > 0) {
       table.bind();
       table.render();
     }
-    initExpandModal(hasRows ? table : null);
+    initExpandModal(instance, table.rows.length > 0 ? table : null);
+  }
+
+  function init() {
+    document.querySelectorAll('[data-sla-detail-instance]').forEach(initInstance);
   }
 
   window.slaDashboardDetailTable = { init: init };

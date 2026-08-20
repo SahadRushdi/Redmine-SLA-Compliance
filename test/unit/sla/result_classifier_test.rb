@@ -118,6 +118,7 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
     r = classify(timeline, definition: d, now: now)
     assert_equal 'met', r.primary_state
     assert_equal 1800, r.response_seconds
+    assert_nil r.first_response_at, 'the Response clock is still pending'
     refute r.at_risk
     assert_equal now + 1800, r.breach_at
     assert_nil r.deviation_seconds
@@ -130,6 +131,7 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
     r = classify(tl, definition: d, now: at(5))
     assert_equal 'met', r.primary_state
     assert_equal 1800, r.response_seconds   # first (public) comment
+    assert_equal @base + 1800, r.first_response_at
     assert_equal 3600, r.resolution_seconds # net(base .. base+1h)
     refute r.at_risk
     assert_nil r.breach_at
@@ -222,6 +224,7 @@ class Sla::ResultClassifierTest < ActiveSupport::TestCase
     r = classify(tl, definition: d, now: at(5) + 2000)
     assert_equal 'met', r.primary_state
     assert_equal 1800, r.response_seconds # measured from the reopen at +5h
+    assert_equal at(5) + 1800, r.first_response_at
     assert_nil r.breach_at                # response already achieved; nothing pending
     refute r.at_risk
   end

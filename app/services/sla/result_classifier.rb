@@ -45,7 +45,7 @@ module Sla
                         :at_risk_target, :at_risk_since,
                         :response_seconds, :workaround_seconds, :resolution_seconds,
                         :update_frequency_seconds, :deviation_seconds, :cycle_started_at,
-                        :resolved_at, keyword_init: true)
+                        :first_response_at, :resolved_at, keyword_init: true)
 
     # @param policy [#first_response_rule, #at_risk_threshold, nil] the effective SlaPolicy
     #   (nil ⇒ not configured).
@@ -97,6 +97,10 @@ module Sla
         update_frequency_seconds: elapsed_for(milestones, :update_frequency),
         deviation_seconds:  breached ? max_overage(milestones) : nil,
         cycle_started_at:   clock_start,
+        # Keep the event timestamp alongside the running elapsed value. Dashboard readers need
+        # this completion marker so a pending Response clock renders as empty instead of looking
+        # like a response has already happened.
+        first_response_at:  response_at,
         resolved_at:        closed_at
       )
     end
@@ -231,8 +235,10 @@ module Sla
     end
 
     def response_at
-      FirstResponseDetector.new(@timeline, rule: @policy.first_response_rule)
-                           .detect(since: clock_start)
+      return @response_at if defined?(@response_at)
+
+      @response_at = FirstResponseDetector.new(@timeline, rule: @policy.first_response_rule)
+                                          .detect(since: clock_start)
     end
 
     # Work genuinely starts once. Unlike resolution (below), re-entering a `work_started` status

@@ -15,6 +15,9 @@
   <div class="lg:tw-col-span-3 tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl tw-shadow-sm tw-p-5">
     <%= render 'sla_dashboard/donut_chart' %>
   </div>
-  <%# Renders its own lg:tw-col-span-5 card plus the expand-to-modal shell. %>
-  <%= render 'sla_dashboard/detail_table' %>
+  <%= render 'sla_dashboard/detail_table',
+        table_key: :open, results: @detail_results, counts: @counts,
+        include_resolution: false, show_title: true,
+        card_classes: 'lg:tw-col-span-5 tw-bg-white tw-border tw-border-gray-200 tw-rounded-xl ' \
+                      'tw-p-5 tw-shadow-sm tw-flex tw-flex-col tw-min-w-0' %>
 </div>

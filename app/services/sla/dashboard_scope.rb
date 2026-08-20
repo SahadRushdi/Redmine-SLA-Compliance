@@ -13,26 +13,29 @@ module Sla
   # times. `resolved_range` defines the SLA Trend card's historical outcome population: tickets
   # whose engine-cached resolution milestone falls inside the selected period. `cycle_started_range`
   # remains available to consumers that need the configured Created/reopen milestone cohort.
+  # `trend_detail_range` is the union shown by the Trend detail table: unresolved cycles started in
+  # the period plus resolved outcomes completed in the period.
   #
   # Deliberately does not scope by permission or resolve which projects/trackers/priorities are
   # valid — the caller (SlaDashboardController#resolve_filters) is responsible for clamping
   # user-submitted ids against what's actually permitted/configured before calling this.
   class DashboardScope
     def self.call(project_ids:, tracker_ids: [], priority_ids: [], open_only: false,
-                  cycle_started_range: nil, resolved_range: nil)
+                  cycle_started_range: nil, resolved_range: nil, trend_detail_range: nil)
       new(project_ids: project_ids, tracker_ids: tracker_ids, priority_ids: priority_ids,
           open_only: open_only, cycle_started_range: cycle_started_range,
-          resolved_range: resolved_range).call
+          resolved_range: resolved_range, trend_detail_range: trend_detail_range).call
     end
 
     def initialize(project_ids:, tracker_ids: [], priority_ids: [], open_only: false,
-                   cycle_started_range: nil, resolved_range: nil)
+                   cycle_started_range: nil, resolved_range: nil, trend_detail_range: nil)
       @project_ids = project_ids
       @tracker_ids = tracker_ids
       @priority_ids = priority_ids
       @open_only = open_only
       @cycle_started_range = cycle_started_range
       @resolved_range = resolved_range
+      @trend_detail_range = trend_detail_range
     end
 
     def call
@@ -48,6 +51,15 @@ module Sla
       end
       if @resolved_range
         scope = scope.where(sla_results: { resolved_at: timestamp_range(@resolved_range) })
+      end
+      if @trend_detail_range
+        period = timestamp_range(@trend_detail_range)
+        scope = scope.where(
+          '(sla_results.resolved_at BETWEEN :period_start AND :period_end) OR ' \
+          '(sla_results.resolved_at IS NULL AND ' \
+          'sla_results.cycle_started_at BETWEEN :period_start AND :period_end)',
+          period_start: period.begin, period_end: period.end
+        )
       end
       scope
     end

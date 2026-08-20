@@ -30,6 +30,17 @@ class SlaResult < ActiveRecord::Base
     primary_state == 'no_sla'
   end
 
+  # The engine's elapsed fields keep advancing while a milestone is pending so breach and at-risk
+  # classification remain correct. Dashboard readers must use these completion-aware accessors
+  # instead of exposing those running clocks as though the milestone had already happened.
+  def completed_response_seconds
+    response_seconds if first_response_at.present?
+  end
+
+  def completed_resolution_seconds
+    resolution_seconds if resolved_at.present?
+  end
+
   private
 
   def reason_only_when_no_sla

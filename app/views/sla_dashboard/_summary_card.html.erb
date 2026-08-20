@@ -25,10 +25,11 @@
 %>
 <% caption = local_assigns[:caption] %>
 <% surface = local_assigns.fetch(:surface, sla_card_surface_classes(state)) %>
+<% centered = local_assigns.fetch(:centered, false) %>
 <%# tw-border-solid, not just tw-border: Tailwind Preflight is disabled in this plugin (CLAUDE.md), %>
 <%# so nothing sets a default border-style and a width-only utility would render no border at all. %>
-<div class="tw-rounded-xl tw-border tw-border-solid tw-p-4 tw-shadow-sm tw-transition-shadow hover:tw-shadow-md <%= surface %>">
-  <div class="tw-flex tw-items-center tw-gap-2.5">
+<div class="tw-rounded-xl tw-border tw-border-solid tw-p-4 tw-shadow-sm tw-transition-shadow hover:tw-shadow-md <%= surface %><%= ' tw-w-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-text-center' if centered %>">
+  <div class="tw-flex tw-items-center tw-gap-2.5<%= ' tw-justify-center' if centered %>">
     <%# Rounded square, not a circle: the icon tile lines up with the card's own rounded-xl corners %>
     <%# and reads as part of the tile rather than as an avatar. %>
     <span class="tw-inline-flex tw-items-center tw-justify-center tw-w-9 tw-h-9 tw-rounded-lg tw-flex-shrink-0 <%= sla_card_icon_classes(state) %>"><%= sla_card_icon(state) %></span>

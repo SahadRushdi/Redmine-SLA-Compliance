@@ -602,8 +602,10 @@ class SlaDashboardControllerTest < ActionController::TestCase
     get :index, params: { project_id: @project.id, date_preset: 'this_month' }
 
     assert_response :success
-    assert_select "th[data-sla-sort='ticket'][data-sla-sort-type='number']", 1
-    assert_select "th[data-sla-sort='result'][data-sla-sort-type='number']", 1
+    assert_select "#sla-detail-card th[data-sla-sort='ticket'][data-sla-sort-type='number']", 1
+    assert_select "#sla-detail-card th[data-sla-sort='result'][data-sla-sort-type='number']", 1
+    assert_select "#sla-trend-detail-card th[data-sla-sort='ticket'][data-sla-sort-type='number']", 1
+    assert_select "#sla-trend-detail-card th[data-sla-sort='result'][data-sla-sort-type='number']", 1
     assert_select 'thead th a', 0 # sorting is client-side now — no per-header server links
   end
 
@@ -632,12 +634,13 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_select "#sla-detail-row-#{issues[:live_breached].id} td:last-child", text: /1h/
   end
 
-  test "detail table uses scan-friendly duration bands for response resolution and deviation" do
+  test "open detail table formats completed response and deviation and has no resolution column" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
     grant_sla_access!
     issues = seed_reconciled_dataset
     SlaResult.find_by!(issue_id: issues[:breached].id).update!(
       response_seconds: 32.minutes,
+      first_response_at: 32.minutes.ago,
       resolution_seconds: 1.day + 5.hours + 32.minutes,
       deviation_seconds: 9.days + 4.hours
     )
@@ -646,8 +649,116 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
     assert_select "#sla-detail-row-#{issues[:breached].id}" do
       assert_select 'td:nth-child(7)', text: '32m'
-      assert_select 'td:nth-child(8)', text: '1d 5h'
-      assert_select 'td:nth-child(10)', text: '+1w 2d'
+      assert_select 'td:nth-child(8)', text: I18n.t(:label_sla_card_breached)
+      assert_select 'td:nth-child(9)', text: '+1w 2d'
+    end
+    assert_select "#sla-detail-card th[data-sla-sort='resolution']", 0
+  end
+
+  test "open detail shows first response only after completion while CSV remains backward compatible" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    grant_sla_access!
+    issues = seed_reconciled_dataset
+    row = SlaResult.find_by!(issue_id: issues[:met].id)
+    row.update!(response_seconds: 17.minutes, resolution_seconds: 31.minutes,
+                first_response_at: nil, resolved_at: nil)
+
+    get :index, params: { project_id: @project.id }
+
+    assert_select "#sla-detail-row-#{issues[:met].id}" do
+      assert_select 'td:nth-child(7)', text: '—'
+    end
+
+    row.update!(first_response_at: 17.minutes.ago)
+    get :index, params: { project_id: @project.id }
+
+    assert_select "#sla-detail-row-#{issues[:met].id}" do
+      assert_select 'td:nth-child(7)', text: '17m'
+    end
+
+    get :index, params: { project_id: @project.id, format: 'csv' }
+    csv_row = CSV.parse(@response.body, headers: true).find do |candidate|
+      candidate[I18n.t(:field_sla_detail_ticket)] == issues[:met].id.to_s
+    end
+    assert_equal '17m', csv_row[I18n.t(:field_sla_detail_first_response)]
+    assert_equal '-', csv_row[I18n.t(:field_sla_detail_resolution)]
+  end
+
+  test "trend detail combines unresolved period starts with resolved period outcomes" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    grant_sla_access!
+    issues = seed_reconciled_dataset
+    inside_met = SlaResult.find_by!(issue_id: issues[:met].id)
+    inside_breached = SlaResult.find_by!(issue_id: issues[:breached].id)
+    outside = SlaResult.find_by!(issue_id: issues[:at_risk].id)
+    open_inside = SlaResult.find_by!(issue_id: issues[:live_breached].id)
+
+    inside_met.update!(resolved_at: Time.zone.local(2026, 7, 10, 10), resolution_seconds: 31.minutes)
+    inside_breached.update!(resolved_at: Time.zone.local(2026, 7, 11, 10), resolution_seconds: 2.hours)
+    outside.update!(resolved_at: Time.zone.local(2026, 6, 30, 10), resolution_seconds: 45.minutes)
+    open_inside.update!(resolved_at: nil, cycle_started_at: Time.zone.local(2026, 7, 12, 10))
+
+    get :index, params: { project_id: @project.id, date_preset: 'custom',
+                          from: '07/01/2026', to: '07/31/2026' }
+
+    assert_select "[data-sla-trend-card-tab='chart']", text: 'Trend'
+    assert_select "[data-sla-trend-card-tab='detail']", text: 'Detail (3)'
+    assert_select "[data-sla-trend-card-tab='chart'].tw-bg-primary-600.tw-text-white", 1
+    assert_select "[data-sla-trend-card-tab='detail'].tw-text-primary-600", 1
+    assert_select '#sla-met-window-caption', { text: /of 2 resolved tickets/ },
+                  'open detail rows must not enter the resolved-only SLA Met denominator'
+    assert_select '#sla-trend-detail-state-tabs' do
+      assert_select 'button', text: /\AAll \(3\)\z/
+      assert_select 'button', text: /\ASLA Met \(1\)\z/
+      assert_select 'button', text: /\ASLA Breached \(2\)\z/
+      assert_select 'button', text: /\AAt Risk \(0\)\z/
+    end
+    assert_select "#sla-trend-detail-row-#{issues[:met].id} td:nth-child(8)", text: '31m'
+    assert_select "#sla-trend-detail-row-#{issues[:breached].id} td:nth-child(8)", text: '2h'
+    assert_select "#sla-trend-detail-row-#{issues[:live_breached].id} td:nth-child(8)", text: '—'
+    assert_select "#sla-trend-detail-row-#{issues[:at_risk].id}", 0
+    assert_select "#sla-trend-detail-row-#{issues[:no_sla].id}", 0
+    assert_select "#sla-detail-row-#{issues[:met].id}", 0,
+                  'resolved-period rows must leave the Open Tickets table'
+  end
+
+  test "both detail tables keep five compact columns and isolated controls" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    grant_sla_access!
+    issues = seed_reconciled_dataset
+    SlaResult.find_by!(issue_id: issues[:met].id)
+             .update!(resolved_at: Time.zone.local(2026, 7, 10, 10), resolution_seconds: 31.minutes)
+
+    get :index, params: { project_id: @project.id, date_preset: 'custom',
+                          from: '07/01/2026', to: '07/31/2026' }
+
+    assert_select "[data-sla-detail-instance='open']", 1
+    assert_select "[data-sla-detail-instance='trend']", 1
+    assert_select '#sla-detail-card thead th', 9
+    assert_select '#sla-detail-card thead th:not(.sla-detail-col-extra)', 5
+    assert_select '#sla-trend-detail-card thead th', 10
+    assert_select '#sla-trend-detail-card thead th:not(.sla-detail-col-extra)', 5
+    assert_select '[data-sla-detail-modal]', 2
+    assert_select '[data-sla-detail-expand]', 2
+    assert_select '#sla-detail-search', 1
+    assert_select '#sla-trend-detail-search', 1
+  end
+
+  test "trend SLA Met card aligns without content-box height overflow and centers its contents" do
+    SlaPolicy.create!(project_id: @project.id, enabled: true)
+    grant_sla_access!
+
+    get :index, params: { project_id: @project.id }
+
+    assert_select '#sla-met-window-caption' do |captions|
+      card = captions.first.ancestors('div').find { |node| node['class'].to_s.include?('tw-items-center') }
+      assert card, 'the SLA Met card should use the centered summary layout'
+      refute_includes card['class'], 'tw-h-full',
+                      'height:100% plus padding overflows when Tailwind Preflight is disabled'
+      assert_includes card['class'], 'tw-w-full'
+      assert_includes card['class'], 'tw-items-center'
+      assert_includes card['class'], 'tw-justify-center'
+      assert_includes card['class'], 'tw-text-center'
     end
   end
 

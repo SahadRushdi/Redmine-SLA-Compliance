@@ -979,10 +979,10 @@
  * compact in-card table, which has no scroll container at all: `.sla-detail-expanded` is added only
  * while the table node lives in the modal.
  */
-.sla-plugin #sla-detail-modal-body {
+.sla-plugin [data-sla-detail-modal-body] {
   display: flex;
   flex-direction: column;
-  /* Beats the element's own tw-overflow-y-auto on specificity (id + class vs two classes). */
+  /* The inner table wrapper owns both scroll axes; the modal body must not scroll separately. */
   overflow: hidden;
   min-height: 0;
 }
@@ -1955,8 +1955,14 @@
 .sla-plugin .tw-h-full {
   height: 100%;
 }
+.sla-plugin .tw-min-h-0 {
+  min-height: 0px;
+}
 .sla-plugin .tw-min-h-9 {
   min-height: 2.25rem;
+}
+.sla-plugin .tw-min-h-\[24rem\] {
+  min-height: 24rem;
 }
 .sla-plugin .tw-w-10 {
   width: 2.5rem;
@@ -2081,6 +2087,9 @@
 .sla-plugin .tw-items-center {
   align-items: center;
 }
+.sla-plugin .tw-items-stretch {
+  align-items: stretch;
+}
 .sla-plugin .tw-justify-end {
   justify-content: flex-end;
 }
@@ -2176,9 +2185,6 @@
 }
 .sla-plugin .tw-overflow-x-auto {
   overflow-x: auto;
-}
-.sla-plugin .tw-overflow-y-auto {
-  overflow-y: auto;
 }
 .sla-plugin .tw-truncate {
   overflow: hidden;
@@ -2790,6 +2796,10 @@
   --tw-bg-opacity: 1;
   background-color: rgb(249 250 251 / var(--tw-bg-opacity, 1));
 }
+.sla-plugin .hover\:tw-bg-primary-50:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(239 246 255 / var(--tw-bg-opacity, 1));
+}
 .sla-plugin .hover\:tw-bg-primary-700:hover {
   --tw-bg-opacity: 1;
   background-color: rgb(29 78 216 / var(--tw-bg-opacity, 1));
@@ -2945,8 +2955,5 @@
   }
   .sla-plugin .lg\:tw-flex-row {
     flex-direction: row;
-  }
-  .sla-plugin .lg\:tw-items-start {
-    align-items: flex-start;
   }
 }

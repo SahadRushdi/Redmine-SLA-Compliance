@@ -144,6 +144,25 @@ class Sla::DashboardScopeTest < ActiveSupport::TestCase
     assert_empty scope
   end
 
+  test 'trend_detail_range combines unresolved cycles started in-period with resolved outcomes in-period' do
+    open_inside = make_issue
+    open_outside = make_issue
+    resolved_inside = make_issue
+    resolved_outside = make_issue
+    make_result(open_inside).update!(cycle_started_at: Time.zone.local(2026, 7, 10, 9))
+    make_result(open_outside).update!(cycle_started_at: Time.zone.local(2026, 6, 30, 9))
+    make_result(resolved_inside, resolved_at: Time.zone.local(2026, 7, 20, 9))
+      .update!(cycle_started_at: Time.zone.local(2026, 6, 1, 9))
+    make_result(resolved_outside, resolved_at: Time.zone.local(2026, 8, 1, 9))
+      .update!(cycle_started_at: Time.zone.local(2026, 7, 15, 9))
+
+    scope = Sla::DashboardScope.call(
+      project_ids: [1], trend_detail_range: Date.new(2026, 7, 1)..Date.new(2026, 7, 31)
+    )
+
+    assert_equal [open_inside.id, resolved_inside.id].sort, scope.pluck(:issue_id).sort
+  end
+
   test 'combines project + tracker + priority + open_only with AND semantics' do
     matches_all = make_issue(project_id: 1, tracker_id: 1, priority_id: 4)
     wrong_tracker = make_issue(project_id: 1, tracker_id: 2, priority_id: 4)

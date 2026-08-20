@@ -46,6 +46,7 @@ module Sla
         deviation_seconds:  result.deviation_seconds,
         deviation_at:       result.deviation_at,
         cycle_started_at:   result.cycle_started_at,
+        first_response_at:  result.first_response_at,
         resolved_at:        result.resolved_at,
         calculated_at:      now
       )

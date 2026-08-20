@@ -74,6 +74,7 @@ class Sla::ResultStoreTest < ActiveSupport::TestCase
     assert_equal 'met', row.primary_state
     refute row.at_risk
     assert_equal 1800, row.response_seconds
+    assert_nil row.first_response_at, 'elapsed is cached, but the first response is not complete'
     assert_equal now + 1800, row.breach_at   # earliest pending breach = response
     assert_equal now + 1080, row.at_risk_at
     assert_nil row.deviation_seconds
@@ -83,6 +84,18 @@ class Sla::ResultStoreTest < ActiveSupport::TestCase
   end
 
   # --- editing updates the SAME row -----------------------------------------------------
+
+  test "persists the first response completion timestamp separately from elapsed seconds" do
+    issue = make_issue
+    journal = Journal.new(journalized: issue, user: User.current, created_on: at(0.5), notes: 'Response')
+    journal.save!
+
+    recalc(issue, now: at(1))
+    row = SlaResult.find_by!(issue_id: issue.id)
+
+    assert_equal 1800, row.response_seconds
+    assert_equal at(0.5).to_i, row.first_response_at.to_i
+  end
 
   test "editing an untracked ticket to a tracked priority updates its cached result in place" do
     issue = make_issue(priority_id: UNTRACKED_PRIORITY)

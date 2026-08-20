@@ -9,6 +9,7 @@
 <%= render 'sla_dashboard/summary_card',
       state: :met, label: sla_card_label(:met_window),
       surface: 'tw-bg-white tw-border-gray-200',
+      centered: true,
       value: safe_join([
         content_tag(:span, sla_percentage(@trend_counts.met, @trend_counts.total), id: 'sla-met-window-percentage'),
         '%',
