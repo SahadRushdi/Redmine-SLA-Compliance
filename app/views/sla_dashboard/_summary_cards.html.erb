@@ -5,21 +5,26 @@
 <%# Card values carry stable ids (also useful for functional tests, since assigns() isn't %>
 <%# available in this Rails version without rails-controller-testing). %>
 <%# Every Open Tickets card uses only the shared card title/icon and its headline value. Supporting %>
-<%# captions are intentionally omitted to keep this four-card row visually minimal. %>
-<div class="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 lg:tw-grid-cols-4 tw-gap-4 tw-mb-6">
+<%# captions are intentionally omitted to keep this five-card row visually minimal. %>
+<div class="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 lg:tw-grid-cols-5 tw-gap-4 tw-mb-6">
   <%= render 'sla_dashboard/summary_card',
         state: :total, label: sla_card_label(:total), value: @counts.total,
         value_id: 'sla-card-total-value' %>
 
-  <%# Stale replaces the SLA Met card on this current-state row (SLA Met now lives on the SLA Trend %>
-  <%# tab). Count comes from Sla::StaleSummary: open tickets with no updates past the inactivity %>
-  <%# threshold an admin configured. %>
+  <%# Count comes from Sla::StaleSummary: open tickets with no updates past the inactivity threshold %>
+  <%# an admin configured. %>
   <%# With no threshold configured the card shows an em dash, NOT 0 — "nobody has defined stale %>
   <%# here" and "nothing is stale" are different states. %>
   <%= render 'sla_dashboard/summary_card',
         state: :stale, label: sla_card_label(:stale),
         value: @stale.configured? ? @stale.count : '—',
         value_id: 'sla-card-stale-value' %>
+
+  <%# This is the current open backlog's raw Met count, not the selected-period percentage card on %>
+  <%# SLA Trend. At Risk remains a subset of Met, so those tickets are included here. %>
+  <%= render 'sla_dashboard/summary_card',
+        state: :met, label: sla_card_label(:met), value: @counts.met,
+        value_id: 'sla-card-met-value' %>
 
   <%= render 'sla_dashboard/summary_card',
         state: :breached, label: sla_card_label(:breached),
