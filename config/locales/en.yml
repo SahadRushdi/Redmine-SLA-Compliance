@@ -41,7 +41,8 @@ en:
   # donut all report one metric, and calling it "Total Open Tickets" here made it read as a second,
   # broader figure than the tab it lives on.
   label_sla_card_total: "Tickets"
-  # Both the Open Tickets tab and SLA Trend card count the same OPEN evaluated tickets.
+  # Open Tickets uses this label for its raw open Met count; SLA Trend uses the window label below
+  # for its selected-period percentage and raw count.
   label_sla_card_met: "SLA Met"
   label_sla_card_met_window: "SLA Met"
   label_sla_card_breached: "SLA Breached"

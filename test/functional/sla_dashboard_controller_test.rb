@@ -281,36 +281,44 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
   # --- Step 6.2: summary cards reconcile in the rendered response ------------------------------
 
-  test "summary cards count evaluated tickets only and do not render a No SLA card" do
+  test "summary cards count evaluated tickets only and render Met after Stale" do
     SlaPolicy.create!(project_id: @project.id, enabled: true)
     grant_sla_access!
 
     tracker_id = @project.trackers.first.id
     met_issue = Issue.generate!(project: @project, tracker_id: tracker_id, author_id: 2)
+    at_risk_issue = Issue.generate!(project: @project, tracker_id: tracker_id, author_id: 2)
     breached_issue = Issue.generate!(project: @project, tracker_id: tracker_id, author_id: 2)
     no_sla_issue = Issue.generate!(project: @project, tracker_id: tracker_id, author_id: 2)
     # The plugin's own event-driven hook (Step 3.1) already wrote an sla_results row for each
     # issue the instant it was created (SLA is enabled on @project) — overwrite those rows with
     # the exact states this test needs, rather than creating new ones.
     SlaResult.find_by!(issue_id: met_issue.id).update!(primary_state: 'met', no_sla_reason: nil)
+    SlaResult.find_by!(issue_id: at_risk_issue.id)
+             .update!(primary_state: 'met', no_sla_reason: nil, at_risk: true,
+                      breach_at: 1.day.from_now)
     SlaResult.find_by!(issue_id: breached_issue.id).update!(primary_state: 'breached', no_sla_reason: nil)
     SlaResult.find_by!(issue_id: no_sla_issue.id).update!(primary_state: 'no_sla', no_sla_reason: 'not_tracked')
 
     get :index, params: { project_id: @project.id }
 
     assert_response :success
-    assert_select '#sla-card-total-value', text: '2'
-    # SLA Met is no longer a summary card (it moved to the SLA Trend tab); the current-state row now
-    # carries Stale in its place. No inactivity threshold is configured in this test, and there is no
-    # built-in one, so the card reports "not configured" rather than a count (see the Stale tests
-    # below).
+    assert_select '#sla-card-total-value', text: '3'
+    # No inactivity threshold is configured in this test, and there is no built-in one, so Stale
+    # reports "not configured" rather than a count (see the Stale tests below).
     assert_select '#sla-card-stale-value', text: '—'
+    assert_select '#sla-card-met-value', text: '2'
     assert_select '#sla-card-breached-value', text: '1'
+    assert_select '#sla-card-at-risk-value', text: '1'
     assert_select '#sla-card-breached-percentage', 0
     assert_select '#sla-card-no-sla-value', 0
     assert_select '#sla-card-not-tracked-value', 0
     assert_select '#sla-card-not-configured-value', 0
-    assert_select '.lg\\:tw-grid-cols-4', 1
+    assert_select '.lg\\:tw-grid-cols-5', 1 do |rows|
+      assert_equal %w[sla-card-total-value sla-card-stale-value sla-card-met-value
+                      sla-card-breached-value sla-card-at-risk-value],
+                   rows.first.css('p[id]').map { |node| node['id'] }
+    end
   end
 
   # --- the Stale card: admin-configured, and honest when it isn't ----------------------------
@@ -326,14 +334,14 @@ class SlaDashboardControllerTest < ActionController::TestCase
     issue
   end
 
-  test "with no threshold configured the Stale card shows a dash and tells you where to set one" do
+  test "with no threshold configured the Stale card shows a dash without a caption" do
     seed_idle_ticket(400) # idle over a year: still not "stale", because nobody has defined stale
 
     get :index, params: { project_id: @project.id }
 
     assert_response :success
     assert_select '#sla-card-stale-value', text: '—', count: 1
-    assert_select '#sla-card-stale-hint', text: I18n.t(:label_sla_card_stale_unset_caption)
+    assert_select '#sla-card-stale-hint', 0
   end
 
   test "the project's own threshold counts its idle open tickets" do
@@ -343,7 +351,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
     assert_response :success
     assert_select '#sla-card-stale-value', text: '1'
-    assert_select '#sla-card-stale-hint', text: I18n.t(:label_sla_card_stale_caption)
+    assert_select '#sla-card-stale-hint', 0
   end
 
   test "a ticket idle for less than the project's threshold is not stale" do
@@ -392,13 +400,14 @@ class SlaDashboardControllerTest < ActionController::TestCase
       get :index, params: { project_id: @project.id, date_preset: 'custom', from: from, to: to }
 
       assert_select '#sla-card-total-value', text: '2'
+      assert_select '#sla-card-met-value', text: '1'
       assert_select '#sla-card-breached-value', text: '1'
       assert_select '#sla-card-at-risk-value', text: '1'
       assert_select '#sla-card-no-sla-value', 0
       assert_select '#sla-met-window-value', text: met
-      noun = total == '1' ? 'ticket' : 'tickets'
       assert_select '#sla-met-window-caption',
-                    text: "#{met} of #{total} #{noun} SLA Met"
+                    text: I18n.t(:text_sla_met_in_target, count: total.to_i,
+                                 met: met, total: total)
     end
   end
 
@@ -424,7 +433,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
     assert_select '#sla-met-window-percentage', text: '100'
     assert_select '#sla-met-window-value', text: '4'
-    assert_select '#sla-met-window-caption', text: '4 of 4 tickets SLA Met'
+    assert_select '#sla-met-window-caption', text: '4 of 4 are SLA Met'
     assert_select "[data-sla-trend-card-tab='detail']", text: 'Detail (4)'
 
     fifth = SlaResult.find_by!(issue_id: issues[:no_sla].id)
@@ -436,7 +445,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
     assert_select '#sla-met-window-percentage', text: '80'
     assert_select '#sla-met-window-value', text: '4'
-    assert_select '#sla-met-window-caption', text: '4 of 5 tickets SLA Met'
+    assert_select '#sla-met-window-caption', text: '4 of 5 are SLA Met'
     assert_select "[data-sla-trend-card-tab='detail']", text: 'Detail (5)'
   end
 
@@ -449,7 +458,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
 
     assert_select '#sla-met-window-percentage', text: '0'
     assert_select '#sla-met-window-value', text: '0'
-    assert_select '#sla-met-window-caption', text: '0 of 0 tickets SLA Met'
+    assert_select '#sla-met-window-caption', text: '0 of 0 are SLA Met'
   end
 
   test "the Created vs Resolved chart maps each timestamp to the correct series and day" do
@@ -723,7 +732,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
     assert_select "[data-sla-trend-card-tab='chart'].tw-bg-primary-600.tw-text-white", 1
     assert_select "[data-sla-trend-card-tab='detail'].tw-text-primary-600", 1
     assert_select '#sla-met-window-percentage', text: '33'
-    assert_select '#sla-met-window-caption', text: '1 of 3 tickets SLA Met'
+    assert_select '#sla-met-window-caption', text: '1 of 3 are SLA Met'
     assert_select '#sla-trend-detail-state-tabs' do
       assert_select 'button', text: /\AAll \(3\)\z/
       assert_select 'button', text: /\ASLA Met \(1\)\z/

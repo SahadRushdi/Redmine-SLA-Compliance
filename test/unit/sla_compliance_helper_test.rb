@@ -45,4 +45,14 @@ class SlaComplianceHelperTest < ActiveSupport::TestCase
     assert_equal 33, sla_percentage(1, 3)
     assert_equal 0, sla_percentage(0, 0)
   end
+
+  test "uses green for SLA Met and contrasting violet for Stale summary cards" do
+    assert_equal 'tw-bg-green-50 tw-border-green-200', sla_card_surface_classes(:met)
+    assert_equal 'tw-text-green-600', sla_card_value_classes(:met)
+    assert_equal 'tw-bg-green-100 tw-text-green-600', sla_card_icon_classes(:met)
+
+    assert_equal 'tw-bg-violet-50 tw-border-violet-200', sla_card_surface_classes(:stale)
+    assert_equal 'tw-text-violet-600', sla_card_value_classes(:stale)
+    assert_equal 'tw-bg-violet-100 tw-text-violet-600', sla_card_icon_classes(:stale)
+  end
 end
