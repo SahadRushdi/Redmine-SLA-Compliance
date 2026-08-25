@@ -28,8 +28,14 @@ class SlaNotificationSetting < ActiveRecord::Base
   has_many :notification_recipients, class_name: 'SlaNotificationRecipient',
              dependent: :delete_all, inverse_of: :sla_notification_setting
 
-  serialize :at_risk_email_recipients, JSON
-  serialize :stale_email_recipients, JSON
+  # Rails 8 makes the coder keyword-only; Rails 6.1 expects it positionally.
+  if method(:serialize).parameters.any? { |type, name| type == :key && name == :coder }
+    serialize :at_risk_email_recipients, coder: JSON
+    serialize :stale_email_recipients, coder: JSON
+  else
+    serialize :at_risk_email_recipients, JSON
+    serialize :stale_email_recipients, JSON
+  end
 
   before_validation :assign_scope_key
 

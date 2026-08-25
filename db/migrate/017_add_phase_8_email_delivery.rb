@@ -3,8 +3,14 @@
 class AddPhase8EmailDelivery < ActiveRecord::Migration[6.1]
   class MigrationSetting < ActiveRecord::Base
     self.table_name = 'sla_notification_settings'
-    serialize :at_risk_email_recipients, JSON
-    serialize :stale_email_recipients, JSON
+    # Rails 8 makes the coder keyword-only; Rails 6.1 expects it positionally.
+    if method(:serialize).parameters.any? { |type, name| type == :key && name == :coder }
+      serialize :at_risk_email_recipients, coder: JSON
+      serialize :stale_email_recipients, coder: JSON
+    else
+      serialize :at_risk_email_recipients, JSON
+      serialize :stale_email_recipients, JSON
+    end
   end
 
   class MigrationEmailAddress < ActiveRecord::Base
