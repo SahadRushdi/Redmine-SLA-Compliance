@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class SlaEmailDeliveryJob < ApplicationJob
+class SlaEmailDeliveryJob < ActiveJob::Base
   queue_as :default
 
   def perform(kind, project_id, log_ids, setting_id)
