@@ -8,7 +8,7 @@ Redmine::Plugin.register :redmine_sla_compliance do
   version '0.1.0'
   url 'https://github.com/SahadRushdi/redmine-plugins'
 
-  requires_redmine version_or_higher: '5.1.0'
+  requires_redmine version_or_higher: '5.0.0'
 
   # Global plugin settings, stored as one serialized hash under
   # `Setting.plugin_redmine_sla_compliance` and read through Sla::PluginSettings.
