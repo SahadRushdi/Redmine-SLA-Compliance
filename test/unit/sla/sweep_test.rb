@@ -66,7 +66,7 @@ class Sla::SweepTest < ActiveSupport::TestCase
     issue = Issue.new(project_id: @project.id, tracker_id: TRACKER, author_id: 2,
                       priority_id: priority_id, status_id: status_id, subject: 'sweep test')
     issue.save!(validate: false)
-    issue.update_column(:created_on, @base)
+    set_redmine_timestamp(issue, :created, @base)
     issue.reload
   end
 
@@ -324,7 +324,7 @@ class Sla::SweepTest < ActiveSupport::TestCase
     other_issue = Issue.new(project_id: other.id, tracker_id: TRACKER, author_id: 2,
                             priority_id: PRIORITY, status_id: NEW, subject: 'other project')
     other_issue.save!(validate: false)
-    other_issue.update_column(:created_on, @base)
+    set_redmine_timestamp(other_issue, :created, @base)
 
     sweep(now: at(50.0 / 60))
 
@@ -382,7 +382,7 @@ class Sla::SweepTest < ActiveSupport::TestCase
                                            priority_id: UNTRACKED_PRIORITY, status_id: NEW,
                                            subject: 'unconfigured tracker')
     unconfigured_tracker_issue.save!(validate: false)
-    unconfigured_tracker_issue.update_column(:created_on, @base)
+    set_redmine_timestamp(unconfigured_tracker_issue, :created, @base)
 
     _, _, stale = sweep(now: @base + 30.days)
 

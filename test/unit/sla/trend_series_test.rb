@@ -14,7 +14,7 @@ class Sla::TrendSeriesTest < ActiveSupport::TestCase
   # dashboard_scope_test.rb, timeline_builder_test.rb).
   def make_issue(project_id: 1, tracker_id: 1, priority_id: 4, created_on:)
     issue = Issue.generate!(project: Project.find(project_id), tracker_id: tracker_id, priority_id: priority_id)
-    issue.update_column(:created_on, created_on)
+    set_redmine_timestamp(issue, :created, created_on)
     issue
   end
 

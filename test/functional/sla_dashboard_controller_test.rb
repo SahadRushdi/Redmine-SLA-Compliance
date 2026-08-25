@@ -328,7 +328,7 @@ class SlaDashboardControllerTest < ActionController::TestCase
                       stale_threshold_days: stale_threshold_days)
     grant_sla_access!
     issue = Issue.generate!(project: @project, tracker_id: @project.trackers.first.id, priority_id: 4)
-    issue.update_columns(updated_on: idle_days.days.ago)
+    set_redmine_timestamp(issue, :updated, idle_days.days.ago)
     SlaResult.find_by!(issue_id: issue.id)
              .update!(primary_state: 'met', no_sla_reason: nil, resolved_at: nil)
     issue

@@ -10,7 +10,7 @@
 # because they are DB queries that would otherwise be paid on the save path, and because the job
 # runs later — the policy, the webhook, or the issue itself may have changed in between, so each
 # condition is re-checked at the moment of sending rather than trusted from enqueue time.
-class SlaGoogleChatNotificationJob < ApplicationJob
+class SlaGoogleChatNotificationJob < ActiveJob::Base
   queue_as :default
 
   # @param issue_id [Integer]

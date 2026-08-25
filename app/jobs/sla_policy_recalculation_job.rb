@@ -3,7 +3,7 @@
 # Optional historical recalculation after a policy save. Runs off the request
 # path (default :async adapter in-process); idempotent and re-tickable, so a lost job on
 # restart is recoverable by saving again with the checkbox ticked.
-class SlaPolicyRecalculationJob < ApplicationJob
+class SlaPolicyRecalculationJob < ActiveJob::Base
   queue_as :default
 
   def perform(project_id, run_token = nil)

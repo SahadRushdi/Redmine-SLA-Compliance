@@ -15,7 +15,7 @@ class Sla::StaleSummaryTest < ActiveSupport::TestCase
 
   def make_issue(project_id: 1, updated_on: NOW)
     issue = Issue.generate!(project: Project.find(project_id), tracker_id: 1, priority_id: 4)
-    issue.update_columns(updated_on: updated_on)
+    set_redmine_timestamp(issue, :updated, updated_on)
     issue
   end
 

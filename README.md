@@ -16,9 +16,9 @@ See `SLA_Compliance_Plugin_Implementation_Plan.md` for the full spec and phased 
 
 | | Supported |
 |---|---|
-| Redmine | 5.0.0 or later (developed against 5.1.4) |
-| Ruby | 3.1.x |
-| Rails | 6.1.x |
+| Redmine | 5.0.0 or later (tested on 5.0.2 and 7.0.0) |
+| Ruby | Host-compatible version (tested on 3.1.4 and 3.4.10) |
+| Rails | Supplied by Redmine (tested on 6.1.6 and 8.1.3) |
 
 - **Background jobs:** ActiveJob with a durable production adapter and running worker. The default
   in-process `:async` adapter is suitable only for development because scheduled jobs are lost on

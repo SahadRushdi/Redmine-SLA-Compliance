@@ -28,7 +28,7 @@ class Sla::TimelineBuilderTest < ActiveSupport::TestCase
     issue = Issue.new(project_id: 1, tracker_id: 1, author_id: 2, priority_id: 4,
                       status_id: status_id, subject: 'SLA timeline test')
     issue.save!(validate: false)
-    issue.update_column(:created_on, @base) # skip callbacks; pin the creation time
+    set_redmine_timestamp(issue, :created, @base) # skip callbacks; pin the creation time
     issue.reload
   end
 

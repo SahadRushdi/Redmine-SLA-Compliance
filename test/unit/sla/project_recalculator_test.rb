@@ -30,7 +30,7 @@ class Sla::ProjectRecalculatorTest < ActiveSupport::TestCase
     issue = Issue.new(project_id: project.id, tracker_id: TRACKER, author_id: 2,
                       priority_id: PRIORITY, status_id: 1, subject: 'recalc test')
     issue.save!(validate: false)
-    issue.update_column(:created_on, @base)
+    set_redmine_timestamp(issue, :created, @base)
     issue.reload
   end
 

@@ -48,7 +48,8 @@ class NotificationLogDeduplicatorTest < ActiveSupport::TestCase
 
   # `created_at`/`sent_at` are real Time objects, formatted for the raw SQL literal using
   # whichever timezone convention ActiveRecord itself will assume on read-back
-  # (`ActiveRecord::Base.default_timezone` — this instance runs `:local`, i.e. the DB
+  # (`ActiveRecord.default_timezone` on Rails 8, `ActiveRecord::Base.default_timezone` on Rails 6)
+  # — this instance runs `:local`, i.e. the DB
   # server's OS timezone, not UTC) — otherwise the round-tripped value would silently land on a
   # different absolute instant than the test intends.
   def insert_raw(issue_id:, type: 'at_risk', target: '', sent_at: nil, created_at:)
@@ -62,7 +63,12 @@ class NotificationLogDeduplicatorTest < ActiveSupport::TestCase
   end
 
   def sql_time(time)
-    if ActiveRecord::Base.default_timezone == :utc
+    default_timezone = if ActiveRecord.respond_to?(:default_timezone)
+                         ActiveRecord.default_timezone
+                       else
+                         ActiveRecord::Base.default_timezone
+                       end
+    if default_timezone == :utc
       time.getutc.strftime('%Y-%m-%d %H:%M:%S')
     else
       time.localtime.strftime('%Y-%m-%d %H:%M:%S')

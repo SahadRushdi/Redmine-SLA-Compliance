@@ -13,7 +13,7 @@ class Sla::DashboardScopeTest < ActiveSupport::TestCase
   def make_issue(project_id: 1, tracker_id: 1, priority_id: 4, created_on: Time.zone.now)
     issue = Issue.generate!(project: Project.find(project_id), tracker_id: tracker_id,
                             priority_id: priority_id)
-    issue.update_column(:created_on, created_on)
+    set_redmine_timestamp(issue, :created, created_on)
     issue
   end
 
