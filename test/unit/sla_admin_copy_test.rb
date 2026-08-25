@@ -17,16 +17,6 @@ class SlaAdminCopyTest < ActiveSupport::TestCase
   # genuinely needs a couple of extra words is not a test failure, but a sentence is.
   CAPTION_KEYS = %i[
     text_sla_access_roles_hint
-    text_sla_target_options_hint
-    text_sla_target_option_details
-    text_sla_basis_hint
-    text_sla_target_option_duration_card
-    text_sla_best_effort_hint
-    text_sla_business_calendars_hint
-    text_sla_calendar_details
-    text_sla_working_days_hint
-    text_sla_working_hours_hint
-    text_sla_holidays_chips_hint
   ].freeze
 
   MAX_CAPTION_WORDS = 10

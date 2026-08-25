@@ -48,11 +48,6 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     { project_id: @project.id, tab: 'sla_policy', section: 'targets' }.deep_merge(overrides)
   end
 
-  def exclusions_params(overrides = {})
-    { project_id: @project.id, tab: 'sla_policy', section: 'exclusions',
-      sla_policy: { pause_enabled: '1' } }.deep_merge(overrides)
-  end
-
   def policy
     SlaPolicy.find_by(project_id: @project.id)
   end
@@ -176,15 +171,12 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_redirected_to settings_project_path(@project, tab: 'sla_policy', section: 'general')
     put :update, params: measurement_params
     assert_redirected_to settings_project_path(@project, tab: 'sla_policy', section: 'measurement')
-    put :update, params: exclusions_params
-    assert_redirected_to settings_project_path(@project, tab: 'sla_policy', section: 'exclusions')
 
     saved = policy
     assert saved.enabled?
     assert_equal '24x7', saved.coverage_hours
     assert_equal 'first_comment', saved.first_response_rule
     assert_equal 75, saved.at_risk_threshold
-    assert saved.pause_enabled?
   end
 
   # --- creating the row from a section that doesn't own every scalar -------------------------
@@ -263,9 +255,10 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     parent.sla_status_mappings.create!(role: 'resolved', status_id: status_id)
     SlaPolicy.create!(project_id: child.id, enabled: false, inherits_config: true)
 
-    # Exclusions owns the `pause` role only — every other role has to arrive by inheritance.
-    put :update, params: { project_id: child.id, tab: 'sla_policy', section: 'exclusions',
-                           sla_policy: { pause_enabled: '1' } }
+    # Saving a current configuration section forks the inherited configuration.
+    put :update, params: { project_id: child.id, tab: 'sla_policy', section: 'measurement',
+                           sla_policy: { first_response_rule: 'either' },
+                           status_mappings: { resolved: [status_id.to_s] } }
 
     own = SlaPolicy.find_by(project_id: child.id)
     assert_not own.inherits_config?, 'saving configuration makes the row self-defining'
@@ -298,13 +291,11 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     put :update, params: general_params(sla_policy: { enabled: '1', coverage_hours: '24x7' })
     put :update, params: measurement_params(sla_policy: { at_risk_threshold: '55',
                                                           first_response_rule: 'either' })
-    put :update, params: exclusions_params(sla_policy: { pause_enabled: '0' })
 
     saved = policy
     assert saved.enabled?, 'General\'s toggle must survive later saves of other sections'
     assert_equal 55, saved.at_risk_threshold
     assert_equal 'either', saved.first_response_rule
-    refute saved.pause_enabled?
   end
 
   # --- section/role wiring invariant ----------------------------------------------------------
@@ -325,23 +316,6 @@ class SlaPoliciesControllerTest < ActionController::TestCase
                  'every savable section must also be offered in the sidebar'
     assert (SlaPoliciesController::SECTION_STATUS_ROLES.keys - SlaPoliciesController::POLICY_SECTIONS).empty?,
            'a role owned by an unknown section could never be posted'
-  end
-
-  test "business hours coverage persists with its calendar" do
-    calendar = SlaBusinessCalendar.create!(name: 'Std', working_days: [1, 2, 3, 4, 5],
-                                           work_start_time: '09:00', work_end_time: '17:00')
-    put :update, params: general_params(
-      sla_policy: { coverage_hours: 'business_hours', business_calendar_id: calendar.id.to_s }
-    )
-    assert_redirected_to settings_project_path(@project, tab: 'sla_policy', section: 'general')
-    assert_equal calendar.id, policy.business_calendar_id
-  end
-
-  test "business hours without a calendar fails atomically" do
-    put :update, params: general_params(sla_policy: { coverage_hours: 'business_hours' })
-    assert_redirected_to settings_project_path(@project, tab: 'sla_policy', section: 'general')
-    assert flash[:error].present?
-    assert_nil policy
   end
 
   test "a rejected section save writes none of that section's side effects" do
@@ -365,13 +339,9 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     put :update, params: measurement_params(
       status_mappings: { created: created.map(&:to_s), resolved: resolved.map(&:to_s) }
     )
-    put :update, params: exclusions_params(
-      status_mappings: { pause: resolved.map(&:to_s) }
-    )
     saved = policy
     assert_equal created.sort, saved.status_ids_for(:created).sort
     assert_equal resolved, saved.status_ids_for(:resolved)
-    assert_equal resolved, saved.status_ids_for(:pause)
     assert_equal [], saved.status_ids_for(:work_started)
   end
 
@@ -388,72 +358,14 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_equal [], saved.status_ids_for(:resolved)
   end
 
-  # The whole point of the per-section save: "omitting a role clears it" must apply ONLY within
-  # the section that owns that role. Before sectioning, one Save owned every field, so saving the
-  # page from any state rewrote everything at once; now a Measurement Rules save posts no pause
-  # statuses and must leave the Exclusions section's selection exactly as it was.
-  test "saving one section leaves another section's status roles untouched" do
-    put :update, params: exclusions_params(
-      status_mappings: { pause: [@status_ids.last.to_s] }
-    )
-    put :update, params: measurement_params(
-      status_mappings: { created: [@status_ids.first.to_s] }
-    )
-
-    saved = policy
-    assert_equal [@status_ids.last], saved.status_ids_for(:pause),
-                 'a Measurement Rules save must not clear the Exclusions pause statuses'
-    assert_equal [@status_ids.first], saved.status_ids_for(:created)
-  end
-
   test "a forged section value falls back to the section that owns nothing" do
-    put :update, params: exclusions_params(
-      status_mappings: { pause: [@status_ids.last.to_s] }
-    )
-    put :update, params: exclusions_params(
-      { section: 'everything', status_mappings: { created: [@status_ids.first.to_s] } }
+    put :update, params: general_params(
+      section: 'everything', status_mappings: { created: [@status_ids.first.to_s] }
     )
 
     saved = policy
-    assert_equal [@status_ids.last], saved.status_ids_for(:pause)
     assert_equal [], saved.status_ids_for(:created),
                  'an unrecognised section must write no status rows at all'
-  end
-
-  # Phase-4-level regression (C): the engine-level "empty pause list = no pause" guard is already
-  # tested in isolation at Phase 2 (Sla::PauseCalculator), but nothing previously proved the UI
-  # form's save path actually WIRES an empty selection through to that behavior end-to-end.
-  test "an empty pause list saved via the form round-trips into no pause subtraction at the engine level" do
-    work_status = @status_ids.second
-    put :update, params: general_params # SLA tracking is switched on in General
-    put :update, params: measurement_params(
-      status_mappings: { created: [@status_ids.first.to_s] }
-    )
-    put :update, params: exclusions_params(status_mappings: {}) # pause intentionally left empty
-    put :update, params: targets_params(
-      definitions: { tracker_ids: [@trackers.first.id.to_s],
-                     rows: { @trackers.first.id.to_s => { @priorities.first.id.to_s => { response: @opt_1h.seconds.to_s } } } }
-    )
-    saved = policy
-    assert_equal [], saved.status_ids_for(:pause), 'pause selection must round-trip to empty'
-
-    base = Time.zone.local(2026, 6, 1, 9, 0, 0)
-    issue = Issue.new(project_id: @project.id, tracker_id: @trackers.first.id, author_id: 2,
-                      priority_id: @priorities.first.id, status_id: @status_ids.first,
-                      subject: 'pause round-trip')
-    issue.save!(validate: false)
-    issue.update_column(:created_on, base)
-
-    # A status change into a status that WOULD have paused the clock if pause were configured.
-    journal = Journal.new(journalized: issue, user: User.find(2), created_on: base + 10.minutes)
-    journal.details << JournalDetail.new(property: 'attr', prop_key: 'status_id',
-                                         old_value: @status_ids.first.to_s, value: work_status.to_s)
-    journal.save!
-    issue.update_column(:status_id, work_status)
-
-    result = Sla::IssueEvaluator.new(issue.reload, now: base + 50.minutes).call
-    assert_equal 3000, result.response_seconds,
-                 'no pause status is configured, so the full 50 minutes must count, unreduced'
   end
 
   test "statuses foreign to the project are rejected" do
@@ -467,7 +379,7 @@ class SlaPoliciesControllerTest < ActionController::TestCase
 
   # --- definitions (4.4) ---------------------------------------------------------------------
 
-  test "targets persist per tracker and priority as seconds from the lookup" do
+  test "targets persist per tracker and priority as direct seconds" do
     priority = @priorities.first
     put :update, params: targets_params(
       definitions: { tracker_ids: [@trackers.first.id.to_s],
@@ -482,15 +394,13 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_equal 86_400, definition.resolution_seconds
   end
 
-  test "the Update Frequency target persists like the other three, from the same lookup" do
-    cadence = SlaTargetOption.create!(target_type: 'update_frequency', code: '8h',
-                                      label: 'Every 8 hours', seconds: 28_800)
+  test "the Update Frequency target persists like the other three" do
     priority = @priorities.first
     put :update, params: targets_params(
       definitions: { tracker_ids: [@trackers.first.id.to_s],
                      rows: { @trackers.first.id.to_s =>
                                { priority.id.to_s => { response: '3600',
-                                                       update_frequency: cadence.seconds.to_s } } } }
+                                                       update_frequency: '28800' } } } }
     )
     definition = policy.sla_definitions.find_by(tracker_id: @trackers.first.id,
                                                 priority_id: priority.id)
@@ -498,7 +408,7 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_equal 3600, definition.response_seconds
   end
 
-  test "an Update Frequency value not in the lookup is rejected, like every other target" do
+  test "an arbitrary positive Update Frequency duration is accepted" do
     priority = @priorities.first
     put :update, params: targets_params(
       definitions: { tracker_ids: [@trackers.first.id.to_s],
@@ -508,7 +418,7 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     )
     definition = policy.sla_definitions.find_by(tracker_id: @trackers.first.id,
                                                 priority_id: priority.id)
-    assert_nil definition.update_frequency_seconds, 'a forged duration is not written'
+    assert_equal 61, definition.update_frequency_seconds
     assert_equal 3600, definition.response_seconds, 'the rest of the row still saves'
   end
 
@@ -685,20 +595,18 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_equal 0, policy.sla_definitions.count
   end
 
-  test "seconds not in the lookup are rejected" do
+  test "direct seconds do not require a catalog entry" do
     priority = @priorities.first
     put :update, params: targets_params(
       definitions: { tracker_ids: [@trackers.first.id.to_s],
                      rows: { @trackers.first.id.to_s => { priority.id.to_s => { response: '12345' } } } }
     )
-    assert_equal 0, policy.sla_definitions.count
+    assert_equal 12_345, policy.sla_definitions.first.response_seconds
   end
 
   # --- Best Effort + basis (B4) --------------------------------------------------------------
 
   test "posting 'best_effort' persists a Best Effort target with no seconds value" do
-    SlaTargetOption.create!(target_type: 'resolution', code: 'be', label: 'Best Effort',
-                            best_effort: true)
     priority = @priorities.first
 
     put :update, params: targets_params(
@@ -709,53 +617,6 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     definition = policy.sla_definitions.find_by(tracker_id: @trackers.first.id, priority_id: priority.id)
     assert definition.resolution_best_effort?
     assert_nil definition.resolution_seconds
-  end
-
-  test "posting 'best_effort' is rejected when no Best Effort option is configured for that type" do
-    priority = @priorities.first
-
-    put :update, params: targets_params(
-      definitions: { tracker_ids: [@trackers.first.id.to_s],
-                     rows: { @trackers.first.id.to_s => { priority.id.to_s => { resolution: 'best_effort' } } } }
-    )
-
-    assert_equal 0, policy.sla_definitions.count
-  end
-
-  test "a business-basis target under 24x7x365 coverage fails the save atomically" do
-    SlaTargetOption.create!(target_type: 'resolution', code: '1bd', label: '1 Business Day',
-                            seconds: 28_800, basis: 'business')
-    priority = @priorities.first
-
-    # Coverage is set in General, the target in SLA Targets — two saves, as the UI does it.
-    put :update, params: general_params(sla_policy: { coverage_hours: '24x7' })
-    put :update, params: targets_params(
-      definitions: { tracker_ids: [@trackers.first.id.to_s],
-                     rows: { @trackers.first.id.to_s => { priority.id.to_s => { resolution: '28800' } } } }
-    )
-
-    assert flash[:error].present?
-    assert_equal 0, policy&.sla_definitions&.count.to_i
-  end
-
-  test "a business-basis target is accepted under Business Hours coverage" do
-    calendar = SlaBusinessCalendar.create!(name: 'Std', working_days: [1, 2, 3, 4, 5],
-                                           work_start_time: '09:00', work_end_time: '17:00')
-    SlaTargetOption.create!(target_type: 'resolution', code: '1bd', label: '1 Business Day',
-                            seconds: 28_800, basis: 'business')
-    priority = @priorities.first
-
-    put :update, params: general_params(
-      sla_policy: { coverage_hours: 'business_hours', business_calendar_id: calendar.id.to_s }
-    )
-    put :update, params: targets_params(
-      definitions: { tracker_ids: [@trackers.first.id.to_s],
-                     rows: { @trackers.first.id.to_s => { priority.id.to_s => { resolution: '28800' } } } }
-    )
-
-    refute flash[:error].present?
-    definition = policy.sla_definitions.find_by(tracker_id: @trackers.first.id, priority_id: priority.id)
-    assert_equal 28_800, definition.resolution_seconds
   end
 
   test "a priority named None can be assigned SLA targets" do
@@ -774,12 +635,12 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     Setting.plugin_redmine_sla_compliance = {}
   end
 
-  test "a previously saved value survives even after the lookup changed" do
+  test "a previously saved direct value survives a section save" do
     saved_policy = SlaPolicy.create!(project_id: @project.id, enabled: true)
     priority = @priorities.first
     saved_policy.sla_definitions.create!(tracker_id: @trackers.first.id,
                                          priority_id: priority.id,
-                                         response_seconds: 99_999) # no longer in the lookup
+                                         response_seconds: 99_999)
 
     put :update, params: targets_params(
       definitions: { tracker_ids: [@trackers.first.id.to_s],
@@ -1015,7 +876,7 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     assert_nil SlaNotificationSetting.find_by(project_id: @project.id),
                'the notification setup must not cross a permission boundary'
     assert flash[:warning].present?, 'a skipped copy has to be stated, not left to be assumed'
-    assert_equal 1, policy.sla_status_mappings.where(role: 'pause').count,
+    assert_equal 3, policy.sla_status_mappings.count,
                  'the rest of the policy still clones'
   end
 
@@ -1122,9 +983,11 @@ class SlaPoliciesControllerTest < ActionController::TestCase
   end
 
   test "a failed save enqueues nothing even with the tick" do
-    SlaTargetOption.create!(target_type: 'resolution', code: '1bd', label: '1 Business Day',
-                            seconds: 28_800, basis: 'business') # invalid under 24x7 coverage
-
+    invalid_definition = SlaDefinition.new
+    invalid_definition.errors.add(:base, 'forced validation failure')
+    SlaDefinition.any_instance.stubs(:save!).raises(
+      ActiveRecord::RecordInvalid.new(invalid_definition)
+    )
     assert_no_enqueued_jobs do
       put :update, params: targets_params(
         { recalculate: '1',
@@ -1193,7 +1056,8 @@ class SlaPoliciesControllerTest < ActionController::TestCase
     get :edit, params: { project_id: @project.id, clone_from: '2' }, format: 'js', xhr: true
     assert_response :success
     assert_includes @response.body, 'sla-policy-tab-body'
-    assert_includes @response.body, 'clone_source_id'
+    assert_includes @response.body, 'value=\\"1\\"',
+                    'the source response target is rendered into the direct-duration editor'
   end
 
   test "edit.js with an unauthorized clone_from is a 404" do
