@@ -22,7 +22,12 @@ class SlaPolicy < ActiveRecord::Base
   has_many :sla_definitions,     dependent: :destroy
   has_many :sla_status_mappings, dependent: :destroy
 
-  serialize :selected_tracker_ids, JSON
+  # Rails 8 makes the coder keyword-only; Rails 6.1 expects it positionally.
+  if method(:serialize).parameters.any? { |type, name| type == :key && name == :coder }
+    serialize :selected_tracker_ids, coder: JSON
+  else
+    serialize :selected_tracker_ids, JSON
+  end
 
   validates :project_id, presence: true, uniqueness: true
   validates :coverage_hours, inclusion: { in: COVERAGE_HOURS }
